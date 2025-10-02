@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { SimpleAuthProvider, useAuth } from "./contexts/SimpleAuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RoleProtectedRoute } from "./components/RoleProtectedRoute";
@@ -11,6 +11,14 @@ import AuthErrorBoundary from "./components/AuthErrorBoundary";
 import { NetworkStatusIndicator } from "./components/NetworkStatusIndicator";
 import { OfflineModeIndicator } from "./components/OfflineModeIndicator";
 import React, { Suspense, lazy } from "react";
+
+// Detect static preview host (no server rewrites)
+const isStaticHost =
+  typeof window !== "undefined" &&
+  (window.location.hostname.endsWith("cosine.page") || window.location.protocol === "file:");
+
+// Choose router implementation accordingly
+const RouterImpl = isStaticHost ? HashRouter : BrowserRouter;
 
 // Pages (code-splitting)
 const SimpleLogin = lazy(() => import("./pages/SimpleLogin"));
@@ -236,13 +244,13 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <RouterImpl>
             <SimpleAuthProvider>
               <AppRoutes />
               <NetworkStatusIndicator />
               <OfflineModeIndicator />
             </SimpleAuthProvider>
-          </BrowserRouter>
+          </RouterImpl>
         </TooltipProvider>
       </QueryClientProvider>
     </AuthErrorBoundary>
