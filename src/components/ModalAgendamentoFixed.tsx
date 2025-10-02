@@ -806,7 +806,7 @@ const handleConfirmAndComplete = async () => {
                 </span>
               </div>
               <p className="text-sm text-bella-500 mt-1">
-                💡 Pagamento será registrado quando o agendamento for concluído
+                Pagamento será registrado quando o agendamento for concluído
               </p>
             </div>
           </div>
@@ -849,7 +849,6 @@ const handleConfirmAndComplete = async () => {
                 disabled={saving || servicosSelecionados.length === 0}
                 style={{ minHeight: "44px" }}
               >
-                <span>🎨</span>
                 <span>{saving ? "Salvando..." : "Criar Agendamento"}</span>
               </button>
             )}
