@@ -245,6 +245,7 @@
 
     const Agenda = () => `
       <style>
+        .icon { width: 18px; height: 18px; vertical-align: -3px; }
         .agenda-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; display:flex; align-items:center; gap:10px; }
         .agenda-hero .chip-online { display:inline-flex; align-items:center; gap:6px; background:#eafff1; color:#15803d; font-weight:800; padding:6px 12px; border-radius:999px; font-size:12px; border:1px solid #bbf7d0; }
         .agenda-hero p { margin: 0; color: #9d3a69; font-weight: 600; }
@@ -253,7 +254,7 @@
         .card-blue .grid { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
         .muted-strong { color:#334155; font-weight:800; }
         .ok { color:#16a34a; font-weight:800; }
-        .row-info { display:flex; align-items:center; gap:16px; color:#6b7280; font-weight:700; }
+        .row-info { display:flex; align-items:center; gap:16px; color:#6b7280; font-weight:700; flex-wrap: wrap; }
         .row-info .chip { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; padding:6px 10px; border-radius:10px; }
         .row-info .btn-refresh { display:inline-flex; align-items:center; gap:6px; background:#eef2ff; border:1px solid #c7d2fe; padding:8px 12px; border-radius:12px; color:#4338ca; font-weight:800; }
 
@@ -288,9 +289,9 @@
         .title-row .badge { background:#fee2f2; color:#a1125b; border:1px solid #fbcfe8; padding:8px 12px; border-radius:999px; font-weight:800; }
 
         /* Appointment cards */
-        .appt { position:relative; border-radius:20px; padding:14px; background:#fff; box-shadow: var(--shadow); border:2px solid #f9c3a7; margin-bottom:16px; }
-        .appt.in-progress { border-color:#f59e0b; background: linear-gradient(90deg, rgba(34,197,94,.25) 0 0); } /* baseline */
-        .appt .progress-fill { position:absolute; left:0; top:0; bottom:0; width:0; border-radius:20px; background: linear-gradient(90deg, rgba(34,197,94,.35), rgba(34,197,94,.08)); pointer-events:none; }
+        .appt { position:relative; border-radius:20px; padding:14px; background:#fff; box-shadow: var(--shadow); border:2px solid #f9c3a7; margin-bottom:16px; overflow:hidden; }
+        .appt.in-progress { border-color:#f59e0b; background: #fff7ed; }
+        .appt .progress-fill { position:absolute; left:0; top:0; bottom:0; width:0; background: linear-gradient(90deg, rgba(34,197,94,.3), rgba(34,197,94,.08)); }
         .appt .inner { position:relative; display:grid; grid-template-columns: 1fr auto; gap: 10px; }
         .appt .header { display:flex; align-items:center; gap:12px; }
         .appt .ava { width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
@@ -309,7 +310,6 @@
 
         .appt.scheduled { border-color:#10b981; background:#ecfdf5; }
         .appt.scheduled .ava { background:#10b981; }
-
       </style>
 
       <div class="agenda-hero">
@@ -317,7 +317,10 @@
         <p>Gerencie os agendamentos do salão</p>
       </div>
 
-      <button class="btn-lg" data-open="agendamento">+ Novo Agendamento</button>
+      <button class="btn-lg" data-open="agendamento">
+        <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        Novo Agendamento
+      </button>
 
       <div class="card-blue" style="margin-top:12px;">
         <div class="grid">
@@ -326,13 +329,22 @@
           <div><div class="muted">1</div><div class="muted-strong">em andamento</div></div>
           <div><div class="muted">Eventos do</div><div class="muted-strong">sistema</div></div>
         </div>
-        <div class="muted" style="margin-top:10px;">📋 1 agendamentos hoje • Atualiza apenas quando algo muda</div>
+        <div class="muted" style="margin-top:10px;">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4z" stroke="#334155" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 4v16M4 8h16" stroke="#334155" stroke-width="1.5"/></svg>
+          1 agendamentos hoje • Atualiza apenas quando algo muda
+        </div>
       </div>
 
       <div class="row-info" style="margin-top:10px;">
-        <span class="chip">🟢 Tempo real ativo</span>
-        <span class="chip">⏱️ Atualizado: <span id="lastUpdate">Agora</span></span>
-        <button id="btnAtualizar" class="btn-refresh">↻ Atualizar</button>
+        <span class="chip"><span class="dot"></span>Tempo real ativo</span>
+        <span class="chip">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#334155" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Atualizado: <span id="lastUpdate">Agora</span>
+        </span>
+        <button id="btnAtualizar" class="btn-refresh">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 8M20 8V4m0 4h-4" stroke="#4338ca" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Atualizar
+        </button>
       </div>
 
       <div class="kpi-mini">
@@ -341,52 +353,66 @@
             <div class="title">Hoje (01/10/2025)</div>
             <div class="val">1</div>
           </div>
-          <div>📅</div>
+          <div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#a1125b" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
         </div>
         <div class="item">
           <div>
             <div class="title">Pendentes</div>
             <div class="val">1</div>
           </div>
-          <div>🕒</div>
+          <div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
         </div>
         <div class="item orange">
           <div>
             <div class="title" style="color:#d97706;">Aguardando Confirmação</div>
             <div class="val" style="color:#d97706;">0</div>
           </div>
-          <div style="color:#d97706;">💲</div>
+          <div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 6v12M17 10c0-1.657-2.239-3-5-3s-5 1.343-5 3 2.239 3 5 3 5 1.343 5 3-2.239 3-5 3-5-1.343-5-3" stroke="#d97706" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
         </div>
         <div class="item purple">
           <div>
             <div class="title" style="color:#a21caf;">Concluídos</div>
             <div class="val" style="color:#a21caf;">0</div>
           </div>
-          <div style="color:#a21caf;">✔️</div>
+          <div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#a21caf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
         </div>
       </div>
 
       <div class="view-card">
         <div class="view-switch">
-          <button class="btn active">≣</button>
-          <button class="btn">▦</button>
-          <button class="btn">📆</button>
+          <button class="btn active"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="#a1125b" stroke-width="2" stroke-linecap="round"/></svg></button>
+          <button class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" stroke="#a1125b" stroke-width="1.8"/></svg></button>
+          <button class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#a1125b" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg></button>
         </div>
         <div class="date-nav">
-          <button class="arrow" aria-label="Anterior">←</button>
+          <button class="arrow" aria-label="Anterior"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="#a1125b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           <div style="text-align:center;">
             <div class="date">02/10/2025</div>
             <div class="muted">02/10/2025 ▾</div>
           </div>
-          <button class="arrow" aria-label="Próximo">→</button>
+          <button class="arrow" aria-label="Próximo"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="#a1125b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
         <div><span class="chip">Hoje</span></div>
       </div>
 
       <section class="section staff-card">
         <div class="top">
-          <div style="display:flex; align-items:center; gap:8px;"><span>👥</span><h2 style="margin:0;">Funcionários</h2><span class="badge">1 ativo</span></div>
-          <div class="muted" style="display:flex; gap:14px; align-items:center;"><a href="#" style="color:#a1125b; font-weight:900; text-decoration:none;">Ver Todos</a> 👁️</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0M12 7a4 4 0 110-8 4 4 0 010 8z" transform="translate(0,4)" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <h2 style="margin:0;">Funcionários</h2><span class="badge">1 ativo</span>
+          </div>
+          <div class="muted" style="display:flex; gap:14px; align-items:center;">
+            <a href="#" style="color:#a1125b; font-weight:900; text-decoration:none;">Ver Todos</a>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#64748b" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="#64748b"/></svg>
+          </div>
         </div>
 
         <div class="staff-item" style="margin:12px 0;">
@@ -441,17 +467,32 @@
                 <span class="status">Em Andamento</span>
               </div>
 
-              <div class="row">🕒 02/10/2025, 09:00</div>
-              <div class="row">👤 (81) 98886-1850</div>
+              <div class="row">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                02/10/2025, 09:00
+              </div>
+              <div class="row">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                (81) 98886-1850
+              </div>
 
               <div class="section-title">Serviços:</div>
               <div class="chip-box">
-                <div class="chip-sub">💇‍♀️ Chapinha<br/><span class="muted">👤 Kelly Monice</span></div>
+                <div class="chip-sub">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 7l-8 8M14 7l-8 8" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Chapinha<br/><span class="muted">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>
+                    Kelly Monice
+                  </span>
+                </div>
                 <strong>R$ 50,00</strong>
               </div>
 
               <div class="section-title">Funcionários:</div>
-              <div class="worker-pill">🟢 Kelly Monice</div>
+              <div class="worker-pill">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#065f46" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#065f46"/></svg>
+                Kelly Monice
+              </div>
 
               <div class="total">
                 <div class="label">Valor Total:</div>
@@ -460,10 +501,10 @@
             </div>
 
             <div class="actions">
-              <button class="btn-outline" title="Visualizar">👁️</button>
-              <button class="btn-outline" title="Editar">✏️</button>
-              <button class="btn-outline" title="Cobrar">💲</button>
-              <button class="btn-outline" title="Excluir">🗑️</button>
+              <button class="btn-outline" title="Visualizar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#a1125b" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="#a1125b"/></svg></button>
+              <button class="btn-outline" title="Editar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#a1125b" stroke-width="1.6"/></svg></button>
+              <button class="btn-outline" title="Cobrar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 6v12M17 10c0-1.657-2.239-3-5-3s-5 1.343-5 3 2.239 3 5 3 5 1.343 5 3-2.239 3-5 3-5-1.343-5-3" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+              <button class="btn-outline" title="Excluir"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
             </div>
           </div>
         </article>
@@ -480,17 +521,32 @@
                 <span class="status scheduled">Agendado</span>
               </div>
 
-              <div class="row">🕒 02/10/2025, 11:25</div>
-              <div class="row">👤 (81) 98886-1850</div>
+              <div class="row">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                02/10/2025, 11:25
+              </div>
+              <div class="row">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                (81) 98886-1850
+              </div>
 
               <div class="section-title">Serviços:</div>
               <div class="chip-box" style="background:#d1fae5; border-color:#a7f3d0;">
-                <div class="chip-sub">💇‍♀️ Chapinha<br/><span class="muted">👤 Simone Barboza</span></div>
+                <div class="chip-sub">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 7l-8 8M14 7l-8 8" stroke="#065f46" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Chapinha<br/><span class="muted">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>
+                    Simone Barboza
+                  </span>
+                </div>
                 <strong>R$ 20,00</strong>
               </div>
 
               <div class="section-title">Funcionários:</div>
-              <div class="worker-pill">🟢 Simone Barboza</div>
+              <div class="worker-pill">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#065f46" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#065f46"/></svg>
+                Simone Barboza
+              </div>
 
               <div class="total">
                 <div class="label">Valor Total:</div>
@@ -499,10 +555,10 @@
             </div>
 
             <div class="actions">
-              <button class="btn-outline" title="Visualizar">👁️</button>
-              <button class="btn-outline" title="Editar">✏️</button>
-              <button class="btn-outline" title="Agendar">🕒</button>
-              <button class="btn-outline" title="Excluir">🗑️</button>
+              <button class="btn-outline" title="Visualizar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#a1125b" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="#a1125b"/></svg></button>
+              <button class="btn-outline" title="Editar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#a1125b" stroke-width="1.6"/></svg></button>
+              <button class="btn-outline" title="Agendar"><svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.6"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button class="btn-outline" title="Excluir"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
             </div>
           </div>
         </article>
