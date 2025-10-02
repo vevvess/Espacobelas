@@ -52,19 +52,58 @@
           box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 8px 22px rgba(236,72,153,.28);
           border: 2px solid #fff;
         }
-        .drawer {
-          position: fixed; inset: 0; background: rgba(15,23,42,.55); display: none; z-index: 30;
+
+        /* Drawer */
+        .drawer { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: none; z-index: 30; }
+        .drawer .panel { position:absolute; top:0; left:0; bottom:0; width: 320px; background:#fff; border-right:1px solid #f1e6ee; box-shadow: var(--shadow); display:flex; flex-direction:column; }
+        .brandbar {
+          background: linear-gradient(90deg, var(--bella-500), var(--bella-400));
+          color: #fff; display:flex; align-items:center; justify-content:space-between;
+          padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.25);
         }
-        .drawer .panel {
-          position: absolute; top:0; left:0; bottom:0; width: 260px; background:#fff; border-right:1px solid #f1e6ee;
-          padding: 16px; box-shadow: var(--shadow);
+        .brandbar .left { display:flex; align-items:center; gap: 10px; font-weight: 900; font-size: 18px; }
+        .brandbar .heart {
+          width: 36px; height: 36px; border-radius: 999px; background: rgba(255,255,255,.25);
+          display:grid; place-items:center; box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
         }
-        .drawer a {
-          display:block; text-decoration:none; color:#334155; padding: 10px 12px; border-radius: 10px; margin: 4px 0;
+        .brandbar .close {
+          width: 40px; height: 40px; border-radius: 12px; display:grid; place-items:center;
+          background: rgba(255,255,255,.25); border: 1px solid rgba(255,255,255,.4);
         }
-        .drawer a.active, .drawer a:hover {
-          background: var(--bella-50); color: var(--bella-900);
+
+        .usercard {
+          display:flex; gap: 12px; align-items:center; padding: 14px; border-bottom:1px solid #f1e6ee;
+          background: linear-gradient(180deg, #fff, #fff9fb);
         }
+        .usercard .ava {
+          width: 52px; height: 52px; border-radius: 16px; display:grid; place-items:center;
+          background: radial-gradient(circle at 30% 30%, #ffc2d6, #f472b6);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 8px 22px rgba(236,72,153,.28);
+          border: 2px solid #fff;
+        }
+        .usercard .name { font-weight: 900; color: #8b1049; }
+        .chips { display:flex; gap: 6px; margin-top: 4px; align-items:center; }
+        .chip { font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: #fde7f2; color:#8b1049; }
+        .online { width: 8px; height: 8px; border-radius: 999px; background:#22c55e; display:inline-block; }
+
+        .navlist { padding: 12px; display:grid; gap: 8px; }
+        .section-divider { display:flex; align-items:center; gap: 12px; color:#9c1d5f; font-weight: 900; padding: 10px 14px; }
+        .section-divider::before, .section-divider::after { content:""; height:1px; background:#f3c6d9; flex:1; border-radius: 999px; }
+
+        .item {
+          display:flex; align-items:center; gap: 12px; text-decoration:none; color:#a1125b;
+          padding: 12px; border-radius: 14px; border:1px solid #f7d2e2; background:#fff;
+          box-shadow: 0 2px 10px rgba(173,24,94,.05);
+        }
+        .item .icon { width: 22px; height: 22px; display:grid; place-items:center; color:#a1125b; }
+        .item .label { font-weight: 800; }
+        .item.active {
+          background: linear-gradient(90deg, rgba(236,72,153,.10), rgba(236,72,153,.03));
+          border: 2px solid #f3a1c8;
+          box-shadow: 0 10px 26px rgba(173,24,94,.15);
+        }
+        .item.danger { color:#b91c1c; border-color:#fca5a5; }
+        .logout { margin-top: auto; padding: 12px; border-top:1px solid #f1e6ee; }
 
         /* Hero */
         .hero { padding: 18px 4px 10px; }
@@ -107,7 +146,7 @@
         .circle { width:32px; height:32px; border-radius: 999px; display:grid; place-items:center; background:#93c5fd; color:#1e3a8a; font-weight: 900; }
         .tel { color:#1e3a8a; text-decoration:none; font-weight:700; }
 
-        /* Lists, table shells */
+        /* Lists */
         .list { display:grid; gap: 10px; }
         .row { display:flex; align-items:center; justify-content:space-between; gap: 10px; border: 1px solid #f1e6ee; background: #fff; border-radius: 12px; padding: 12px; }
         .pill { display:inline-block; padding:6px 10px; border-radius:999px; background: var(--bella-50); color: var(--bella-900); font-weight:700; font-size:12px; }
@@ -228,6 +267,23 @@
       </section>
     `;
 
+    const FichaCliente = () => `
+      <div class="hero"><h1>Ficha Cliente</h1><p>Histórico e informações do cliente</p></div>
+      <section class="section list">
+        <div class="row"><div><strong>Nome</strong><div class="muted">Claudia Maria</div></div><span class="pill">Ativa</span></div>
+        <div class="row"><div><strong>Último atendimento</strong><div class="muted">há 15 dias</div></div><span class="pill">Coloração</span></div>
+        <div class="row"><div><strong>Observações</strong><div class="muted">Prefere sábado à tarde</div></div></div>
+      </section>
+    `;
+
+    const ClientesMensais = () => `
+      <div class="hero"><h1>Clientes Mensais</h1><p>Assinaturas e recorrência</p></div>
+      <section class="section list">
+        <div class="row"><div><strong>Rafael</strong><div class="muted">Plano: Mensal</div></div><span class="pill">Ativo</span></div>
+        <div class="row"><div><strong>Mari</strong><div class="muted">Plano: Mensal</div></div><span class="pill">Ativo</span></div>
+      </section>
+    `;
+
     const Servicos = () => `
       <div class="hero"><h1>Serviços</h1><p>Catálogo, preços e duração</p></div>
       <section class="section list">
@@ -253,14 +309,6 @@
       </section>
     `;
 
-    const Relatorios = () => `
-      <div class="hero"><h1>Relatórios</h1><p>Métricas e indicadores</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Receita (Mês)</strong></div><strong>R$ 0,00</strong></div>
-        <div class="row"><div><strong>Agendamentos (Hoje)</strong></div><strong>1</strong></div>
-      </section>
-    `;
-
     const Configuracoes = () => `
       <div class="hero"><h1>Configurações</h1><p>Preferências do sistema</p></div>
       <section class="section list">
@@ -269,14 +317,16 @@
       </section>
     `;
 
+    // Rotas (sem Relatórios, conforme pedido)
     const routes = {
       "/dashboard": { title: "Dashboard", view: Dashboard },
       "/agenda": { title: "Agenda", view: Agenda },
       "/clientes": { title: "Clientes", view: Clientes },
+      "/ficha-cliente": { title: "Ficha Cliente", view: FichaCliente },
+      "/clientes-mensais": { title: "Clientes Mensais", view: ClientesMensais },
       "/servicos": { title: "Serviços", view: Servicos },
       "/caixa": { title: "Caixa", view: Caixa },
       "/usuarios": { title: "Usuários", view: Usuarios },
-      "/relatorios": { title: "Relatórios", view: Relatorios },
       "/configuracoes": { title: "Configurações", view: Configuracoes },
     };
 
@@ -289,16 +339,54 @@
         <div class="titlebar" id="titlebar">Dashboard</div>
         <div class="shield" title="Conta"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 5-3.5 9-7 9s-7-4-7-9V7l7-4z" fill="white" fill-opacity=".85"/></svg></div>
       </div>
+
       <div class="drawer" id="drawer">
         <div class="panel">
-          <h3 style="margin:0 0 10px; color: var(--bella-800);">Navegação</h3>
-          ${Object.keys(routes)
-            .map(
-              (path) => `<a href="#${path}" data-link="${path}" id="link-${path.slice(1)}">${routes[path].title}</a>`
-            )
-            .join("")}
+          <div class="brandbar">
+            <div class="left">
+              <div class="heart"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 21s-6.4-3.7-9.2-8C.8 10.1 1.3 6.7 4.2 5.3A5 5 0 0 1 12 7a5 5 0 0 1 7.8-1.7c2.9 1.4 3.4 4.8 1.4 7.7C18.4 17.3 12 21 12 21z" fill="white" fill-opacity=".9"/></svg></div>
+              <div>Bella's</div>
+            </div>
+            <button class="close" id="drawerClose" aria-label="Fechar">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+
+          <div class="usercard">
+            <div class="ava"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 5-3.5 9-7 9s-7-4-7-9V7l7-4z" fill="white" fill-opacity=".85"/></svg></div>
+            <div style="flex:1;">
+              <div class="name">Weslley Raphael</div>
+              <div class="chips">
+                <span class="online"></span>
+                <span class="chip">Admin</span>
+                <span class="chip">Admin</span>
+              </div>
+            </div>
+          </div>
+
+          <nav class="navlist">
+            <a class="item" href="#/dashboard" data-link="/dashboard"><span class="icon">🏠</span><span class="label">Dashboard</span></a>
+            <a class="item" href="#/agenda" data-link="/agenda"><span class="icon">📅</span><span class="label">Agenda</span></a>
+            <a class="item" href="#/clientes" data-link="/clientes"><span class="icon">👥</span><span class="label">Clientes</span></a>
+            <a class="item" href="#/ficha-cliente" data-link="/ficha-cliente"><span class="icon">📄</span><span class="label">Ficha Cliente</span></a>
+            <a class="item" href="#/clientes-mensais" data-link="/clientes-mensais"><span class="icon">🗓️</span><span class="label">Clientes Mensais</span></a>
+            <a class="item" href="#/servicos" data-link="/servicos"><span class="icon">⚙️</span><span class="label">Serviços</span></a>
+            <a class="item" href="#/caixa" data-link="/caixa"><span class="icon">💵</span><span class="label">Caixa</span></a>
+          </nav>
+
+          <div class="section-divider"><span>ADMINISTRAÇÃO</span></div>
+
+          <nav class="navlist" style="padding-top: 0;">
+            <a class="item" href="#/usuarios" data-link="/usuarios"><span class="icon">🛡️</span><span class="label">Usuários</span></a>
+            <a class="item" href="#/configuracoes" data-link="/configuracoes"><span class="icon">🔧</span><span class="label">Configurações</span></a>
+          </nav>
+
+          <div class="logout">
+            <a class="item danger" href="#" id="logoutBtn"><span class="icon">↪️</span><span class="label">Sair</span></a>
+          </div>
         </div>
       </div>
+
       <div class="shell"><div id="page"></div></div>
 
       <!-- Modal shell -->
@@ -316,7 +404,7 @@
       </div>
     `;
 
-    // Mount layout
+    // Monta layout
     root.innerHTML = layout;
 
     // Helpers
@@ -325,12 +413,15 @@
     const titlebar = $("#titlebar");
     const drawer = $("#drawer");
     $("#menuBtn").addEventListener("click", () => (drawer.style.display = "block"));
+    $("#drawerClose").addEventListener("click", () => (drawer.style.display = "none"));
     drawer.addEventListener("click", (e) => {
       if (e.target === drawer) drawer.style.display = "none";
     });
-    drawer.querySelectorAll("a[data-link]").forEach((a) =>
-      a.addEventListener("click", () => (drawer.style.display = "none"))
-    );
+    $("#logoutBtn").addEventListener("click", (e) => {
+      e.preventDefault();
+      alert("Sessão encerrada (simulação).");
+      drawer.style.display = "none";
+    });
 
     function renderRoute() {
       const hash = location.hash.replace("#", "") || "/dashboard";
@@ -338,13 +429,13 @@
       titlebar.textContent = route.title;
       page.innerHTML = route.view();
 
-      // highlight active link
+      // destacar item ativo
       drawer.querySelectorAll("a[data-link]").forEach((a) => {
         const active = a.getAttribute("data-link") === hash;
         a.classList.toggle("active", active);
       });
 
-      // wire modals on dashboard and clients
+      // Modais simples
       const modals = $("#modals");
       function openModal(title) {
         $("#modal-title").textContent = title;
