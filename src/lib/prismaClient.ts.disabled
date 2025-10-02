@@ -1,0 +1,100 @@
+/**
+ * PrismaClient Singleton
+ * Configuração otimizada para desenvolvimento e produção
+ */
+
+import { PrismaClient } from '@prisma/client'
+
+// Criar singleton para evitar múltiplas conexões
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  log: [
+    {
+      emit: 'event',
+      level: 'query',
+    },
+    {
+      emit: 'event', 
+      level: 'error',
+    },
+    {
+      emit: 'event',
+      level: 'info',
+    },
+    {
+      emit: 'event',
+      level: 'warn',
+    },
+  ],
+})
+
+// Configurar event listeners para logging
+prisma.$on('query', (e) => {
+  if (import.meta.env.DEV) {
+    console.log('🔍 Prisma Query:', e.query)
+    console.log('📊 Params:', e.params)
+    console.log('⏱️ Duration:', e.duration + 'ms')
+  }
+})
+
+prisma.$on('error', (e) => {
+  console.error('❌ Prisma Error:', e)
+})
+
+prisma.$on('info', (e) => {
+  console.log('ℹ️ Prisma Info:', e.message)
+})
+
+prisma.$on('warn', (e) => {
+  console.warn('⚠️ Prisma Warning:', e.message)
+})
+
+// Em desenvolvimento, armazenar no global para hot reload
+if (import.meta.env.DEV) globalForPrisma.prisma = prisma
+
+// Test de conectividade
+export async function testPrismaConnection(): Promise<boolean> {
+  try {
+    await prisma.$queryRaw`SELECT 1 as test`
+    console.log('✅ Prisma conectado com sucesso')
+    return true
+  } catch (error) {
+    console.error('❌ Erro na conexão Prisma:', error)
+    return false
+  }
+}
+
+// Cleanup graceful
+export async function disconnectPrisma(): Promise<void> {
+  await prisma.$disconnect()
+}
+
+// Status da conexão
+export async function getPrismaStatus() {
+  try {
+    const result = await prisma.$queryRaw`
+      SELECT 
+        version() as pg_version,
+        current_database() as db_name,
+        current_user as user_name,
+        NOW() as server_time
+    `
+    
+    return {
+      connected: true,
+      database: result[0],
+      timestamp: new Date().toISOString()
+    }
+  } catch (error) {
+    return {
+      connected: false,
+      error: error?.message || 'Unknown error',
+      timestamp: new Date().toISOString()
+    }
+  }
+}
+
+export default prisma

@@ -1,0 +1,284 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== MODELO DE USUÁRIOS ==========
+
+model UserSimple {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  nome         String
+  isAdmin      Boolean  @default(false) @map("is_admin")
+  canEditAll   Boolean  @default(false) @map("can_edit_all")
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdBy    String?  @map("created_by")
+
+  // Relacionamentos
+  criadoPor             UserSimple?           @relation("UserCreatedBy", fields: [createdBy], references: [id])
+  usuariosCriados       UserSimple[]          @relation("UserCreatedBy")
+  clientes              Cliente[]
+  servicos              Servico[]
+  agendamentos          Agendamento[]
+  agendamentosComoFunc  Agendamento[]         @relation("AgendamentoFuncionario")
+  transacoes            Transacao[]
+  funcionarioCores      FuncionarioCor[]
+  chatMessages          ChatMessage[]
+  chatMessagesV2        ChatMessageV2[]
+  chatMessageReads      ChatMessageRead[]
+  agendamentoServicos   AgendamentoServico[]
+  chatMessageRecipient  ChatMessageV2[]       @relation("ChatMessageRecipient")
+
+  @@map("users_simple")
+}
+
+// ========== MODELO DE CLIENTES ==========
+
+model Cliente {
+  id              String    @id @default(uuid())
+  userSimpleId    String    @map("user_simple_id")
+  nome            String
+  telefone        String?
+  email           String?
+  dataNascimento  DateTime? @map("data_nascimento") @db.Date
+  endereco        String?
+  observacoes     String?
+  tipoCliente     String?   @default("normal") @map("tipo_cliente")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  userSimple    UserSimple     @relation(fields: [userSimpleId], references: [id], onDelete: Cascade)
+  agendamentos  Agendamento[]
+  debitosMensais DebitoMensal[]
+
+  @@map("clientes")
+}
+
+// ========== MODELO DE SERVIÇOS ==========
+
+model Servico {
+  id              String   @id @default(uuid())
+  userSimpleId    String   @map("user_simple_id")
+  nome            String
+  descricao       String?
+  preco           Decimal  @db.Decimal(10, 2)
+  duracaoMinutos  Int      @default(60) @map("duracao_minutos")
+  ativo           Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  userSimple          UserSimple           @relation(fields: [userSimpleId], references: [id], onDelete: Cascade)
+  agendamentos        Agendamento[]
+  agendamentoServicos AgendamentoServico[]
+
+  @@map("servicos")
+}
+
+// ========== MODELO DE AGENDAMENTOS ==========
+
+model Agendamento {
+  id            String   @id @default(uuid())
+  userSimpleId  String   @map("user_simple_id")
+  clienteId     String   @map("cliente_id")
+  servicoId     String   @map("servico_id")
+  funcionarioId String?  @map("funcionario_id")
+  dataHora      DateTime @map("data_hora")
+  status        String   @default("agendado")
+  observacoes   String?
+  valor         Decimal? @db.Decimal(10, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  userSimple          UserSimple           @relation(fields: [userSimpleId], references: [id], onDelete: Cascade)
+  cliente             Cliente              @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  servico             Servico              @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+  funcionario         UserSimple?          @relation("AgendamentoFuncionario", fields: [funcionarioId], references: [id])
+  transacoes          Transacao[]
+  agendamentoServicos AgendamentoServico[]
+  pagamentos          AgendamentoPagamento[]
+
+  @@index([dataHora])
+  @@index([userSimpleId])
+  @@index([clienteId])
+  @@index([funcionarioId])
+  @@map("agendamentos")
+}
+
+// ========== MODELO DE SERVIÇOS POR AGENDAMENTO ==========
+
+model AgendamentoServico {
+  id            String   @id @default(uuid())
+  agendamentoId String   @map("agendamento_id")
+  servicoId     String   @map("servico_id")
+  funcionarioId String?  @map("funcionario_id")
+  preco         Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relacionamentos
+  agendamento  Agendamento @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+  servico      Servico     @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+  funcionario  UserSimple? @relation(fields: [funcionarioId], references: [id], onDelete: SetNull)
+
+  @@index([agendamentoId])
+  @@index([funcionarioId])
+  @@map("agendamento_servicos")
+}
+
+// ========== MODELO DE PAGAMENTOS POR AGENDAMENTO ==========
+
+model AgendamentoPagamento {
+  id              String   @id @default(uuid())
+  agendamentoId   String   @map("agendamento_id")
+  formaPagamento  String   @map("forma_pagamento")
+  valor           Decimal  @db.Decimal(10, 2)
+  observacoes     String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relacionamentos
+  agendamento Agendamento @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+
+  @@index([agendamentoId])
+  @@map("agendamento_pagamentos")
+}
+
+// ========== MODELO DE CORES DOS FUNCIONÁRIOS ==========
+
+model FuncionarioCor {
+  id            String   @id @default(uuid())
+  funcionarioId String   @map("funcionario_id")
+  corHex        String   @map("cor_hex")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  funcionario UserSimple @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+
+  @@unique([funcionarioId])
+  @@index([funcionarioId])
+  @@map("funcionario_cores")
+}
+
+// ========== MODELO DE TRANSAÇÕES ==========
+
+model Transacao {
+  id              String   @id @default(uuid())
+  userSimpleId    String   @map("user_simple_id")
+  agendamentoId   String?  @map("agendamento_id")
+  tipo            String
+  valor           Decimal  @db.Decimal(10, 2)
+  descricao       String?
+  dataTransacao   DateTime @map("data_transacao")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relacionamentos
+  userSimple  UserSimple   @relation(fields: [userSimpleId], references: [id])
+  agendamento Agendamento? @relation(fields: [agendamentoId], references: [id])
+
+  @@index([userSimpleId])
+  @@index([dataTransacao])
+  @@map("transacoes")
+}
+
+// ========== MODELOS DE CHAT ==========
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  message     String
+  messageType String   @default("text") @map("message_type")
+  imageUrl    String?  @map("image_url")
+  imageName   String?  @map("image_name")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  edited      Boolean  @default(false)
+
+  // Relacionamentos
+  user UserSimple @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+model ChatMessageV2 {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  message     String
+  messageType String   @default("text") @map("message_type")
+  imageUrl    String?  @map("image_url")
+  imageName   String?  @map("image_name")
+  chatType    String   @default("public") @map("chat_type")
+  recipientId String?  @map("recipient_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  edited      Boolean  @default(false)
+
+  // Relacionamentos
+  user      UserSimple        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipient UserSimple?       @relation("ChatMessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  reads     ChatMessageRead[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([chatType, createdAt(sort: Desc)])
+  @@index([userId, recipientId, createdAt(sort: Desc)])
+  @@map("chat_messages_v2")
+}
+
+model ChatMessageRead {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  readAt    DateTime @default(now()) @map("read_at") @db.Timestamptz
+
+  // Relacionamentos
+  message ChatMessageV2 @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    UserSimple    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("chat_message_reads")
+}
+
+// ========== MODELOS FINANCEIROS ==========
+
+model DebitoMensal {
+  id             String   @id @default(uuid())
+  clienteId      String   @map("cliente_id")
+  valor          Decimal  @db.Decimal(10, 2)
+  mesReferencia  DateTime @map("mes_referencia") @db.Date
+  descricao      String?
+  status         String   @default("pendente")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  cliente           Cliente             @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  pagamentosMensais PagamentoMensal[]
+
+  @@map("debitos_mensais")
+}
+
+model PagamentoMensal {
+  id              String   @id @default(uuid())
+  debitoId        String   @map("debito_id")
+  valor           Decimal  @db.Decimal(10, 2)
+  dataPagamento   DateTime @map("data_pagamento")
+  formaPagamento  String?  @map("forma_pagamento")
+  observacoes     String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relacionamentos
+  debito DebitoMensal @relation(fields: [debitoId], references: [id], onDelete: Cascade)
+
+  @@map("pagamentos_mensais")
+}

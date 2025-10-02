@@ -1,0 +1,418 @@
+/**
+ * Sistema Híbrido Prisma + IndexedDB
+ * Prisma (quando disponível) + IndexedDB local (fallback para quota)
+ * Switch automático baseado na conectividade e quota
+ */
+
+import { prisma, testPrismaConnection, getPrismaStatus } from './prismaClient'
+import type { 
+  Agendamento, 
+  Cliente, 
+  Servico, 
+  UserSimple, 
+  Transacao,
+  AgendamentoServico,
+  AgendamentoPagamento,
+  FuncionarioCor
+} from '@prisma/client'
+
+// Estado do sistema híbrido
+interface HybridState {
+  isPrismaAvailable: boolean
+  isLocalReady: boolean
+  currentMode: 'prisma' | 'local' | 'initializing'
+  lastPrismaCheck: number
+  prismaCheckInterval: number
+  quotaError: boolean
+}
+
+let hybridState: HybridState = {
+  isPrismaAvailable: false,
+  isLocalReady: false,
+  currentMode: 'initializing',
+  lastPrismaCheck: 0,
+  prismaCheckInterval: 30000, // 30 segundos
+  quotaError: false
+}
+
+// IndexedDB local
+let localDB: IDBDatabase | null = null
+
+// Inicializar IndexedDB local
+async function initLocalDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (localDB) {
+      resolve(localDB)
+      return
+    }
+
+    const request = indexedDB.open('BellaSalonPrismaDB', 1)
+
+    request.onerror = () => reject(request.error)
+    
+    request.onsuccess = () => {
+      localDB = request.result
+      hybridState.isLocalReady = true
+      console.log('✅ IndexedDB híbrido Prisma inicializado')
+      resolve(localDB)
+    }
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result
+      
+      // Criar stores para tabelas Prisma
+      const tables = [
+        'UserSimple', 'Cliente', 'Servico', 'Agendamento',
+        'AgendamentoServico', 'AgendamentoPagamento', 
+        'FuncionarioCor', 'Transacao', 'ChatMessage',
+        'ChatMessageV2', 'ChatMessageRead', 'DebitoMensal', 
+        'PagamentoMensal'
+      ]
+
+      tables.forEach(tableName => {
+        if (!db.objectStoreNames.contains(tableName)) {
+          const store = db.createObjectStore(tableName, { keyPath: 'id' })
+          
+          // Índices específicos para cada tabela
+          if (tableName === 'Agendamento') {
+            store.createIndex('dataHora', 'dataHora')
+            store.createIndex('userSimpleId', 'userSimpleId')
+            store.createIndex('clienteId', 'clienteId')
+            store.createIndex('funcionarioId', 'funcionarioId')
+          } else if (tableName === 'Cliente' || tableName === 'Servico') {
+            store.createIndex('userSimpleId', 'userSimpleId')
+          } else if (tableName === 'Transacao') {
+            store.createIndex('userSimpleId', 'userSimpleId')
+            store.createIndex('dataTransacao', 'dataTransacao')
+          }
+        }
+      })
+
+      console.log('🗄️ Schema IndexedDB Prisma criado')
+    }
+  })
+}
+
+// Verificar conectividade Prisma
+async function checkPrismaConnectivity(): Promise<boolean> {
+  try {
+    const now = Date.now()
+    
+    // Cache do resultado por intervalos
+    if (now - hybridState.lastPrismaCheck < hybridState.prismaCheckInterval) {
+      return hybridState.isPrismaAvailable
+    }
+
+    const isConnected = await testPrismaConnection()
+    
+    hybridState.isPrismaAvailable = isConnected
+    hybridState.lastPrismaCheck = now
+    hybridState.quotaError = false
+    
+    if (isConnected) {
+      console.log('✅ Prisma disponível')
+      hybridState.currentMode = 'prisma'
+    } else {
+      console.warn('⚠️ Prisma indisponível - usando IndexedDB')
+      hybridState.currentMode = 'local'
+    }
+    
+    return isConnected
+  } catch (error: any) {
+    console.warn('❌ Erro ao verificar Prisma:', error)
+    
+    // Detectar erro de quota
+    if (error?.message?.includes('quota') || error?.message?.includes('exceeded')) {
+      console.error('🚫 Quota atingida - forçando modo local')
+      hybridState.quotaError = true
+    }
+    
+    hybridState.isPrismaAvailable = false
+    hybridState.currentMode = 'local'
+    return false
+  }
+}
+
+// Executar operação no IndexedDB local
+async function executeLocalOperation(
+  tableName: string, 
+  operation: 'get' | 'getAll' | 'add' | 'put' | 'delete', 
+  data?: any, 
+  index?: string
+): Promise<any> {
+  const db = await initLocalDB()
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(tableName, operation === 'get' || operation === 'getAll' ? 'readonly' : 'readwrite')
+    const store = transaction.objectStore(tableName)
+    
+    let request: IDBRequest
+    
+    switch (operation) {
+      case 'get':
+        request = store.get(data)
+        break
+      case 'getAll':
+        if (index && data) {
+          const indexObj = store.index(index)
+          request = indexObj.getAll(data)
+        } else {
+          request = store.getAll()
+        }
+        break
+      case 'add':
+        request = store.add(data)
+        break
+      case 'put':
+        request = store.put(data)
+        break
+      case 'delete':
+        request = store.delete(data)
+        break
+      default:
+        reject(new Error(`Operação não suportada: ${operation}`))
+        return
+    }
+    
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+// ========== INTERFACE HÍBRIDA PARA AGENDAMENTOS ==========
+
+export async function getAgendamentosHybrid(
+  userSimpleId: string,
+  dataInicio?: Date,
+  dataFim?: Date
+): Promise<Agendamento[]> {
+  const isPrismaAvailable = await checkPrismaConnectivity()
+  
+  if (isPrismaAvailable && !hybridState.quotaError) {
+    try {
+      // Usar Prisma
+      const where: any = { userSimpleId }
+      
+      if (dataInicio && dataFim) {
+        where.dataHora = {
+          gte: dataInicio,
+          lte: dataFim
+        }
+      }
+      
+      return await prisma.agendamento.findMany({
+        where,
+        include: {
+          cliente: true,
+          servico: true,
+          funcionario: true,
+          agendamentoServicos: {
+            include: {
+              servico: true,
+              funcionario: true
+            }
+          },
+          pagamentos: true
+        },
+        orderBy: {
+          dataHora: 'asc'
+        }
+      })
+    } catch (error: any) {
+      console.warn('⚠️ Falha no Prisma, fallback para local:', error)
+      
+      // Detectar quota e forçar local
+      if (error?.message?.includes('quota') || error?.message?.includes('exceeded')) {
+        hybridState.quotaError = true
+        hybridState.isPrismaAvailable = false
+        hybridState.currentMode = 'local'
+      }
+    }
+  }
+  
+  // Fallback para IndexedDB local
+  console.log('🔵 Usando IndexedDB local para agendamentos')
+  const agendamentos = await executeLocalOperation('Agendamento', 'getAll')
+  
+  // Filtrar por usuário
+  let filtered = agendamentos.filter((a: any) => a.userSimpleId === userSimpleId)
+  
+  // Filtrar por data se especificado
+  if (dataInicio && dataFim) {
+    const start = dataInicio.getTime()
+    const end = dataFim.getTime()
+    
+    filtered = filtered.filter((a: any) => {
+      const agendamentoTime = new Date(a.dataHora).getTime()
+      return agendamentoTime >= start && agendamentoTime <= end
+    })
+  }
+  
+  return filtered.sort((a: any, b: any) => 
+    new Date(a.dataHora).getTime() - new Date(b.dataHora).getTime()
+  )
+}
+
+export async function createAgendamentoHybrid(
+  data: Omit<Agendamento, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<Agendamento> {
+  const isPrismaAvailable = await checkPrismaConnectivity()
+  
+  if (isPrismaAvailable && !hybridState.quotaError) {
+    try {
+      // Usar Prisma
+      return await prisma.agendamento.create({
+        data,
+        include: {
+          cliente: true,
+          servico: true,
+          funcionario: true
+        }
+      })
+    } catch (error: any) {
+      console.warn('⚠️ Falha no Prisma create, fallback para local:', error)
+      
+      if (error?.message?.includes('quota') || error?.message?.includes('exceeded')) {
+        hybridState.quotaError = true
+      }
+    }
+  }
+  
+  // Fallback para IndexedDB local
+  const agendamento = {
+    ...data,
+    id: crypto.randomUUID(),
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }
+  
+  await executeLocalOperation('Agendamento', 'add', agendamento)
+  return agendamento as Agendamento
+}
+
+export async function updateAgendamentoHybrid(
+  id: string,
+  data: Partial<Agendamento>
+): Promise<Agendamento> {
+  const isPrismaAvailable = await checkPrismaConnectivity()
+  
+  if (isPrismaAvailable && !hybridState.quotaError) {
+    try {
+      // Usar Prisma
+      return await prisma.agendamento.update({
+        where: { id },
+        data: {
+          ...data,
+          updatedAt: new Date()
+        },
+        include: {
+          cliente: true,
+          servico: true,
+          funcionario: true
+        }
+      })
+    } catch (error: any) {
+      console.warn('⚠️ Falha no Prisma update, fallback para local:', error)
+      
+      if (error?.message?.includes('quota') || error?.message?.includes('exceeded')) {
+        hybridState.quotaError = true
+      }
+    }
+  }
+  
+  // Fallback para IndexedDB local
+  const agendamento = await executeLocalOperation('Agendamento', 'get', id)
+  
+  if (!agendamento) {
+    throw new Error('Agendamento não encontrado')
+  }
+  
+  const updatedAgendamento = {
+    ...agendamento,
+    ...data,
+    updatedAt: new Date()
+  }
+  
+  await executeLocalOperation('Agendamento', 'put', updatedAgendamento)
+  return updatedAgendamento as Agendamento
+}
+
+export async function deleteAgendamentoHybrid(id: string): Promise<boolean> {
+  const isPrismaAvailable = await checkPrismaConnectivity()
+  
+  if (isPrismaAvailable && !hybridState.quotaError) {
+    try {
+      // Usar Prisma
+      await prisma.agendamento.delete({
+        where: { id }
+      })
+      return true
+    } catch (error: any) {
+      console.warn('⚠️ Falha no Prisma delete, fallback para local:', error)
+      
+      if (error?.message?.includes('quota') || error?.message?.includes('exceeded')) {
+        hybridState.quotaError = true
+      }
+    }
+  }
+  
+  // Fallback para IndexedDB local
+  await executeLocalOperation('Agendamento', 'delete', id)
+  return true
+}
+
+// ========== STATUS E INICIALIZAÇÃO ==========
+
+export function getHybridStatus() {
+  return {
+    mode: hybridState.currentMode,
+    prismaAvailable: hybridState.isPrismaAvailable,
+    localReady: hybridState.isLocalReady,
+    quotaError: hybridState.quotaError,
+    lastCheck: new Date(hybridState.lastPrismaCheck).toLocaleString()
+  }
+}
+
+export async function initHybridDatabase() {
+  console.log('🚀 Inicializando sistema híbrido Prisma + IndexedDB...')
+  
+  // Inicializar local sempre
+  await initLocalDB()
+  
+  // Verificar Prisma
+  await checkPrismaConnectivity()
+  
+  console.log('✅ Sistema híbrido Prisma inicializado:', getHybridStatus())
+}
+
+// Auto-inicializar se estiver no browser
+if (typeof window !== 'undefined') {
+  initHybridDatabase()
+  
+  // Debug tools globais
+  (window as any).hybridPrismaStatus = getHybridStatus
+  (window as any).testPrismaHybrid = async () => {
+    console.log('🧪 Testando sistema híbrido Prisma...')
+    const status = await getPrismaStatus()
+    console.log('📊 Status:', status)
+    return status
+  }
+  
+  console.log('🔧 Debug: Use window.hybridPrismaStatus() e window.testPrismaHybrid()')
+}
+
+// Exports
+export {
+  prisma,
+  executeLocalOperation,
+  checkPrismaConnectivity
+}
+
+export default {
+  getAgendamentos: getAgendamentosHybrid,
+  createAgendamento: createAgendamentoHybrid,
+  updateAgendamento: updateAgendamentoHybrid,
+  deleteAgendamento: deleteAgendamentoHybrid,
+  getStatus: getHybridStatus,
+  init: initHybridDatabase
+}

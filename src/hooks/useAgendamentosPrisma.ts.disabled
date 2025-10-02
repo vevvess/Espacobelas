@@ -1,0 +1,426 @@
+/**
+ * Hook de Agendamentos com Prisma Híbrido
+ * Usa Prisma (quando disponível) + IndexedDB local (fallback para quota)
+ * Switch automático e transparente para o usuário
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useAuth } from '@/contexts/SimpleAuthContext'
+import { toast } from '@/hooks/use-toast'
+import {
+  getAgendamentosHybrid,
+  createAgendamentoHybrid,
+  updateAgendamentoHybrid,
+  deleteAgendamentoHybrid,
+  getHybridStatus
+} from '@/lib/prismaHybridDatabase'
+import type { Agendamento } from '@prisma/client'
+
+// Tipo estendido para compatibilidade com sistema antigo
+interface AgendamentoModerno extends Agendamento {
+  cliente?: {
+    nome: string
+    telefone?: string
+    tipo_cliente?: string
+  }
+  servico?: {
+    nome: string
+    preco: number
+    duracao_minutos?: number
+  }
+  funcionario?: {
+    nome: string
+    username: string
+  }
+}
+
+interface UseAgendamentosPrismaState {
+  agendamentos: AgendamentoModerno[]
+  loading: boolean
+  error: string | null
+  hybridStatus: any
+  isRealTime: boolean
+  isChangingDate: boolean
+  hasCachedData: boolean
+}
+
+// Função para calcular duração total dos serviços (compatibilidade)
+const calcularDuracaoTotal = (agendamento: AgendamentoModerno): number => {
+  // Se tem serviço específico, usar sua duração
+  if (agendamento.servico?.duracao_minutos) {
+    return agendamento.servico.duracao_minutos
+  }
+  
+  // Duração padrão
+  return 60
+}
+
+// Função para determinar status automático baseado na hora
+const getStatusAutomatico = (agendamento: AgendamentoModerno): string => {
+  const agora = new Date()
+  const dataHoraAgendamento = new Date(agendamento.dataHora)
+  const duracaoMinutos = calcularDuracaoTotal(agendamento)
+  const fimEstimado = new Date(dataHoraAgendamento.getTime() + duracaoMinutos * 60000)
+
+  // Se já passou do fim estimado e ainda está "em_andamento", deveria estar "concluído"
+  if (agendamento.status === 'em_andamento' && agora > fimEstimado) {
+    return 'concluido'
+  }
+
+  // Se chegou a hora e está "agendado", deveria estar "em_andamento"
+  if (agendamento.status === 'agendado' && agora >= dataHoraAgendamento && agora <= fimEstimado) {
+    return 'em_andamento'
+  }
+
+  // Manter status atual se não há mudança automática
+  return agendamento.status
+}
+
+export function useAgendamentosPrisma(
+  dataInicio: Date,
+  dataFim: Date,
+  userId?: string
+) {
+  const { user } = useAuth()
+  const userIdToUse = userId || user?.id
+
+  const [state, setState] = useState<UseAgendamentosPrismaState>({
+    agendamentos: [],
+    loading: true,
+    error: null,
+    hybridStatus: null,
+    isRealTime: true, // Híbrido é sempre "tempo real"
+    isChangingDate: false,
+    hasCachedData: false
+  })
+
+  const loadingRef = useRef(false)
+  const cacheRef = useRef(new Map<string, AgendamentoModerno[]>())
+
+  // Gerar chave de cache baseada nas datas
+  const getCacheKey = useCallback((start: Date, end: Date) => {
+    return `${start.toISOString()}-${end.toISOString()}`
+  }, [])
+
+  // Carregar agendamentos
+  const loadAgendamentos = useCallback(async (
+    start: Date,
+    end: Date,
+    isDateChange = false
+  ) => {
+    if (!userIdToUse) {
+      setState(prev => ({ ...prev, loading: false, error: 'Usuário não autenticado' }))
+      return
+    }
+
+    if (loadingRef.current) return
+
+    const cacheKey = getCacheKey(start, end)
+    const cachedData = cacheRef.current.get(cacheKey)
+
+    // Se mudando data e tem cache, usar imediatamente
+    if (isDateChange && cachedData) {
+      setState(prev => ({
+        ...prev,
+        agendamentos: cachedData,
+        loading: false,
+        isChangingDate: false,
+        hasCachedData: true,
+        error: null
+      }))
+      return
+    }
+
+    loadingRef.current = true
+    
+    setState(prev => ({
+      ...prev,
+      loading: true,
+      isChangingDate: isDateChange,
+      error: null
+    }))
+
+    try {
+      console.log(`🔄 Carregando agendamentos Prisma híbridos ${start.toDateString()} → ${end.toDateString()}`)
+      
+      // Carregar dados com sistema híbrido
+      const data = await getAgendamentosHybrid(userIdToUse, start, end)
+      
+      // Converter para formato compatível (Prisma já vem com includes)
+      const agendamentos = data.map(ag => {
+        const agendamentoModerno: AgendamentoModerno = {
+          ...ag,
+          // Garantir compatibilidade de datas
+          dataHora: new Date(ag.dataHora),
+          createdAt: new Date(ag.createdAt),
+          updatedAt: new Date(ag.updatedAt)
+        }
+
+        // Verificar status automático
+        const statusAutomatico = getStatusAutomatico(agendamentoModerno)
+        if (statusAutomatico !== ag.status) {
+          // Atualizar status automaticamente
+          updateAgendamentoHybrid(ag.id, { status: statusAutomatico })
+            .catch(error => {
+              console.warn('⚠️ Erro ao atualizar status automático Prisma:', error)
+            })
+          
+          agendamentoModerno.status = statusAutomatico
+        }
+
+        return agendamentoModerno
+      })
+
+      // Atualizar cache
+      cacheRef.current.set(cacheKey, agendamentos)
+      
+      // Limitar cache a 10 entradas
+      if (cacheRef.current.size > 10) {
+        const firstKey = cacheRef.current.keys().next().value
+        cacheRef.current.delete(firstKey)
+      }
+
+      // Obter status do sistema híbrido
+      const hybridStatus = getHybridStatus()
+
+      setState(prev => ({
+        ...prev,
+        agendamentos,
+        hybridStatus,
+        loading: false,
+        isChangingDate: false,
+        hasCachedData: cacheRef.current.has(cacheKey),
+        error: null
+      }))
+
+      console.log(`✅ Agendamentos Prisma híbridos carregados: ${agendamentos.length} registros (modo: ${hybridStatus.mode})`)
+
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar agendamentos Prisma:', error)
+      
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        isChangingDate: false,
+        error: error?.message || 'Erro ao carregar agendamentos'
+      }))
+    } finally {
+      loadingRef.current = false
+    }
+  }, [userIdToUse, getCacheKey])
+
+  // Criar agendamento
+  const createAgendamento = useCallback(async (agendamentoData: {
+    clienteId: string
+    servicoId: string
+    dataHora: Date
+    observacoes?: string
+    valor?: number
+    funcionarioId?: string
+  }) => {
+    if (!userIdToUse) throw new Error('Usuário não autenticado')
+
+    try {
+      console.log('➕ Criando agendamento Prisma híbrido...')
+      
+      const novoAgendamento = await createAgendamentoHybrid({
+        userSimpleId: userIdToUse,
+        clienteId: agendamentoData.clienteId,
+        servicoId: agendamentoData.servicoId,
+        funcionarioId: agendamentoData.funcionarioId || null,
+        dataHora: agendamentoData.dataHora,
+        status: 'agendado',
+        observacoes: agendamentoData.observacoes || null,
+        valor: agendamentoData.valor ? String(agendamentoData.valor) : null
+      })
+      
+      // Invalidar cache relevante
+      cacheRef.current.clear()
+      
+      // Recarregar dados
+      await loadAgendamentos(dataInicio, dataFim)
+      
+      console.log('✅ Agendamento Prisma criado com sucesso')
+      
+      toast({
+        title: "Sucesso",
+        description: "Agendamento criado com sucesso"
+      })
+      
+      return novoAgendamento
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao criar agendamento Prisma:', error)
+      
+      toast({
+        title: "Erro",
+        description: error?.message || "Erro ao criar agendamento",
+        variant: "destructive"
+      })
+      
+      throw error
+    }
+  }, [userIdToUse, dataInicio, dataFim, loadAgendamentos])
+
+  // Atualizar agendamento
+  const updateAgendamento = useCallback(async (
+    agendamentoId: string,
+    updates: Partial<{
+      status: string
+      dataHora: Date
+      observacoes: string
+      valor: number
+      funcionarioId: string
+      servicoId: string
+    }>
+  ) => {
+    if (!userIdToUse) throw new Error('Usuário não autenticado')
+
+    try {
+      console.log('✏️ Atualizando agendamento Prisma híbrido...')
+      
+      // Converter campos para formato Prisma
+      const prismaUpdates: any = {}
+      
+      if (updates.status) prismaUpdates.status = updates.status
+      if (updates.dataHora) prismaUpdates.dataHora = updates.dataHora
+      if (updates.observacoes) prismaUpdates.observacoes = updates.observacoes
+      if (updates.valor) prismaUpdates.valor = String(updates.valor)
+      if (updates.funcionarioId) prismaUpdates.funcionarioId = updates.funcionarioId
+      if (updates.servicoId) prismaUpdates.servicoId = updates.servicoId
+      
+      const agendamentoAtualizado = await updateAgendamentoHybrid(agendamentoId, prismaUpdates)
+      
+      // Invalidar cache
+      cacheRef.current.clear()
+      
+      // Recarregar dados
+      await loadAgendamentos(dataInicio, dataFim)
+      
+      console.log('✅ Agendamento Prisma atualizado com sucesso')
+      
+      toast({
+        title: "Sucesso",
+        description: "Agendamento atualizado com sucesso"
+      })
+      
+      return agendamentoAtualizado
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar agendamento Prisma:', error)
+      
+      toast({
+        title: "Erro",
+        description: error?.message || "Erro ao atualizar agendamento",
+        variant: "destructive"
+      })
+      
+      throw error
+    }
+  }, [userIdToUse, dataInicio, dataFim, loadAgendamentos])
+
+  // Deletar agendamento
+  const deleteAgendamento = useCallback(async (agendamentoId: string) => {
+    if (!userIdToUse) throw new Error('Usuário não autenticado')
+
+    try {
+      console.log('🗑️ Deletando agendamento Prisma híbrido...')
+      
+      const success = await deleteAgendamentoHybrid(agendamentoId)
+      
+      if (success) {
+        // Invalidar cache
+        cacheRef.current.clear()
+        
+        // Recarregar dados
+        await loadAgendamentos(dataInicio, dataFim)
+        
+        console.log('✅ Agendamento Prisma deletado com sucesso')
+        
+        toast({
+          title: "Sucesso",
+          description: "Agendamento removido com sucesso"
+        })
+      }
+      
+      return success
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao deletar agendamento Prisma:', error)
+      
+      toast({
+        title: "Erro",
+        description: error?.message || "Erro ao remover agendamento",
+        variant: "destructive"
+      })
+      
+      throw error
+    }
+  }, [userIdToUse, dataInicio, dataFim, loadAgendamentos])
+
+  // Refresh manual
+  const refresh = useCallback(async () => {
+    cacheRef.current.clear()
+    await loadAgendamentos(dataInicio, dataFim)
+  }, [dataInicio, dataFim, loadAgendamentos])
+
+  // Efeito para carregar dados quando as datas mudam
+  useEffect(() => {
+    const isDateChange = !loadingRef.current
+    loadAgendamentos(dataInicio, dataFim, isDateChange)
+  }, [dataInicio, dataFim, loadAgendamentos])
+
+  // Polling suave para atualizações (só se estiver no modo Prisma)
+  useEffect(() => {
+    if (!state.hybridStatus?.prismaAvailable) {
+      return // Não fazer polling se estiver offline
+    }
+
+    const interval = setInterval(() => {
+      if (!loadingRef.current && !state.isChangingDate) {
+        loadAgendamentos(dataInicio, dataFim)
+      }
+    }, 30000) // 30 segundos
+
+    return () => clearInterval(interval)
+  }, [dataInicio, dataFim, loadAgendamentos, state.hybridStatus?.prismaAvailable, state.isChangingDate])
+
+  // Debug helpers
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).debugPrismaHook = () => {
+        console.log('🔍 Estado do Hook Prisma:', {
+          agendamentosCount: state.agendamentos.length,
+          loading: state.loading,
+          hybridStatus: state.hybridStatus,
+          cacheSize: cacheRef.current.size,
+          error: state.error
+        })
+        return state
+      }
+      
+      (window as any).clearPrismaCache = () => {
+        cacheRef.current.clear()
+        console.log('🧹 Cache Prisma limpo')
+      }
+      
+      console.log('🔧 Debug: Use window.debugPrismaHook() e window.clearPrismaCache()')
+    }
+  }, [state])
+
+  return {
+    agendamentos: state.agendamentos,
+    loading: state.loading,
+    error: state.error,
+    hybridStatus: state.hybridStatus,
+    isRealTime: state.isRealTime,
+    isChangingDate: state.isChangingDate,
+    hasCachedData: state.hasCachedData,
+    createAgendamento,
+    updateAgendamento,
+    deleteAgendamento,
+    refresh
+  }
+}
+
+export default useAgendamentosPrisma
