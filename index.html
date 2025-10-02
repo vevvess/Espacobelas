@@ -9,6 +9,38 @@
   <body>
     <div id="root"></div>
 
-    <script type="module" src="/src/main.tsx"></script>
+    <!--
+      Tenta carregar o app via Vite (TSX).
+      Se falhar (em ambiente de preview estático), cai para um preview simples estático.
+    -->
+    <script type="module">
+      const root = document.getElementById("root");
+      try {
+        await import("/src/main.tsx");
+      } catch (err) {
+        console.warn("Vite/TSX indisponível neste preview. Carregando preview estático...", err);
+
+        const loadScript = (src) =>
+          new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+
+        try {
+          await loadScript("/public/fallback-preview.js");
+          if (window.__runFallbackPreview) {
+            window.__runFallbackPreview(root);
+          } else {
+            root.textContent = "Falha ao inicializar o preview estático.";
+          }
+        } catch (e) {
+          console.error("Erro ao carregar o preview estático:", e);
+          root.textContent = "Não foi possível carregar o app ou o preview estático.";
+        }
+      }
+    </script>
   </body>
 </html>
