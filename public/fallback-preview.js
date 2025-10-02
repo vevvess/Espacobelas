@@ -244,12 +244,268 @@
     `;
 
     const Agenda = () => `
-      <div class="hero"><h1>Agenda</h1><p>Agendamentos e calendário</p></div>
+      <style>
+        .agenda-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; display:flex; align-items:center; gap:10px; }
+        .agenda-hero .chip-online { display:inline-flex; align-items:center; gap:6px; background:#eafff1; color:#15803d; font-weight:800; padding:6px 12px; border-radius:999px; font-size:12px; border:1px solid #bbf7d0; }
+        .agenda-hero p { margin: 0; color: #9d3a69; font-weight: 600; }
+        .btn-lg { display:inline-flex; align-items:center; gap:10px; background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; font-weight:900; border-radius:16px; padding:16px 22px; border:0; box-shadow: var(--shadow); }
+        .card-blue { background:#eff6ff; border:1px solid #bfdbfe; border-radius:18px; padding:14px; box-shadow: var(--shadow); }
+        .card-blue .grid { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+        .muted-strong { color:#334155; font-weight:800; }
+        .ok { color:#16a34a; font-weight:800; }
+        .row-info { display:flex; align-items:center; gap:16px; color:#6b7280; font-weight:700; }
+        .row-info .chip { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; padding:6px 10px; border-radius:10px; }
+        .row-info .btn-refresh { display:inline-flex; align-items:center; gap:6px; background:#eef2ff; border:1px solid #c7d2fe; padding:8px 12px; border-radius:12px; color:#4338ca; font-weight:800; }
+
+        .kpi-mini { display:grid; gap:12px; margin:14px 0; }
+        .kpi-mini .item { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; display:flex; align-items:center; justify-content:space-between; box-shadow: var(--shadow); }
+        .kpi-mini .item.orange { background: #fff7ed; border-color:#fed7aa; }
+        .kpi-mini .item.purple { border-color:#e9d5ff; }
+        .kpi-mini .title { color:#a1125b; font-weight:900; }
+        .kpi-mini .val { font-size:32px; font-weight:900; color:#a1125b; }
+
+        .view-card { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; box-shadow: var(--shadow); display:grid; gap:12px; }
+        .view-switch { display:flex; gap:8px; }
+        .view-switch .btn { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
+        .view-switch .btn.active { background: linear-gradient(180deg,#fff,#ffe9f1); border:2px solid #f3a1c8; box-shadow: var(--shadow); }
+        .date-nav { display:flex; align-items:center; justify-content:space-between; }
+        .date-nav .arrow { width:40px; height:40px; display:grid; place-items:center; border-radius:12px; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
+        .date-nav .date { font-size:22px; font-weight:900; color:#a1125b; }
+        .date-nav .chip { border:1px solid #fde2f1; background:#fff4f9; padding:6px 12px; border-radius:999px; font-weight:800; color:#a1125b; }
+
+        .staff-card .top { display:flex; align-items:center; justify-content:space-between; }
+        .staff-card .badge { background:#fee2f2; color:#a1125b; border:1px solid #fbcfe8; padding:6px 10px; border-radius:999px; font-weight:800; }
+        .staff-item { display:flex; align-items:center; justify-content:space-between; gap: 10px; background:#fff7fb; border:1px solid #f3c6d9; border-radius:14px; padding:12px; }
+        .staff-item .left { display:flex; gap:10px; align-items:center; }
+        .staff-item .ava { width:34px; height:34px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
+        .staff-footer { display:flex; align-items:center; justify-content:space-between; color:#a1125b; font-weight:900; }
+
+        .filters .field { display:grid; gap:6px; margin:8px 0; }
+        .filters select { width:100%; border:1px solid #f3c6d9; padding:12px; border-radius:14px; background:#fff; font-weight:700; color:#a1125b; }
+        .filters .check { display:flex; align-items:center; gap:8px; font-weight:800; color:#a1125b; }
+
+        .title-row { display:flex; align-items:center; justify-content:space-between; }
+        .title-row .badge { background:#fee2f2; color:#a1125b; border:1px solid #fbcfe8; padding:8px 12px; border-radius:999px; font-weight:800; }
+
+        /* Appointment cards */
+        .appt { position:relative; border-radius:20px; padding:14px; background:#fff; box-shadow: var(--shadow); border:2px solid #f9c3a7; margin-bottom:16px; }
+        .appt.in-progress { border-color:#f59e0b; background: linear-gradient(90deg, rgba(34,197,94,.25) 0 0); } /* baseline */
+        .appt .progress-fill { position:absolute; left:0; top:0; bottom:0; width:0; border-radius:20px; background: linear-gradient(90deg, rgba(34,197,94,.35), rgba(34,197,94,.08)); pointer-events:none; }
+        .appt .inner { position:relative; display:grid; grid-template-columns: 1fr auto; gap: 10px; }
+        .appt .header { display:flex; align-items:center; gap:12px; }
+        .appt .ava { width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
+        .appt .name { font-weight:900; color:#7a0f3f; font-size:20px; }
+        .appt .status { background:#fef3c7; color:#a16207; padding:6px 10px; border-radius:999px; font-weight:900; border:1px solid #fde68a; }
+        .appt .status.scheduled { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
+        .appt .actions { display:grid; gap:10px; color:#a1125b; }
+        .appt .row { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
+        .appt .section-title { color:#a1125b; font-weight:900; margin: 8px 0 6px; }
+        .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
+        .chip-sub { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
+        .worker-pill { display:inline-flex; align-items:center; gap:8px; background:#def7ec; border:1px solid #a7f3d0; color:#065f46; padding:10px 12px; border-radius:14px; font-weight:800; }
+        .total { background:#fff; border:1px solid #f3c6d9; padding:12px 14px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
+        .total .label { color:#a1125b; font-weight:900; }
+        .total .value { color:#16a34a; font-weight:900; }
+
+        .appt.scheduled { border-color:#10b981; background:#ecfdf5; }
+        .appt.scheduled .ava { background:#10b981; }
+
+      </style>
+
+      <div class="agenda-hero">
+        <h1>Agenda <span class="chip-online"><span class="dot"></span>Online</span></h1>
+        <p>Gerencie os agendamentos do salão</p>
+      </div>
+
+      <button class="btn-lg" data-open="agendamento">+ Novo Agendamento</button>
+
+      <div class="card-blue" style="margin-top:12px;">
+        <div class="grid">
+          <div><div class="muted">Status</div><div class="muted-strong">Automático</div></div>
+          <div><div class="muted">Tempo real por</div><div class="muted-strong">eventos</div></div>
+          <div><div class="muted">1</div><div class="muted-strong">em andamento</div></div>
+          <div><div class="muted">Eventos do</div><div class="muted-strong">sistema</div></div>
+        </div>
+        <div class="muted" style="margin-top:10px;">📋 1 agendamentos hoje • Atualiza apenas quando algo muda</div>
+      </div>
+
+      <div class="row-info" style="margin-top:10px;">
+        <span class="chip">🟢 Tempo real ativo</span>
+        <span class="chip">⏱️ Atualizado: <span id="lastUpdate">Agora</span></span>
+        <button id="btnAtualizar" class="btn-refresh">↻ Atualizar</button>
+      </div>
+
+      <div class="kpi-mini">
+        <div class="item">
+          <div>
+            <div class="title">Hoje (01/10/2025)</div>
+            <div class="val">1</div>
+          </div>
+          <div>📅</div>
+        </div>
+        <div class="item">
+          <div>
+            <div class="title">Pendentes</div>
+            <div class="val">1</div>
+          </div>
+          <div>🕒</div>
+        </div>
+        <div class="item orange">
+          <div>
+            <div class="title" style="color:#d97706;">Aguardando Confirmação</div>
+            <div class="val" style="color:#d97706;">0</div>
+          </div>
+          <div style="color:#d97706;">💲</div>
+        </div>
+        <div class="item purple">
+          <div>
+            <div class="title" style="color:#a21caf;">Concluídos</div>
+            <div class="val" style="color:#a21caf;">0</div>
+          </div>
+          <div style="color:#a21caf;">✔️</div>
+        </div>
+      </div>
+
+      <div class="view-card">
+        <div class="view-switch">
+          <button class="btn active">≣</button>
+          <button class="btn">▦</button>
+          <button class="btn">📆</button>
+        </div>
+        <div class="date-nav">
+          <button class="arrow" aria-label="Anterior">←</button>
+          <div style="text-align:center;">
+            <div class="date">02/10/2025</div>
+            <div class="muted">02/10/2025 ▾</div>
+          </div>
+          <button class="arrow" aria-label="Próximo">→</button>
+        </div>
+        <div><span class="chip">Hoje</span></div>
+      </div>
+
+      <section class="section staff-card">
+        <div class="top">
+          <div style="display:flex; align-items:center; gap:8px;"><span>👥</span><h2 style="margin:0;">Funcionários</h2><span class="badge">1 ativo</span></div>
+          <div class="muted" style="display:flex; gap:14px; align-items:center;"><a href="#" style="color:#a1125b; font-weight:900; text-decoration:none;">Ver Todos</a> 👁️</div>
+        </div>
+
+        <div class="staff-item" style="margin:12px 0;">
+          <div class="left">
+            <div class="ava">K</div>
+            <div>
+              <div class="muted-strong">Kelly Monice</div>
+              <div class="muted">@Kelly</div>
+            </div>
+          </div>
+          <span class="badge">1 agend.</span>
+        </div>
+
+        <div class="staff-footer">
+          <div>1 Agendamentos</div>
+          <div>1 Funcionários</div>
+        </div>
+      </section>
+
+      <section class="section filters">
+        <div class="field">
+          <label class="muted-strong">Data</label>
+          <select>
+            <option>02/10/2025</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="muted-strong">Status</label>
+          <select>
+            <option>Todos os status</option>
+          </select>
+        </div>
+        <label class="check"><input type="checkbox"> Mostrar concluídos</label>
+      </section>
+
       <section class="section">
-        <div class="row"><strong>09:00</strong><span class="pill">Livre</span></div>
-        <div class="row"><strong>10:00</strong><span class="pill">Livre</span></div>
-        <div class="row"><strong>11:00</strong><span class="pill">Livre</span></div>
-        <div class="row"><strong>14:00</strong><span class="pill">Confirmado</span></div>
+        <div class="title-row">
+          <h2 style="margin:0;">Agendamentos – 02/10/2025</h2>
+          <span class="badge">2 agendamentos</span>
+        </div>
+
+        <!-- Appointment 1 - Em andamento com progresso -->
+        <article class="appt in-progress" id="appt1">
+          <div class="progress-fill" style="width:64%"></div>
+          <div class="inner">
+            <div>
+              <div class="header">
+                <div class="ava">A</div>
+                <div style="flex:1;">
+                  <div class="name">Adriane Lima</div>
+                </div>
+                <span class="status">Em Andamento</span>
+              </div>
+
+              <div class="row">🕒 02/10/2025, 09:00</div>
+              <div class="row">👤 (81) 98886-1850</div>
+
+              <div class="section-title">Serviços:</div>
+              <div class="chip-box">
+                <div class="chip-sub">💇‍♀️ Chapinha<br/><span class="muted">👤 Kelly Monice</span></div>
+                <strong>R$ 50,00</strong>
+              </div>
+
+              <div class="section-title">Funcionários:</div>
+              <div class="worker-pill">🟢 Kelly Monice</div>
+
+              <div class="total">
+                <div class="label">Valor Total:</div>
+                <div class="value">R$ 50,00</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn-outline" title="Visualizar">👁️</button>
+              <button class="btn-outline" title="Editar">✏️</button>
+              <button class="btn-outline" title="Cobrar">💲</button>
+              <button class="btn-outline" title="Excluir">🗑️</button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Appointment 2 - Agendado -->
+        <article class="appt scheduled">
+          <div class="inner">
+            <div>
+              <div class="header">
+                <div class="ava">A</div>
+                <div style="flex:1;">
+                  <div class="name">Adriane Lima</div>
+                </div>
+                <span class="status scheduled">Agendado</span>
+              </div>
+
+              <div class="row">🕒 02/10/2025, 11:25</div>
+              <div class="row">👤 (81) 98886-1850</div>
+
+              <div class="section-title">Serviços:</div>
+              <div class="chip-box" style="background:#d1fae5; border-color:#a7f3d0;">
+                <div class="chip-sub">💇‍♀️ Chapinha<br/><span class="muted">👤 Simone Barboza</span></div>
+                <strong>R$ 20,00</strong>
+              </div>
+
+              <div class="section-title">Funcionários:</div>
+              <div class="worker-pill">🟢 Simone Barboza</div>
+
+              <div class="total">
+                <div class="label">Valor Total:</div>
+                <div class="value">R$ 20,00</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn-outline" title="Visualizar">👁️</button>
+              <button class="btn-outline" title="Editar">✏️</button>
+              <button class="btn-outline" title="Agendar">🕒</button>
+              <button class="btn-outline" title="Excluir">🗑️</button>
+            </div>
+          </div>
+        </article>
       </section>
     `;
 
@@ -459,6 +715,25 @@
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeModal();
       });
+
+      // Interações específicas da Agenda (progresso e atualizar)
+      if (hash === "/agenda") {
+        const btnUpd = document.getElementById("btnAtualizar");
+        const last = document.getElementById("lastUpdate");
+        btnUpd && btnUpd.addEventListener("click", () => (last.textContent = "Agora"));
+        // Progresso: simulação suave de preenchimento
+        const card = page.querySelector("#appt1 .progress-fill");
+        if (card) {
+          let w = parseFloat(card.style.width) || 64;
+          function step() {
+            w += 0.15; // ~0.15% por frame (~9%/seg a 60fps)
+            if (w >= 100) w = 100;
+            card.style.width = w + "%";
+            if (w < 100) requestAnimationFrame(step);
+          }
+          requestAnimationFrame(step);
+        }
+      }
     }
 
     window.addEventListener("hashchange", renderRoute);
