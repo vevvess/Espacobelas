@@ -137,6 +137,22 @@ export async function upsertCategoria(userId: string, nome: string): Promise<Cat
   return r[0] as Categoria;
 }
 
+export async function updateCategoria(userId: string, id: string, nome: string): Promise<Categoria> {
+  await ensureEstoqueSchema();
+  const now = nowIso();
+  const r = await sql`
+    UPDATE estoque_categorias SET nome = ${nome}, updated_at = ${now}
+    WHERE id = ${id} AND user_simple_id = ${userId}
+    RETURNING *
+  `;
+  return r[0] as Categoria;
+}
+
+export async function deleteCategoria(userId: string, id: string): Promise<void> {
+  await ensureEstoqueSchema();
+  await sql`DELETE FROM estoque_categorias WHERE id = ${id} AND user_simple_id = ${userId}`;
+}
+
 export async function listCategorias(userId: string): Promise<Categoria[]> {
   await ensureEstoqueSchema();
   const r = await sql`SELECT * FROM estoque_categorias WHERE user_simple_id = ${userId} ORDER BY nome`;
@@ -155,10 +171,20 @@ export async function upsertLocal(userId: string, nome: string): Promise<LocalAr
   return r[0] as LocalArmazenamento;
 }
 
-export async function listLocais(userId: string): Promise<LocalArmazenamento[]> {
+export async function updateLocal(userId: string, id: string, nome: string): Promise<LocalArmazenamento> {
   await ensureEstoqueSchema();
-  const r = await sql`SELECT * FROM estoque_locais WHERE user_simple_id = ${userId} ORDER BY nome`;
-  return r as LocalArmazenamento[];
+  const now = nowIso();
+  const r = await sql`
+    UPDATE estoque_locais SET nome = ${nome}, updated_at = ${now}
+    WHERE id = ${id} AND user_simple_id = ${userId}
+    RETURNING *
+  `;
+  return r[0] as LocalArmazenamento;
+}
+
+export async function deleteLocal(userId: string, id: string): Promise<void> {
+  await ensureEstoqueSchema();
+  await sql`DELETE FROM estoque_locais WHERE id = ${id} AND user_simple_id = ${userId}`;
 }
 
 export async function createProduto(userId: string, data: Partial<Produto>): Promise<Produto> {
@@ -218,6 +244,27 @@ export async function recordMovimento(userId: string, data: {
     RETURNING *
   `;
   return r[0] as Movimento;
+}
+
+export async function updateMovimento(userId: string, id: string, data: Partial<Pick<Movimento, "tipo" | "quantidade" | "unidade" | "motivo" | "observacao">>): Promise<Movimento> {
+  await ensureEstoqueSchema();
+  const r = await sql`
+    UPDATE estoque_movimentos
+    SET
+      tipo = COALESCE(${data.tipo as any}, tipo),
+      quantidade = COALESCE(${data.quantidade as any}, quantidade),
+      unidade = COALESCE(${data.unidade as any}, unidade),
+      motivo = COALESCE(${data.motivo as any}, motivo),
+      observacao = COALESCE(${data.observacao as any}, observacao)
+    WHERE id = ${id} AND user_simple_id = ${userId}
+    RETURNING *
+  `;
+  return r[0] as Movimento;
+}
+
+export async function deleteMovimento(userId: string, id: string): Promise<void> {
+  await ensureEstoqueSchema();
+  await sql`DELETE FROM estoque_movimentos WHERE id = ${id} AND user_simple_id = ${userId}`;
 }
 
 export async function listProdutos(userId: string, q?: string, categoriaId?: string, localId?: string): Promise<Produto[]> {
@@ -370,6 +417,60 @@ export function exportMovimentosCSV(movs: Movimento[]) {
   a.download = `estoque_movimentos_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// XLSX helpers (dinâmico via CDN)
+async function loadXLSX(): Promise<any> {
+  const w = window as any;
+  if (w.XLSX) return w.XLSX;
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Falha ao carregar XLSX"));
+    document.head.appendChild(s);
+  });
+  return (window as any).XLSX;
+}
+
+export async function exportProdutosXLSX(produtos: Produto[]) {
+  const XLSX = await loadXLSX();
+  const data = produtos.map((p) => ({
+    Nome: p.nome || "",
+    "Código de Barras": p.codigo_barras || "",
+    Categoria: p.categoria_nome || "",
+    Local: p.local_nome || "",
+    Unidade: p.unidade,
+    "Fator Pacote": Number(p.fator_pacote || 1),
+    Fracionável: p.fracionavel ? "Sim" : "Não",
+    Validade: p.validade || "",
+    "Alerta Validade (dias)": Number(p.alerta_validade_dias ?? 7),
+    "Alerta Estoque (qtd)": Number(p.alerta_estoque_qtd ?? 1),
+    "Saldo Atual": Number(p.saldo_atual ?? 0),
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Produtos");
+  XLSX.writeFile(wb, `estoque_produtos_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+export async function exportMovimentosXLSX(movs: Movimento[]) {
+  const XLSX = await loadXLSX();
+  const data = movs.map((m) => ({
+    "Data/Hora": new Date(m.created_at).toLocaleString("pt-BR"),
+    Produto: m.produto_nome || "",
+    Categoria: m.categoria_nome || "",
+    Tipo: m.tipo,
+    Quantidade: Number(m.quantidade),
+    Unidade: m.unidade,
+    Motivo: m.motivo || "",
+    Observação: m.observacao || "",
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Movimentos");
+  XLSX.writeFile(wb, `estoque_movimentos_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function escapeCSV(s: string) {
