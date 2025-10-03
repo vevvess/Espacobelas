@@ -18,6 +18,7 @@ import { useAuth } from "../contexts/SimpleAuthContext";
 import { useCaixa } from "../hooks/useCaixa";
 import { ModalEditarMovimentacao } from "../components/ModalEditarMovimentacao";
 import { toast } from "../hooks/use-toast";
+import { getDinheiroInformado, setDinheiroInformado as setDinheiroInformadoDB } from "@/services/caixaDbService";
 
 interface MovimentoCaixa {
   id: string;
@@ -97,11 +98,18 @@ export default function Caixa() {
       return 0;
     }
   });
-  const saveDinheiroInformado = (v: number) => {
+  const saveDinheiroInformado = async (v: number) => {
     setDinheiroInformado(v);
     try {
       localStorage.setItem(cashKey, String(v));
     } catch {}
+    try {
+      if (user?.id) {
+        await setDinheiroInformadoDB(user.id, dataAtual, Number(v) || 0);
+      }
+    } catch (e) {
+      console.warn("Falha ao persistir dinheiro informado no banco:", e);
+    }
   };
   const hiddenKey = useMemo(() => `caixa_hidden_${dataAtual}`, [dataAtual]);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => {
@@ -130,6 +138,27 @@ export default function Caixa() {
   useEffect(() => {
     loadHidden();
   }, [hiddenKey]);
+
+  // Carregar Dinheiro Informado do banco ao trocar a data
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCash() {
+      try {
+        if (user?.id) {
+          const v = await getDinheiroInformado(user.id, dataAtual);
+          if (!cancelled) {
+            setDinheiroInformado(v || 0);
+            try { localStorage.setItem(cashKey, String(v || 0)); } catch {}
+          }
+        }
+      } catch (e) {
+        // Silencioso: se falhar, fica com o que estiver no localStorage
+        console.warn("Falha ao carregar Dinheiro Informado do banco:", e);
+      }
+    }
+    loadCash();
+    return () => { cancelled = true; };
+  }, [user?.id, dataAtual]);
   const {
     movimentos,
     atendimentos,
