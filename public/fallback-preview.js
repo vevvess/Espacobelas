@@ -174,7 +174,7 @@
     // Pages
     const Dashboard = () => `
       <div class="hero">
-        <h1>ok tudo bem</h1>
+        <h1>Bem-vindo, Weslley<br/>Raphael! 👋</h1>
         <p>Aqui está um resumo das suas atividades de hoje</p>
       </div>
       <div class="datecard">
