@@ -606,11 +606,7 @@
     `;
 
     const Caixa = () => `
-      <div class="hero"><h1>Caixa</h1><p>Movimentações e pagamentos</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Venda #1021</strong><div class="muted">Hoje • Corte</div></div><strong>R$ 35,00</strong></div>
-        <div class="row"><div><strong>Pix</strong><div class="muted">Ontem</div></div><strong>R$ 90,00</strong></div>
-      </section>
+      <div id="caixa-root"></div>
     `;
 
     const Usuarios = () => `
@@ -789,6 +785,488 @@
           }
           requestAnimationFrame(step);
         }
+      }
+
+      // Interações específicas do Caixa (persistência local e cálculos)
+      if (hash === "/caixa") {
+        const storageKey = "bella_caixa_v1";
+        const todayYMD = (() => {
+          const t = new Date();
+          const y = t.getFullYear();
+          const m = String(t.getMonth() + 1).padStart(2, "0");
+          const d = String(t.getDate()).padStart(2, "0");
+          return `${y}-${m}-${d}`;
+        })();
+        const selectedDate = localStorage.getItem("bella_caixa_selected_date") || todayYMD;
+
+        const money = (n) =>
+          (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const fmtBR = (ymd) => {
+          const [y, m, d] = ymd.split("-");
+          return `${d}/${m}/${y}`;
+        };
+        const getStore = () => {
+          try {
+            return JSON.parse(localStorage.getItem(storageKey) || '{"days":{}}');
+          } catch {
+            return { days: {} };
+          }
+        };
+        const setStore = (s) => localStorage.setItem(storageKey, JSON.stringify(s));
+        const getDay = (store, ymd) => {
+          if (!store.days[ymd]) {
+            store.days[ymd] = { atendimentos: [], despesas: [], dinheiroInformado: 0 };
+          }
+          return store.days[ymd];
+        };
+
+        const snapshot = (ymd) => {
+          const store = getStore();
+          const day = getDay(store, ymd);
+          const atts = day.atendimentos || [];
+          const deps = day.despesas || [];
+          let totalPix = 0,
+            totalCartao = 0,
+            totalDinheiro = 0,
+            totalDebitos = 0;
+          atts.forEach((a) => {
+            const v = Number(a.valor) || 0;
+            if (a.pagamento === "pix") totalPix += v;
+            else if (a.pagamento === "cartao") totalCartao += v;
+            else if (a.pagamento === "dinheiro") totalDinheiro += v;
+            else if (a.pagamento === "mensal") totalDebitos += v;
+          });
+          let totalDespesas = 0,
+            totalDespesasCaixa = 0;
+          deps.forEach((d) => {
+            const v = Number(d.valor) || 0;
+            totalDespesas += v;
+            if (d.origem === "caixa") totalDespesasCaixa += v;
+          });
+          const entradas = totalPix + totalCartao + totalDinheiro;
+          const dinheiroInformado = Number(day.dinheiroInformado || 0);
+          const dinheiroCalculado = dinheiroInformado + totalDinheiro - totalDespesasCaixa;
+          return {
+            store,
+            day,
+            atts,
+            deps,
+            totalPix,
+            totalCartao,
+            totalDinheiro,
+            totalDebitos,
+            totalDespesas,
+            totalDespesasCaixa,
+            entradas,
+            dinheiroInformado,
+            dinheiroCalculado,
+          };
+        };
+
+        function renderCaixa() {
+          const s = snapshot(selectedDate);
+          const brDate = fmtBR(selectedDate);
+
+          page.innerHTML = `
+            <style>
+              .cx-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+              .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+              .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              .grid-cards{ display:grid; gap:12px; margin:12px 0; }
+              .card-sm{ border-radius:16px; border:1px solid #f1e6ee; background:#fff; padding:14px; box-shadow: var(--shadow); }
+              .card-sm.green{ border-color:#86efac; }
+              .card-sm.blue{ border-color:#93c5fd; }
+              .card-sm.purple{ border-color:#c7d2fe; }
+              .card-sm.yellow{ border-color:#fde68a; background:#fffbeb; }
+              .card-sm.red{ border-color:#fecaca; }
+              .k-title{ color:#a1125b; font-weight:900; }
+              .k-value{ font-size:28px; font-weight:900; color:#0f172a; }
+              @media(min-width:980px){ .grid-cards{ grid-template-columns: repeat(3,minmax(0,1fr)); } }
+              .filter-card{ display:grid; gap:10px; }
+              .filter-card .field{ display:grid; gap:6px; }
+              .filter-card input, .filter-card select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+              .list-table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
+              .list-table th{ text-align:left; color:#a1125b; font-size:12px; }
+              .list-table td{ background:#fff; border:1px solid #f1e6ee; padding:10px; border-radius:10px; }
+              .badge{ display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; }
+              .pay-pix{ background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
+              .pay-cartao{ background:#f3e8ff; border:1px solid #e9d5ff; color:#6d28d9; }
+              .pay-dinheiro{ background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
+              .pay-mensal{ background:#fff7ed; border:1px solid #fed7aa; color:#b45309; }
+              .muted2{ color:#6b7280; }
+              .section h2{ margin:0 0 10px; }
+              .right{ text-align:right; }
+            </style>
+
+            <div class="hero"><h1>Caixa</h1><p>Controle financeiro e movimentações</p></div>
+
+            <div class="cx-actions">
+              <button class="btn primary" id="btnAtendimento">+ Atendimento Manual</button>
+              <button class="btn" id="btnDespesa">+ Despesa</button>
+              <button class="btn" id="btnPdf">Gerar PDF</button>
+            </div>
+
+            <div class="grid-cards">
+              <div class="card-sm green">
+                <div class="k-title">Total Entradas (PIX+Cartão+Din.)</div>
+                <div class="k-value">${money(s.entradas)}</div>
+              </div>
+              <div class="card-sm blue">
+                <div class="k-title">Total PIX</div>
+                <div class="k-value">${money(s.totalPix)}</div>
+              </div>
+              <div class="card-sm purple">
+                <div class="k-title">Total Cartão (Crédito/Débito)</div>
+                <div class="k-value">${money(s.totalCartao)}</div>
+              </div>
+              <div class="card-sm">
+                <div class="k-title">Total Dinheiro (Entrada)</div>
+                <div class="k-value">${money(s.totalDinheiro)}</div>
+              </div>
+              <div class="card-sm yellow">
+                <div class="k-title">Total Débitos (Não Pago)</div>
+                <div class="k-value">${money(s.totalDebitos)}</div>
+              </div>
+              <div class="card-sm red">
+                <div class="k-title">Total Despesas</div>
+                <div class="k-value">${money(s.totalDespesas)}</div>
+              </div>
+              <div class="card-sm">
+                <div class="k-title">Dinheiro em Caixa (Calculado)</div>
+                <div class="k-value">${money(s.dinheiroCalculado)}</div>
+              </div>
+            </div>
+
+            <section class="section filter-card">
+              <div class="field">
+                <label class="muted2">Data</label>
+                <input type="date" id="cxDate" value="${selectedDate}">
+              </div>
+              <div class="field">
+                <label class="muted2">Tipo</label>
+                <select id="cxTipo">
+                  <option value="todos">Todos os tipos</option>
+                  <option value="atendimentos">Atendimentos</option>
+                  <option value="despesas">Despesas</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="muted2">Dinheiro em Caixa (Informado)</label>
+                <input type="number" id="cxDinheiro" value="${s.dinheiroInformado}" step="0.01" min="0">
+              </div>
+            </section>
+
+            <section class="section">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <h2>Atendimentos do Caixa (${brDate})</h2>
+                <span class="badge muted2">${s.atts.length} atend.</span>
+              </div>
+              ${
+                s.atts.length
+                  ? `
+                  <table class="list-table">
+                    <thead>
+                      <tr>
+                        <th>Cliente</th><th>Serviços</th><th>Funcionário</th><th class="right">Total (R$)</th><th>Pagamento</th><th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${s.atts
+                        .map(
+                          (a) => `
+                        <tr>
+                          <td>${a.cliente || "-"}</td>
+                          <td>${(a.servicos || []).map((sv) => sv.nome).join(", ") || a.servico || "-"}</td>
+                          <td>${(a.servicos || [])
+                            .map((sv) => sv.profissional)
+                            .filter(Boolean)
+                            .join(", ") || a.profissional || "-"}</td>
+                          <td class="right">${money(a.valor)}</td>
+                          <td>
+                            <span class="badge ${
+                              a.pagamento === "pix"
+                                ? "pay-pix"
+                                : a.pagamento === "cartao"
+                                ? "pay-cartao"
+                                : a.pagamento === "dinheiro"
+                                ? "pay-dinheiro"
+                                : "pay-mensal"
+                            }">${a.pagamento}</span>
+                          </td>
+                          <td>
+                            <button class="btn" data-edit-att="${a.id}">Editar</button>
+                            <button class="btn" data-del-att="${a.id}">Excluir</button>
+                          </td>
+                        </tr>
+                      `
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                `
+                  : `<div class="empty">Sem atendimentos para esta data</div>`
+              }
+            </section>
+
+            <section class="section">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <h2>Movimentações do Dia</h2>
+                <span class="badge muted2">${s.deps.length} movimentações</span>
+              </div>
+              ${
+                s.deps.length
+                  ? `
+                  <table class="list-table">
+                    <thead>
+                      <tr>
+                        <th>Descrição</th><th>Origem</th><th class="right">Valor (R$)</th><th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${s.deps
+                        .map(
+                          (d) => `
+                        <tr>
+                          <td>${d.descricao}</td>
+                          <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
+                          <td class="right">${money(d.valor)}</td>
+                          <td>
+                            <button class="btn" data-edit-dep="${d.id}">Editar</button>
+                            <button class="btn" data-del-dep="${d.id}">Excluir</button>
+                          </td>
+                        </tr>
+                      `
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                `
+                  : `<div class="empty">Nenhuma movimentação encontrada para esta data</div>`
+              }
+            </section>
+          `;
+
+          // Eventos do cabeçalho/filters
+          const byId = (id) => document.getElementById(id);
+          byId("cxDate").addEventListener("change", (e) => {
+            const v = e.target.value || selectedDate;
+            localStorage.setItem("bella_caixa_selected_date", v);
+            renderCaixa();
+          });
+          byId("cxDinheiro").addEventListener("change", (e) => {
+            const v = parseFloat(e.target.value || "0") || 0;
+            const store = getStore();
+            const day = getDay(store, selectedDate);
+            day.dinheiroInformado = v;
+            setStore(store);
+            renderCaixa();
+          });
+
+          // Ações
+          byId("btnAtendimento").addEventListener("click", () => showAtendimentoModal());
+          byId("btnDespesa").addEventListener("click", () => showDespesaModal());
+          const pdfBtn = byId("btnPdf");
+          pdfBtn && pdfBtn.addEventListener("click", () => window.print());
+
+          // Atendimentos - editar/excluir
+          page.querySelectorAll("[data-del-att]").forEach((b) =>
+            b.addEventListener("click", () => {
+              const id = b.getAttribute("data-del-att");
+              const store = getStore();
+              const day = getDay(store, selectedDate);
+              day.atendimentos = (day.atendimentos || []).filter((a) => String(a.id) !== String(id));
+              setStore(store);
+              renderCaixa();
+            })
+          );
+          page.querySelectorAll("[data-edit-att]").forEach((b) =>
+            b.addEventListener("click", () => {
+              const id = b.getAttribute("data-edit-att");
+              const store = getStore();
+              const day = getDay(store, selectedDate);
+              const att = (day.atendimentos || []).find((a) => String(a.id) === String(id));
+              showAtendimentoModal(att);
+            })
+          );
+
+          // Despesas - editar/excluir
+          page.querySelectorAll("[data-del-dep]").forEach((b) =>
+            b.addEventListener("click", () => {
+              const id = b.getAttribute("data-del-dep");
+              const store = getStore();
+              const day = getDay(store, selectedDate);
+              day.despesas = (day.despesas || []).filter((a) => String(a.id) !== String(id));
+              setStore(store);
+              renderCaixa();
+            })
+          );
+          page.querySelectorAll("[data-edit-dep]").forEach((b) =>
+            b.addEventListener("click", () => {
+              const id = b.getAttribute("data-edit-dep");
+              const store = getStore();
+              const day = getDay(store, selectedDate);
+              const dep = (day.despesas || []).find((a) => String(a.id) === String(id));
+              showDespesaModal(dep);
+            })
+          );
+
+          function showAtendimentoModal(existing) {
+            const modals = document.getElementById("modals");
+            const modal = modals.querySelector(".modal");
+            modal.innerHTML = `
+              <h3 id="modal-title">${existing ? "Editar Atendimento" : "Atendimento Manual"}</h3>
+              <div class="field"><label>Cliente</label><input id="fCliente" placeholder="Ex.: Maria Silva" value="${existing?.cliente || ""}"></div>
+              <div class="field"><label>Serviços</label>
+                <div id="svcList"></div>
+                <button class="btn" id="addSvc" type="button">+ Adicionar serviço</button>
+              </div>
+              <div class="field"><label>Pagamento</label>
+                <select id="fPagamento">
+                  <option value="pix" ${existing?.pagamento === "pix" ? "selected" : ""}>PIX</option>
+                  <option value="cartao" ${existing?.pagamento === "cartao" ? "selected" : ""}>Cartão</option>
+                  <option value="dinheiro" ${existing?.pagamento === "dinheiro" ? "selected" : ""}>Dinheiro</option>
+                  <option value="mensal" ${existing?.pagamento === "mensal" ? "selected" : ""}>Mensal (débito)</option>
+                </select>
+              </div>
+              <div class="field"><label>Total</label><input id="fTotal" type="number" step="0.01" min="0" value="${existing ? existing.valor : 0}"></div>
+              <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="saveAtt">${existing ? "Salvar alterações" : "Salvar"}</button>
+              </div>
+            `;
+            modals.style.display = "flex";
+
+            const svcList = modal.querySelector("#svcList");
+            function addRow(svc = { nome: "", valor: "", profissional: "" }) {
+              const row = document.createElement("div");
+              row.className = "row";
+              row.style = "display:flex; gap:8px; align-items:center; margin-bottom:6px;";
+              row.innerHTML = `
+                <input placeholder="Serviço" class="svc-nome" style="flex:1; padding:8px; border:1px solid #e5e7eb; border-radius:8px;" value="${svc.nome || ""}">
+                <input type="number" step="0.01" min="0" placeholder="Valor" class="svc-valor" style="width:120px; padding:8px; border:1px solid #e5e7eb; border-radius:8px;" value="${svc.valor || ""}">
+                <input placeholder="Profissional" class="svc-prof" style="width:160px; padding:8px; border:1px solid #e5e7eb; border-radius:8px;" value="${svc.profissional || ""}">
+                <button class="btn" type="button">x</button>
+              `;
+              row.querySelector("button").addEventListener("click", () => {
+                row.remove();
+                recalcTotal();
+              });
+              row.querySelectorAll("input").forEach((inp) =>
+                inp.addEventListener("input", recalcTotal)
+              );
+              svcList.appendChild(row);
+            }
+            function recalcTotal() {
+              const values = Array.from(
+                modal.querySelectorAll(".svc-valor")
+              ).map((i) => parseFloat(i.value || "0") || 0);
+              const total = values.reduce((a, b) => a + b, 0);
+              modal.querySelector("#fTotal").value = String(total.toFixed(2));
+            }
+            modal.querySelector("#addSvc").addEventListener("click", () => addRow());
+            if (existing?.servicos?.length) existing.servicos.forEach(addRow);
+            else addRow();
+
+            modal.querySelector("#saveAtt").addEventListener("click", () => {
+              const cliente = modal.querySelector("#fCliente").value.trim();
+              const pagamento = modal.querySelector("#fPagamento").value;
+              const total = parseFloat(modal.querySelector("#fTotal").value || "0") || 0;
+              const servicos = Array.from(modal.querySelectorAll("#svcList .row")).map((r) => ({
+                nome: r.querySelector(".svc-nome").value.trim(),
+                valor: parseFloat(r.querySelector(".svc-valor").value || "0") || 0,
+                profissional: r.querySelector(".svc-prof").value.trim(),
+              }));
+              const store = getStore();
+              const day = getDay(store, selectedDate);
+              if (existing) {
+                const idx = day.atendimentos.findIndex(
+                  (a) => String(a.id) === String(existing.id)
+                );
+                if (idx >= 0)
+                  day.atendimentos[idx] = {
+                    ...existing,
+                    cliente,
+                    pagamento,
+                    valor: total,
+                    servicos,
+                  };
+              } else {
+                day.atendimentos.push({
+                  id: "att-" + Date.now(),
+                  data: selectedDate,
+                  cliente,
+                  pagamento,
+                  valor: total,
+                  servicos,
+                });
+              }
+              setStore(store);
+              modals.style.display = "none";
+              renderCaixa();
+            });
+          }
+
+          function showDespesaModal(existing) {
+            const modals = document.getElementById("modals");
+            const modal = modals.querySelector(".modal");
+            modal.innerHTML = `
+              <h3 id="modal-title">${existing ? "Editar Despesa" : "Nova Despesa"}</h3>
+              <div class="field"><label>Descrição</label><input id="dDesc" placeholder="Ex.: Compra de produtos" value="${existing?.descricao || ""}"></div>
+              <div class="field"><label>Valor</label><input id="dVal" type="number" step="0.01" min="0" value="${existing ? existing.valor : 0}"></div>
+              <div class="field"><label>Origem</label>
+                <select id="dOrigem">
+                  <option value="caixa" ${existing?.origem === "caixa" ? "selected" : ""}>Retirar do caixa</option>
+                  <option value="outro" ${existing?.origem === "outro" ? "selected" : ""}>Outro</option>
+                </select>
+              </div>
+              <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="saveDesp">${existing ? "Salvar alterações" : "Salvar"}</button>
+              </div>
+            `;
+            modals.style.display = "flex";
+
+            modal.querySelector("#saveDesp").addEventListener("click", () => {
+              const descricao = modal.querySelector("#dDesc").value.trim();
+              const valor = parseFloat(modal.querySelector("#dVal").value || "0") || 0;
+              const origem = modal.querySelector("#dOrigem").value;
+              const store = getStore();
+              const day = getDay(store, selectedDate);
+              // bloqueia negativo se for retirada do caixa
+              if (origem === "caixa") {
+                const snap = snapshot(selectedDate);
+                const saldoAtual = snap.dinheiroCalculado;
+                if (valor > saldoAtual) {
+                  alert(
+                    "Valor indisponível no caixa. Ajuste o Dinheiro em Caixa (Informado) ou altere a origem."
+                  );
+                  return;
+                }
+              }
+              if (existing) {
+                const idx = day.despesas.findIndex(
+                  (d) => String(d.id) === String(existing.id)
+                );
+                if (idx >= 0)
+                  day.despesas[idx] = { ...existing, descricao, valor, origem };
+              } else {
+                day.despesas.push({
+                  id: "dep-" + Date.now(),
+                  data: selectedDate,
+                  descricao,
+                  valor,
+                  origem,
+                });
+              }
+              setStore(store);
+              modals.style.display = "none";
+              renderCaixa();
+            });
+          }
+        }
+
+        // Primeira renderização
+        renderCaixa();
       }
     }
 
