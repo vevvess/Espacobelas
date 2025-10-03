@@ -9,6 +9,8 @@ import {
   updateProduto,
   exportProdutosCSV,
   exportMovimentosCSV,
+  exportProdutosXLSX,
+  exportMovimentosXLSX,
   listMovimentos,
   updateMovimento,
   deleteMovimento,
