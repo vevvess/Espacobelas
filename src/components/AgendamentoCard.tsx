@@ -265,7 +265,7 @@ export function AgendamentoCard({
                   <FiClock className="w-4 h-4" />
                   <span>{formatDateTime(safeDataHora)}</span>
                 </div>
-                {agendamento.cliente?.telefone && (
+                {agendamento.cliente?.telefone && canViewValues && (
                   <div className="flex items-center space-x-2">
                     <FiUser className="w-4 h-4" />
                     <span>{agendamento.cliente.telefone}</span>
@@ -312,10 +312,9 @@ export function AgendamentoCard({
                                 )}
                               </div>
                               {servico?.funcionario && (
-                                <div className="text-xs text-bella-600 mt-1">
-                                  👤 {servico.funcionario.nome}
-                                </div>
-                              )}
+                               <<div className="text-xs text-bella-600 mt-1 flex items-center gap-1">
+                                 <nFiUser className="w-3 h-3" /> {servico.funcionario.nome}
+                              </                   )}
                             </div>
                           );
                         })

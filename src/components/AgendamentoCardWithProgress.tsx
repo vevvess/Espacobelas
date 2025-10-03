@@ -682,7 +682,7 @@ export function AgendamentoCardWithProgress({
               <div className="mb-2 overflow-hidden">
                 <p className="text-xl font-bold animate-slideUp"
                    style={{ animationDelay: '0.3s', animationFillMode: 'both' }}>
-                  🎉 Atendimento Finalizado!
+                  Atendimento finalizado
                 </p>
               </div>
 
@@ -690,7 +690,7 @@ export function AgendamentoCardWithProgress({
               <div className="overflow-hidden">
                 <p className="text-sm opacity-90 animate-slideUp"
                    style={{ animationDelay: '0.8s', animationFillMode: 'both' }}>
-                  💰 Aguardando confirmação de pagamento...
+                  Aguardando confirmação de pagamento...
                 </p>
               </div>
 
@@ -736,9 +736,6 @@ export function AgendamentoCardWithProgress({
                   className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(agendamento.status)}`}
                 >
                   {getStatusText(agendamento.status)}
-                  {agendamento.status === "em_andamento" && (
-                    <span className="ml-1">({Math.round(progress)}%)</span>
-                  )}
                 </span>
               </div>
 
@@ -795,8 +792,8 @@ export function AgendamentoCardWithProgress({
                                 )}
                               </div>
                               {servico?.funcionario && (
-                                <div className="text-xs text-bella-600 mt-1">
-                                  👤 {servico.funcionario.nome}
+                                <div className="text-xs text-bella-600 mt-1 flex items-center gap-1">
+                                  <FiUser className="w-3 h-3" /> {servico.funcionario.nome}
                                 </div>
                               )}
                             </div>

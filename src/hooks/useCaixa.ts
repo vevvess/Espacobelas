@@ -2,6 +2,13 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/SimpleAuthContext";
 import { useAgendamentosRealTimeOptimized } from "./useAgendamentosRealTimeOptimized";
 import { toast } from "@/hooks/use-toast";
+import {
+  listMovimentosManuais,
+  createAtendimentoManual,
+  createDespesaManual,
+  deleteAtendimentoManual,
+  deleteDespesaManual,
+} from "@/services/caixaDbService";
 
 interface MovimentoCaixa {
   id: string;
@@ -202,7 +209,67 @@ export function useCaixa(selectedDate?: Date) {
             })
           );
 
-        setMovimentos(movimentosFromAgendamentos);
+        // Carregar movimentos manuais do banco para o dia selecionado
+        let manualMovs: MovimentoCaixa[] = [];
+        try {
+          if (user?.id) {
+            const ymd = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+            const { atendimentos: atts, despesas: deps } = await listMovimentosManuais(user.id, ymd);
+
+            const attsMovs: MovimentoCaixa[] = (atts || []).map((a) => {
+              // servicos é JSON: tentar extrair string amigável
+              let servicosStr = "";
+              try {
+                const arr = Array.isArray(a.servicos) ? a.servicos : JSON.parse(a.servicos || "[]");
+                servicosStr = (arr || []).map((s: any) => s?.nome).filter(Boolean).join(" + ");
+              } catch {
+                servicosStr = "";
+              }
+              const prof = (() => {
+                try {
+                  const arr = Array.isArray(a.servicos) ? a.servicos : JSON.parse(a.servicos || "[]");
+                  return arr?.[0]?.profissional || "";
+                } catch {
+                  return "";
+                }
+              })();
+
+              return {
+                id: `manual_db_att_${a.id}`,
+                tipo: "entrada" as const,
+                descricao: "Atendimento manual",
+                valor: Number(a.valor) || 0,
+                categoria: "Atendimento",
+                formaPagamento: (a.pagamento || undefined) as any,
+                data: new Date(a.created_at || base),
+                observacoes: servicosStr,
+                clienteNome: a.cliente || undefined,
+                profissional: prof || undefined,
+              };
+            });
+
+            const depMovs: MovimentoCaixa[] = (deps || []).map((d) => ({
+              id: `manual_db_dep_${d.id}`,
+              tipo: "saida",
+              descricao: d.descricao || "Despesa",
+              valor: Number(d.valor) || 0,
+              categoria: "Despesas",
+              data: new Date(d.created_at || base),
+              observacoes: d.origem === "caixa" ? "Retirada do caixa" : "Outro",
+            }));
+
+            manualMovs = [...attsMovs, ...depMovs];
+          }
+        } catch (e) {
+          console.warn("Falha ao carregar movimentos manuais do banco:", e);
+        }
+
+        // Combinar e ordenar por data/hora
+        const allMovs = [...movimentosFromAgendamentos, ...manualMovs].sort(
+          (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
+        );
+
+        setMovimentos(allMovs);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
         setError(errorMessage);
@@ -221,7 +288,7 @@ export function useCaixa(selectedDate?: Date) {
   }, [agendamentos, agLoading, selectedDate]);
 
   // Adicionar movimento manual
-  const adicionarMovimentoManual = (movimento: Omit<MovimentoCaixa, "id">) => {
+  const adicionarMovimentoManual = async (movimento: Omit<MovimentoCaixa, "id">) => {
     const valor = Number(movimento.valor) || 0;
     if (valor <= 0 || isNaN(valor)) {
       toast({
@@ -232,13 +299,68 @@ export function useCaixa(selectedDate?: Date) {
       throw new Error("Valor inválido");
     }
 
-    const novoMovimento: MovimentoCaixa = {
-      ...movimento,
-      valor,
-      id: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    };
+    let novoMovimento: MovimentoCaixa;
 
-    setMovimentos((prev) => [novoMovimento, ...prev]);
+    // Persistência em banco (caixa_*), com fallback para estado local se falhar
+    try {
+      if (!user?.id) throw new Error("Usuário não autenticado");
+      const base = selectedDate || new Date();
+      const ymd = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+
+      if (movimento.tipo === "entrada" && movimento.categoria === "Atendimento") {
+        const row = await createAtendimentoManual(user.id, ymd, {
+          cliente: movimento.clienteNome,
+          pagamento: movimento.formaPagamento,
+          valor,
+          servicos: [
+            {
+              nome: movimento.observacoes || "",
+              valor,
+              profissional: movimento.profissional || "",
+            },
+          ],
+        });
+
+        novoMovimento = {
+          ...movimento,
+          id: `manual_db_att_${row.id}`,
+          data: new Date(row.created_at || base),
+        };
+      } else if (movimento.tipo === "saida") {
+        const row = await createDespesaManual(user.id, ymd, {
+          descricao: movimento.descricao,
+          valor,
+          origem: "caixa",
+        });
+        novoMovimento = {
+          ...movimento,
+          id: `manual_db_dep_${row.id}`,
+          data: new Date(row.created_at || base),
+        };
+      } else {
+        // Outras categorias de entrada: armazenar como atendimento manual genérico por enquanto
+        const row = await createAtendimentoManual(user.id, ymd, {
+          cliente: movimento.clienteNome,
+          pagamento: movimento.formaPagamento,
+          valor,
+          servicos: [{ nome: movimento.observacoes || movimento.descricao || "", valor }],
+        });
+        novoMovimento = {
+          ...movimento,
+          id: `manual_db_att_${row.id}`,
+          data: new Date(row.created_at || base),
+        };
+      }
+    } catch (e) {
+      console.warn("Falha ao persistir no banco; mantendo apenas em memória:", e);
+      novoMovimento = {
+        ...movimento,
+        valor,
+        id: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      };
+    }
+
+    setMovimentos((prev) => [novoMovimento!, ...prev]);
 
     toast({
       title: "Movimento adicionado",
@@ -247,7 +369,7 @@ export function useCaixa(selectedDate?: Date) {
       )} registrada.`,
     });
 
-    return novoMovimento;
+    return novoMovimento!;
   };
 
   const editarMovimentacao = async (
@@ -308,8 +430,21 @@ export function useCaixa(selectedDate?: Date) {
     }
   };
 
-  const removerMovimento = (id: string) => {
-    if (id.startsWith("manual_")) {
+  const removerMovimento = async (id: string) => {
+    // Remoção em banco quando aplicável
+    try {
+      if (id.startsWith("manual_db_att_") && user?.id) {
+        const dbId = id.replace("manual_db_att_", "");
+        await deleteAtendimentoManual(user.id, dbId);
+      } else if (id.startsWith("manual_db_dep_") && user?.id) {
+        const dbId = id.replace("manual_db_dep_", "");
+        await deleteDespesaManual(user.id, dbId);
+      }
+    } catch (e) {
+      console.warn("Não foi possível remover do banco; removendo localmente:", e);
+    }
+
+    if (id.startsWith("manual_") || id.startsWith("manual_db_")) {
       setMovimentos((prev) => prev.filter((m) => m.id !== id));
       toast({
         title: "Movimento removido",

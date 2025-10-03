@@ -18,6 +18,7 @@ import {
   FiShield,
   FiBarChart,
   FiTool,
+  FiPackage,
 } from "react-icons/fi";
 import { SystemStatusIndicator } from "./SystemMonitor";
 import { prefetchAgendamentos } from "@/hooks/useAgendamentosSimple";
@@ -31,6 +32,7 @@ const prefetchers: Record<string, () => Promise<unknown>> = {
   "/clientes-mensais": () => import("../pages/ClientesMensais"),
   "/servicos": () => import("../pages/Servicos"),
   "/caixa": () => import("../pages/Caixa"),
+  "/estoque": () => import("../pages/Estoque"),
   "/usuarios": () => import("../pages/Usuarios"),
   "/configuracoes": () => import("../pages/ConfiguracoesSistema"),
   "/relatorios": () => import("../pages/Relatorios"),
@@ -49,6 +51,7 @@ const adminNavigation = [
   { name: "Clientes Mensais", href: "/clientes-mensais", icon: FiCalendar },
   { name: "Serviços", href: "/servicos", icon: FiSettings },
   { name: "Caixa", href: "/caixa", icon: FiDollarSign },
+  { name: "Estoque", href: "/estoque", icon: FiPackage },
   // Relatórios mantido visível porém desativado temporariamente
   { name: "Relatórios", href: "/relatorios", icon: FiBarChart, disabled: true },
 ];
