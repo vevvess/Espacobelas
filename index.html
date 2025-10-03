@@ -34,44 +34,56 @@
     <script type="module">
       const root = document.getElementById("root");
       const isCosine = location.hostname.endsWith(".cosine.page");
+      const params = new URLSearchParams(location.search);
+      const wantsVercel = params.get("vercel") === "1";
       const VERCEL_URL = "https://espaco-five.vercel.app";
 
+      async function loadFallback() {
+        const loadScript = (src) =>
+          new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+
+        try {
+          await loadScript("/public/fallback-preview.js");
+          if (window.__runFallbackPreview) {
+            const target = document.getElementById("root") || document.body;
+            window.__runFallbackPreview(target);
+          } else {
+            document.body.textContent = "Falha ao inicializar o preview estático.";
+          }
+        } catch (e) {
+          console.error("Erro ao carregar o preview estático:", e);
+          document.body.textContent = "Não foi possível carregar o app ou o preview estático.";
+        }
+      }
+
       if (isCosine) {
-        const container = document.createElement("div");
-        container.className = "embed-container";
-        const iframe = document.createElement("iframe");
-        iframe.className = "embed-iframe";
-        iframe.src = VERCEL_URL;
-        iframe.allow = "clipboard-write; clipboard-read; fullscreen";
-        container.appendChild(iframe);
-        root.replaceWith(container);
+        if (wantsVercel) {
+          // Modo: embutir Vercel explicitamente (?vercel=1)
+          const container = document.createElement("div");
+          container.className = "embed-container";
+          const iframe = document.createElement("iframe");
+          iframe.className = "embed-iframe";
+          iframe.src = VERCEL_URL;
+          iframe.allow = "clipboard-write; clipboard-read; fullscreen";
+          container.appendChild(iframe);
+          root.replaceWith(container);
+        } else {
+          // Padrão em cosine.page: mostrar o preview estático (WIP)
+          await loadFallback();
+        }
       } else {
+        // Dev/local: tenta carregar a app real via Vite. Se falhar, cai no fallback.
         try {
           await import("/src/main.tsx");
         } catch (err) {
           console.warn("Vite/TSX indisponível. Carregando preview estático...", err);
-
-          const loadScript = (src) =>
-            new Promise((resolve, reject) => {
-              const s = document.createElement("script");
-              s.src = src;
-              s.onload = resolve;
-              s.onerror = reject;
-              document.head.appendChild(s);
-            });
-
-          try {
-            await loadScript("/public/fallback-preview.js");
-            if (window.__runFallbackPreview) {
-              const target = document.getElementById("root") || document.body;
-              window.__runFallbackPreview(target);
-            } else {
-              document.body.textContent = "Falha ao inicializar o preview estático.";
-            }
-          } catch (e) {
-            console.error("Erro ao carregar o preview estático:", e);
-            document.body.textContent = "Não foi possível carregar o app ou o preview estático.";
-          }
+          await loadFallback();
         }
       }
     </script>
