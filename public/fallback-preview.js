@@ -903,7 +903,8 @@
             <div class="cx-actions">
               <button class="btn primary" id="btnAtendimento">+ Atendimento Manual</button>
               <button class="btn" id="btnDespesa">+ Despesa</button>
-              <button class="btn" id="btnPdf">Gerar PDF</button>
+              <button class="btn" id="btnPdf">Exportar PDF</button>
+              <button class="btn" id="btnImg">Exportar Imagem</button>
             </div>
 
             <div class="grid-cards">
@@ -1066,7 +1067,9 @@
           byId("btnAtendimento").addEventListener("click", () => showAtendimentoModal());
           byId("btnDespesa").addEventListener("click", () => showDespesaModal());
           const pdfBtn = byId("btnPdf");
-          pdfBtn && pdfBtn.addEventListener("click", () => window.print());
+          if (pdfBtn) pdfBtn.addEventListener("click", () => exportPDF());
+          const imgBtn = byId("btnImg");
+          if (imgBtn) imgBtn.addEventListener("click", () => exportImage());
 
           // Atendimentos - editar/excluir
           page.querySelectorAll("[data-del-att]").forEach((b) =>
@@ -1329,6 +1332,379 @@
               modals.style.display = "none";
               renderCaixa();
             });
+          }
+
+          // ======== Exportação: PDF e Imagem ========
+
+          async function loadScriptOnce(src) {
+            if (!window.__loadedScripts) window.__loadedScripts = {};
+            if (window.__loadedScripts[src]) return;
+            await new Promise((resolve, reject) => {
+              const s = document.createElement("script");
+              s.src = src;
+              s.onload = resolve;
+              s.onerror = reject;
+              document.head.appendChild(s);
+            });
+            window.__loadedScripts[src] = true;
+          }
+
+          async function ensureJsPDF() {
+            if (!(window.jspdf && window.jspdf.jsPDF)) {
+              await loadScriptOnce("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js");
+            }
+            // autotable
+            if (!window.jspdf?.autoTable && !window.jsPDF?.API?.autoTable) {
+              await loadScriptOnce("https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js");
+            }
+          }
+
+          async function ensureHtml2Canvas() {
+            if (!window.html2canvas) {
+              await loadScriptOnce("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
+            }
+          }
+
+          function hexToRgb(hex) {
+            const m = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex);
+            return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0,0,0];
+          }
+
+          async function exportPDF() {
+            await ensureJsPDF();
+            const { jsPDF } = window.jspdf || {};
+            const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+            const margin = 12;
+            const pageW = 210;
+            let y = margin;
+
+            const s2 = snapshot(selectedDate);
+            const brDate = fmtBR(selectedDate);
+            const gen = new Date();
+            const genStr = gen.toLocaleString("pt-BR");
+
+            const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+
+            // Header
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(16);
+            doc.text("Fechamento de Caixa — Espaço Bella's", margin, y);
+            y += 7;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.text(`Data do caixa: ${brDate}`, margin, y);
+            doc.text(`Gerado em: ${genStr}`, pageW - margin, y, { align: "right" });
+            y += 5;
+            doc.text(`CNPJ: 30.504.701/0001-29`, margin, y);
+            y += 5;
+            doc.text(`Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 — Espaço Bella's`, margin, y);
+            y += 5;
+            doc.text(`Telefone: (81) 98628-8749`, margin, y);
+            y += 6;
+
+            // Cards (3 col x N rows)
+            const gap = 5;
+            const cols = 3;
+            const cardW = (pageW - margin*2 - gap*(cols-1)) / cols;
+            const cardH = 18;
+
+            const cards = [
+              { t:"Total Entradas (PIX+Cartão+Dinheiro)", v: money(s2.entradas), c:"#059669" },
+              { t:"Total PIX", v: money(s2.totalPix), c:"#2563eb" },
+              { t:"Total Cartão (Crédito/Débito)", v: money(s2.totalCartao), c:"#7c3aed" },
+              { t:"Total Dinheiro (Entrada)", v: money(s2.totalDinheiro), c:"#059669" },
+              { t:"Total Débitos (Não Pago)", v: money(s2.totalDebitos), c:"#d97706" },
+              { t:"Total Despesas", v: money(s2.totalDespesas), c:"#dc2626" },
+              { t:"Dinheiro em Caixa (Calculado)", v: money(s2.dinheiroCalculado), c:"#0f172a" },
+              { t:"Dinheiro em Caixa (Informado)", v: money(s2.dinheiroInformado), c:"#334155" },
+              { t:"Diferença (Calc − Informado)", v: money(s2.dinheiroCalculado - s2.dinheiroInformado), c:(s2.dinheiroCalculado - s2.dinheiroInformado === 0 ? "#059669" : "#dc2626") },
+            ];
+
+            function drawCard(ix, iy, title, value, color) {
+              const [r,g,b] = hexToRgb(color);
+              doc.setDrawColor(r,g,b);
+              doc.setLineWidth(0.6);
+              doc.roundedRect(ix, iy, cardW, cardH, 2, 2);
+
+              doc.setTextColor(51,65,85);
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(9);
+              doc.text(title, ix + 2.5, iy + 5);
+
+              doc.setTextColor(15,23,42);
+              doc.setFontSize(12);
+              doc.text(value, ix + 2.5, iy + 12.5);
+            }
+
+            let row = 0, col = 0, iy = y;
+            cards.forEach((c, i) => {
+              const ix = margin + col*(cardW + gap);
+              drawCard(ix, iy, c.t, c.v, c.c);
+              col++;
+              if (col >= cols) {
+                col = 0;
+                iy += cardH + gap;
+              }
+            });
+            y = iy + (col === 0 ? 0 : cardH + gap);
+            y += 4;
+
+            // Tabela Atendimentos
+            const attRows = (s2.atts || []).map(a => [
+              a.cliente || "-",
+              (a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-",
+              (a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-",
+              (a.pagamento || "").toUpperCase(),
+              money(a.valor)
+            ]);
+
+            if ((attRows || []).length) {
+              doc.setTextColor(161,18,91);
+              doc.setFont("helvetica","bold");
+              doc.setFontSize(12);
+              doc.text("Detalhes dos Atendimentos", margin, y);
+              y += 3;
+
+              doc.setTextColor(15,23,42);
+              doc.autoTable({
+                startY: y,
+                head: [["Cliente","Serviços","Funcionário","Pagamento","Valor"]],
+                body: attRows,
+                styles: { font:"helvetica", fontSize: 9, cellPadding: 2 },
+                headStyles: { fillColor: [252,231,243], textColor: [161,18,91] },
+                columnStyles: { 4: { halign: "right" } },
+                theme: "grid",
+                margin: { left: margin, right: margin },
+              });
+              y = (doc.lastAutoTable?.finalY || y) + 6;
+            }
+
+            // Tabela Débito Mensal
+            const mensalRows = (s2.atts || [])
+              .filter(a => a.pagamento === "mensal")
+              .map(a => [
+                a.cliente || "-",
+                (a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-",
+                (a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-",
+                money(a.valor)
+              ]);
+            if ((mensalRows || []).length) {
+              doc.setTextColor(217,119,6);
+              doc.setFont("helvetica","bold");
+              doc.setFontSize(12);
+              doc.text("Débito Mensal (Não Pago)", margin, y);
+              y += 3;
+
+              doc.setTextColor(15,23,42);
+              doc.autoTable({
+                startY: y,
+                head: [["Cliente","Serviços","Funcionário","Valor"]],
+                body: mensalRows,
+                styles: { font:"helvetica", fontSize: 9, cellPadding: 2 },
+                headStyles: { fillColor: [255,247,237], textColor: [180,83,9] },
+                columnStyles: { 3: { halign: "right" } },
+                theme: "grid",
+                margin: { left: margin, right: margin },
+              });
+              y = (doc.lastAutoTable?.finalY || y) + 6;
+            }
+
+            // Tabela Despesas
+            const depRows = (s2.deps || []).map(d => [
+              d.descricao || "-",
+              d.origem === "caixa" ? "Retirada do Caixa" : "Outro",
+              money(d.valor)
+            ]);
+            doc.setTextColor(161,18,91);
+            doc.setFont("helvetica","bold");
+            doc.setFontSize(12);
+            doc.text("Detalhes das Despesas", margin, y);
+            y += 3;
+            doc.setTextColor(15,23,42);
+            doc.autoTable({
+              startY: y,
+              head: [["Descrição","Origem","Valor"]],
+              body: depRows,
+              styles: { font:"helvetica", fontSize: 9, cellPadding: 2 },
+              headStyles: { fillColor: [254,226,226], textColor: [153,27,27] },
+              columnStyles: { 2: { halign: "right" } },
+              theme: "grid",
+              margin: { left: margin, right: margin },
+            });
+            y = (doc.lastAutoTable?.finalY || y) + 6;
+
+            // Ledger resumo final
+            const diff = s2.dinheiroCalculado - s2.dinheiroInformado;
+            doc.setFont("helvetica","bold");
+            doc.setFontSize(12);
+            doc.text("Resumo do Caixa", margin, y);
+            y += 5;
+            doc.setFont("helvetica","normal");
+            doc.setFontSize(10);
+            doc.text(`Dinheiro em Caixa (Informado): ${money(s2.dinheiroInformado)}`, margin, y); y+=5;
+            doc.text(`Entradas em Dinheiro: ${money(s2.totalDinheiro)}`, margin, y); y+=5;
+            doc.text(`Retiradas do Caixa (Despesas): ${money(s2.totalDespesasCaixa)}`, margin, y); y+=5;
+            doc.text(`Dinheiro em Caixa (Calculado): ${money(s2.dinheiroCalculado)}`, margin, y); y+=5;
+            doc.text(`Diferença (Calc − Informado): ${money(diff)}`, margin, y);
+            y += 8;
+
+            // Footer
+            doc.setFontSize(9);
+            doc.setTextColor(107,114,128);
+            doc.text(`Gerado em ${genStr}`, margin, 297 - margin);
+
+            const filename = `fechamento-caixa_${selectedDate}.pdf`;
+            doc.save(filename);
+          }
+
+          async function exportImage() {
+            await ensureHtml2Canvas();
+            const s2 = snapshot(selectedDate);
+            const brDate = fmtBR(selectedDate);
+            const genStr = new Date().toLocaleString("pt-BR");
+            const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+
+            const container = document.createElement("div");
+            container.id = "report-capture";
+            container.style.position = "fixed";
+            container.style.left = "-10000px";
+            container.style.top = "0";
+            container.style.width = "980px";
+            container.style.background = "#fff";
+            container.style.color = "#0f172a";
+            container.style.padding = "20px";
+            container.style.fontFamily = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+
+            container.innerHTML = `
+              <style>
+                .r-title { font-weight:900; font-size:24px; color:#9d174d; margin-bottom:4px; }
+                .r-sub { color:#475569; font-weight:700; }
+                .r-grid { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0 6px; }
+                .r-card { border:2px solid #f1e6ee; border-radius:12px; padding:10px; }
+                .r-card.green { border-color:#10b981; }
+                .r-card.blue { border-color:#2563eb; }
+                .r-card.purple { border-color:#7c3aed; }
+                .r-card.amber { border-color:#d97706; }
+                .r-card.red { border-color:#dc2626; }
+                .r-card .t { color:#475569; font-weight:800; font-size:12px; }
+                .r-card .v { color:#0f172a; font-weight:900; font-size:18px; margin-top:4px; }
+                .sec { margin-top:14px; }
+                .sec h3 { margin: 0 0 6px; color:#9d174d; font-size:16px; }
+                table { width:100%; border-collapse:separate; border-spacing:0 6px; font-size:13px; }
+                th { text-align:left; color:#9d174d; font-weight:800; }
+                td, th { padding:8px 10px; border:1px solid #f1e6ee; background:#fff; }
+                td.num { text-align:right; font-weight:900; }
+                .muted { color:#64748b; }
+                .foot { margin-top: 8px; color:#64748b; font-size:12px; }
+              </style>
+
+              <div class="r-title">Fechamento de Caixa — Espaço Bella's</div>
+              <div class="r-sub">Data do caixa: <strong>${brDate}</strong> • Gerado em: ${genStr}</div>
+              <div class="r-sub">CNPJ: 30.504.701/0001-29 • Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 • Tel: (81) 98628-8749</div>
+
+              <div class="r-grid">
+                <div class="r-card green"><div class="t">Total Entradas (PIX+Cartão+Dinheiro)</div><div class="v">${money(s2.entradas)}</div></div>
+                <div class="r-card blue"><div class="t">Total PIX</div><div class="v">${money(s2.totalPix)}</div></div>
+                <div class="r-card purple"><div class="t">Total Cartão</div><div class="v">${money(s2.totalCartao)}</div></div>
+                <div class="r-card green"><div class="t">Total Dinheiro (Entrada)</div><div class="v">${money(s2.totalDinheiro)}</div></div>
+                <div class="r-card amber"><div class="t">Total Débitos (Não Pago)</div><div class="v">${money(s2.totalDebitos)}</div></div>
+                <div class="r-card red"><div class="t">Total Despesas</div><div class="v">${money(s2.totalDespesas)}</div></div>
+                <div class="r-card"><div class="t">Dinheiro em Caixa (Calculado)</div><div class="v">${money(s2.dinheiroCalculado)}</div></div>
+                <div class="r-card"><div class="t">Dinheiro em Caixa (Informado)</div><div class="v">${money(s2.dinheiroInformado)}</div></div>
+                <div class="r-card ${ (s2.dinheiroCalculado - s2.dinheiroInformado) === 0 ? 'green' : 'red' }"><div class="t">Diferença</div><div class="v">${money(s2.dinheiroCalculado - s2.dinheiroInformado)}</div></div>
+              </div>
+
+              <div class="sec">
+                <h3>Detalhes dos Atendimentos</h3>
+                ${
+                  s2.atts.length
+                    ? `<table>
+                        <thead><tr><th>Cliente</th><th>Serviços</th><th>Funcionário</th><th>Pagamento</th><th>Valor</th></tr></thead>
+                        <tbody>
+                          ${s2.atts.map(a => `
+                            <tr>
+                              <td>${a.cliente || "-"}</td>
+                              <td>${(a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-"}</td>
+                              <td>${(a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-"}</td>
+                              <td>${(a.pagamento || "").toUpperCase()}</td>
+                              <td class="num">${money(a.valor)}</td>
+                            </tr>
+                          `).join("")}
+                        </tbody>
+                      </table>`
+                    : `<div class="muted">Sem atendimentos para esta data</div>`
+                }
+              </div>
+
+              ${
+                s2.atts.filter(a => a.pagamento === "mensal").length
+                  ? `<div class="sec">
+                      <h3>Débito Mensal (Não Pago)</h3>
+                      <table>
+                        <thead><tr><th>Cliente</th><th>Serviços</th><th>Funcionário</th><th>Valor</th></tr></thead>
+                        <tbody>
+                          ${s2.atts.filter(a => a.pagamento === "mensal").map(a => `
+                            <tr>
+                              <td>${a.cliente || "-"}</td>
+                              <td>${(a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-"}</td>
+                              <td>${(a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-"}</td>
+                              <td class="num">${money(a.valor)}</td>
+                            </tr>
+                          `).join("")}
+                        </tbody>
+                      </table>
+                    </div>`
+                  : ""
+              }
+
+              <div class="sec">
+                <h3>Detalhes das Despesas</h3>
+                ${
+                  s2.deps.length
+                    ? `<table>
+                        <thead><tr><th>Descrição</th><th>Origem</th><th>Valor</th></tr></thead>
+                        <tbody>
+                          ${s2.deps.map(d => `
+                            <tr>
+                              <td>${d.descricao}</td>
+                              <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
+                              <td class="num">${money(d.valor)}</td>
+                            </tr>
+                          `).join("")}
+                        </tbody>
+                      </table>`
+                    : `<div class="muted">Sem despesas para esta data</div>`
+                }
+              </div>
+
+              <div class="sec">
+                <h3>Resumo do Caixa</h3>
+                <table>
+                  <tbody>
+                    <tr><td>Dinheiro em Caixa (Informado)</td><td class="num">${money(s2.dinheiroInformado)}</td></tr>
+                    <tr><td>Entradas em Dinheiro</td><td class="num">${money(s2.totalDinheiro)}</td></tr>
+                    <tr><td>Retiradas do Caixa (Despesas)</td><td class="num">${money(s2.totalDespesasCaixa)}</td></tr>
+                    <tr><td><strong>Dinheiro em Caixa (Calculado)</strong></td><td class="num"><strong>${money(s2.dinheiroCalculado)}</strong></td></tr>
+                    <tr><td>Diferença</td><td class="num">${money(s2.dinheiroCalculado - s2.dinheiroInformado)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="foot">Gerado em ${genStr}</div>
+            `;
+
+            document.body.appendChild(container);
+            const canvas = await html2canvas(container, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
+            const dataUrl = canvas.toDataURL("image/png");
+            const a = document.createElement("a");
+            a.href = dataUrl;
+            a.download = `fechamento-caixa_${selectedDate}.png`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            container.remove();
           }
         }
 
