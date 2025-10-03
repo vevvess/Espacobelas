@@ -36,6 +36,14 @@ jobs:
           VITE_DATABASE_URL: ${{ secrets.VITE_DATABASE_URL }}
         run: npm run build
 
+      - name: Upload dist artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+
       - name: Commit dist back to repo
         env:
           BRANCH_NAME: ${{ github.ref_name }}
