@@ -610,94 +610,7 @@
     `;
 
     const Estoque = () => `
-      <style>
-        .stock-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; }
-        .stock-hero p { margin: 0; color: #9d3a69; font-weight: 600; }
-        .stock-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
-        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
-        .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
-        .stock-filters { display:grid; gap:10px; margin:12px 0; }
-        .stock-filters .field { display:grid; gap:6px; }
-        .stock-filters input, .stock-filters select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
-        .stock-list { display:grid; gap:10px; }
-        .stock-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #f1e6ee; background:#fff; border-radius:12px; padding:12px; }
-        .stock-row .left { display:flex; gap:10px; align-items:center; }
-        .thumb { width:44px; height:44px; border-radius:12px; background:#fff; border:1px solid #f1e6ee; display:grid; place-items:center; color:#a1125b; font-weight:900; }
-        .badge { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; }
-        .warn { background:#fff7ed; border:1px solid #fed7aa; color:#b45309; }
-        .danger { background:#fee2e2; border:1px solid #fecaca; color:#b91c1c; }
-      </style>
-
-      <div class="stock-hero">
-        <h1>Estoque</h1>
-        <p>Visualização estática para revisão de layout. O app real possui cadastro, scanner e histórico.</p>
-      </div>
-
-      <div class="stock-actions">
-        <button class="btn primary">+ Novo Produto</button>
-        <button class="btn">Exportar CSV</button>
-        <button class="btn">Exportar XLSX</button>
-      </div>
-
-      <section class="section stock-filters">
-        <div class="field">
-          <label class="muted">Buscar</label>
-          <input placeholder="Nome, código de barras ou categoria" />
-        </div>
-        <div class="field">
-          <label class="muted">Categoria</label>
-          <select><option>Todas</option><option>Manicure/Pedicure</option><option>Coloração</option></select>
-        </div>
-        <div class="field">
-          <label class="muted">Local</label>
-          <select><option>Todos</option><option>Armário</option><option>Recepção</option></select>
-        </div>
-      </section>
-
-      <section class="section">
-        <h2 style="margin:0 0 8px;">Produtos</h2>
-        <div class="stock-list">
-          <div class="stock-row">
-            <div class="left">
-              <div class="thumb">E</div>
-              <div>
-                <div style="font-weight:900;color:#7a0f3f;">Esmalte Rosa</div>
-                <div class="muted">Manicure/Pedicure • Armário • 12 un</div>
-              </div>
-            </div>
-            <div>
-              <span class="badge warn">Baixo estoque</span>
-            </div>
-          </div>
-
-          <div class="stock-row">
-            <div class="left">
-              <div class="thumb">R</div>
-              <div>
-                <div style="font-weight:900;color:#7a0f3f;">Removedor de Esmalte 500ml</div>
-                <div class="muted">Manicure/Pedicure • Armário • 0.5 l</div>
-              </div>
-            </div>
-            <div>
-              <span class="badge danger">Vencido</span>
-            </div>
-          </div>
-
-          <div class="stock-row">
-            <div class="left">
-              <div class="thumb">A</div>
-              <div>
-                <div style="font-weight:900;color:#7a0f3f;">Alicate (pacote x12)</div>
-                <div class="muted">Equipamentos • Recepção • 24 un</div>
-              </div>
-            </div>
-            <div>
-              <button class="btn">−1</button>
-              <button class="btn">+1</button>
-            </div>
-          </div>
-        </div>
-      </section>
+      <div id="estoque-root"></div>
     `;
 
     const Usuarios = () => `
@@ -1803,6 +1716,664 @@
 
         // Primeira renderização
         renderCaixa();
+      }
+
+      // Interações específicas do Estoque (CRUD local com câmera, export, filtros)
+      if (hash === "/estoque") {
+        const SKEY = "bella_stock_v1";
+
+        function loadScriptOnce(src) {
+          if (!window.__loadedScripts) window.__loadedScripts = {};
+          if (window.__loadedScripts[src]) return Promise.resolve();
+          return new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.onload = () => resolve();
+            s.onerror = reject;
+            document.head.appendChild(s);
+          }).then(() => (window.__loadedScripts[src] = true));
+        }
+
+        function uid(p) {
+          return `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        }
+
+        function getStore() {
+          try {
+            const raw = localStorage.getItem(SKEY);
+            if (raw) return JSON.parse(raw);
+          } catch {}
+          return { categorias: [], locais: [], produtos: [], movimentos: [] };
+        }
+        function setStore(s) {
+          localStorage.setItem(SKEY, JSON.stringify(s));
+        }
+
+        function ensureDefaults() {
+          const s = getStore();
+          if (!s._initialized) {
+            if (!s.categorias.length) {
+              s.categorias = [
+                { id: uid("cat"), nome: "Manicure/Pedicure" },
+                { id: uid("cat"), nome: "Coloração" },
+                { id: uid("cat"), nome: "Equipamentos" },
+              ];
+            }
+            if (!s.locais.length) {
+              s.locais = [
+                { id: uid("loc"), nome: "Armário" },
+                { id: uid("loc"), nome: "Recepção" },
+              ];
+            }
+            s._initialized = true;
+            setStore(s);
+          }
+        }
+
+        function money(n) {
+          return (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        }
+
+        function saldoDoProduto(prodId) {
+          const s = getStore();
+          let total = 0;
+          (s.movimentos || []).forEach((m) => {
+            if (m.produto_id === prodId) {
+              if (m.tipo === "entrada") total += Number(m.quantidade) || 0;
+              else if (m.tipo === "saida") total -= Number(m.quantidade) || 0;
+              else total += Number(m.quantidade) || 0; // ajuste pode ser negativo
+            }
+          });
+          return total;
+        }
+
+        function computeAlertsLocal(p) {
+          const alerts = { baixo: false, validadeAtencao: false, validadeCritico: false, diasParaVencer: null };
+          const saldo = saldoDoProduto(p.id);
+          if (saldo <= Number(p.alerta_estoque_qtd || 0)) alerts.baixo = true;
+          if (p.validade) {
+            try {
+              const today = new Date();
+              const d0 = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+              const v = new Date(p.validade).getTime();
+              const diff = Math.floor((v - d0) / 86400000);
+              alerts.diasParaVencer = diff;
+              if (diff < 0) alerts.validadeCritico = true;
+              else if (diff <= Number(p.alerta_validade_dias || 7)) alerts.validadeAtencao = true;
+            } catch {}
+          }
+          return alerts;
+        }
+
+        function exportProdutosCSVLocal(produtos) {
+          const header = [
+            "Nome",
+            "Código de Barras",
+            "Categoria",
+            "Local",
+            "Unidade",
+            "Fator Pacote",
+            "Fracionável",
+            "Validade",
+            "Alerta Validade (dias)",
+            "Alerta Estoque (qtd)",
+            "Saldo Atual",
+          ];
+          const esc = (s) => {
+            s = String(s ?? "");
+            return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+          const s = getStore();
+          const rows = produtos.map((p) => {
+            const cat = (s.categorias.find((c) => c.id === p.categoria_id) || {}).nome || "";
+            const loc = (s.locais.find((l) => l.id === p.local_id) || {}).nome || "";
+            return [
+              esc(p.nome),
+              esc(p.codigo_barras || ""),
+              esc(cat),
+              esc(loc),
+              p.unidade || "un",
+              String(p.fator_pacote || 1),
+              p.fracionavel ? "Sim" : "Não",
+              p.validade || "",
+              String(p.alerta_validade_dias ?? 7),
+              String(p.alerta_estoque_qtd ?? 1),
+              String(saldoDoProduto(p.id)),
+            ];
+          });
+          const csv = [header, ...rows].map((r) => r.join(";")).join("\n");
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `estoque_produtos_${new Date().toISOString().slice(0, 10)}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+
+        async function ensureXLSX() {
+          if (!window.XLSX) {
+            await loadScriptOnce("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js");
+          }
+        }
+
+        async function exportProdutosXLSXLocal(produtos) {
+          await ensureXLSX();
+          const s = getStore();
+          const catName = (id) => (s.categorias.find((c) => c.id === id) || {}).nome || "";
+          const locName = (id) => (s.locais.find((l) => l.id === id) || {}).nome || "";
+          const data = produtos.map((p) => ({
+            Nome: p.nome,
+            "Código de Barras": p.codigo_barras || "",
+            Categoria: catName(p.categoria_id),
+            Local: locName(p.local_id),
+            Unidade: p.unidade || "un",
+            "Fator Pacote": p.fator_pacote || 1,
+            Fracionável: p.fracionavel ? "Sim" : "Não",
+            Validade: p.validade || "",
+            "Alerta Validade (dias)": p.alerta_validade_dias ?? 7,
+            "Alerta Estoque (qtd)": p.alerta_estoque_qtd ?? 1,
+            "Saldo Atual": saldoDoProduto(p.id),
+          }));
+          const ws = XLSX.utils.json_to_sheet(data);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Produtos");
+          XLSX.writeFile(wb, `estoque_produtos_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        function compressImageToDataUrl(file, maxW = 800, quality = 0.8) {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            const fr = new FileReader();
+            fr.onload = () => {
+              img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const scale = Math.min(1, maxW / img.width);
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return reject(new Error("ctx null"));
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL("image/jpeg", quality));
+              };
+              img.onerror = reject;
+              img.src = fr.result;
+            };
+            fr.onerror = reject;
+            fr.readAsDataURL(file);
+          });
+        }
+
+        async function detectBarcodeFromFile(file) {
+          try {
+            if (window.BarcodeDetector) {
+              const detector = new window.BarcodeDetector({ formats: ["ean_13","ean_8","code_128","code_39","qr_code","upc_a","upc_e"] });
+              const bmp = await createImageBitmap(file);
+              const res = await detector.detect(bmp);
+              if (res && res.length) return res[0].rawValue || res[0].raw || null;
+            }
+          } catch (e) {
+            console.warn("BarcodeDetector falhou:", e);
+          }
+          return null;
+        }
+
+        function renderEstoque() {
+          ensureDefaults();
+          const s = getStore();
+
+          // estado de filtros
+          const params = new URLSearchParams(location.hash.split("?")[1] || "");
+          let q = params.get("q") || "";
+          let cat = params.get("cat") || "";
+          let loc = params.get("loc") || "";
+
+          const catName = (id) => (s.categorias.find((c) => c.id === id) || {}).nome || "";
+          const locName = (id) => (s.locais.find((l) => l.id === id) || {}).nome || "";
+
+          function filteredProdutos() {
+            return (s.produtos || [])
+              .filter((p) => (cat ? p.categoria_id === cat : true))
+              .filter((p) => (loc ? p.local_id === loc : true))
+              .filter((p) => {
+                if (!q) return true;
+                const value = `${p.nome} ${(p.codigo_barras || "")} ${catName(p.categoria_id)} ${locName(p.local_id)}`.toLowerCase();
+                return value.includes(q.toLowerCase());
+              })
+              .sort((a, b) => a.nome.localeCompare(b.nome));
+          }
+
+          function productRow(p) {
+            const saldo = saldoDoProduto(p.id);
+            const alert = computeAlertsLocal(p);
+            const badges = [];
+            if (alert.baixo) badges.push(`<span class="badge warn">Baixo estoque</span>`);
+            if (alert.validadeCritico) badges.push(`<span class="badge danger">Vencido</span>`);
+            else if (alert.validadeAtencao) badges.push(`<span class="badge warn">Validade em ${alert.diasParaVencer}d</span>`);
+            return `
+              <div class="stock-row" data-prod="${p.id}">
+                <div class="left">
+                  <div class="thumb">${(p.nome || "?").slice(0,1).toUpperCase()}</div>
+                  <div>
+                    <div style="font-weight:900;color:#7a0f3f;">${p.nome}</div>
+                    <div class="muted">${catName(p.categoria_id) || "Sem categoria"} • ${locName(p.local_id) || "Sem local"} • ${saldo} ${p.unidade}${p.unidade==="pct" && p.fator_pacote ? ` (x${p.fator_pacote})` : ""} ${p.codigo_barras ? `• #${p.codigo_barras}` : ""}</div>
+                  </div>
+                </div>
+                <div>
+                  ${badges.join(" ")}
+                  <button class="btn" data-act="sub">−1</button>
+                  <button class="btn" data-act="add">+1</button>
+                  <button class="btn" data-act="edit">Editar</button>
+                </div>
+              </div>
+            `;
+          }
+
+          // estilo
+          const style = `
+            <style>
+              .stock-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; }
+              .stock-hero p { margin: 0; color: #9d3a69; font-weight: 600; }
+              .stock-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+              .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+              .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              .stock-filters { display:grid; gap:10px; margin:12px 0; }
+              .stock-filters .field { display:grid; gap:6px; }
+              .stock-filters input, .stock-filters select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+              .stock-list { display:grid; gap:10px; }
+              .stock-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #f1e6ee; background:#fff; border-radius:12px; padding:12px; }
+              .stock-row .left { display:flex; gap:10px; align-items:center; }
+              .thumb { width:44px; height:44px; border-radius:12px; background:#fff; border:1px solid #f1e6ee; display:grid; place-items:center; color:#a1125b; font-weight:900; }
+              .badge { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; margin-right:6px; }
+              .warn { background:#fff7ed; border:1px solid #fed7aa; color:#b45309; }
+              .danger { background:#fee2e2; border:1px solid #fecaca; color:#b91c1c; }
+            </style>
+          `;
+
+          page.innerHTML = `
+            ${style}
+            <div class="stock-hero">
+              <h1>Estoque</h1>
+              <p>Cadastro, scanner por câmera (foto), histórico e exportações — preview estático com dados salvos neste navegador.</p>
+            </div>
+
+            <div class="stock-actions">
+              <button class="btn primary" id="stNovo">+ Novo Produto</button>
+              <button class="btn" id="stManage">Gerenciar Categorias/Locais</button>
+              <button class="btn" id="stCSV">Exportar CSV</button>
+              <button class="btn" id="stXLSX">Exportar XLSX</button>
+              <button class="btn" id="stRefresh">Atualizar</button>
+            </div>
+
+            <section class="section stock-filters">
+              <div class="field">
+                <label class="muted">Buscar</label>
+                <input id="stQ" placeholder="Nome, código de barras ou categoria" value="${q}">
+              </div>
+              <div class="field">
+                <label class="muted">Categoria</label>
+                <select id="stCat">
+                  <option value="">Todas</option>
+                  ${s.categorias.map((c) => `<option value="${c.id}" ${c.id===cat?"selected":""}>${c.nome}</option>`).join("")}
+                </select>
+              </div>
+              <div class="field">
+                <label class="muted">Local</label>
+                <select id="stLoc">
+                  <option value="">Todos</option>
+                  ${s.locais.map((l) => `<option value="${l.id}" ${l.id===loc?"selected":""}>${l.nome}</option>`).join("")}
+                </select>
+              </div>
+            </section>
+
+            <section class="section">
+              <h2 style="margin:0 0 8px;">Produtos</h2>
+              <div class="stock-list" id="stList">
+                ${filteredProdutos().map(productRow).join("") || `<div class="muted" style="padding:12px;">Nenhum produto cadastrado. Clique em “+ Novo Produto”.</div>`}
+              </div>
+            </section>
+          `;
+
+          // listeners de filtros
+          page.querySelector("#stQ").addEventListener("input", (e) => {
+            q = e.target.value || "";
+            const params = new URLSearchParams({ q, cat, loc });
+            location.hash = "/estoque?" + params.toString();
+          });
+          page.querySelector("#stCat").addEventListener("change", (e) => {
+            cat = e.target.value || "";
+            const params = new URLSearchParams({ q, cat, loc });
+            location.hash = "/estoque?" + params.toString();
+          });
+          page.querySelector("#stLoc").addEventListener("change", (e) => {
+            loc = e.target.value || "";
+            const params = new URLSearchParams({ q, cat, loc });
+            location.hash = "/estoque?" + params.toString();
+          });
+
+          page.querySelector("#stRefresh").addEventListener("click", () => renderEstoque());
+
+          // exportações
+          page.querySelector("#stCSV").addEventListener("click", () => exportProdutosCSVLocal(filteredProdutos()));
+          page.querySelector("#stXLSX").addEventListener("click", () => exportProdutosXLSXLocal(filteredProdutos()));
+
+          // novo produto
+          page.querySelector("#stNovo").addEventListener("click", () => showProdutoModal());
+
+          // gerenciar cat/loc
+          page.querySelector("#stManage").addEventListener("click", () => showManageModal());
+
+          // ações de linha
+          page.querySelectorAll(".stock-row .btn").forEach((btn) => {
+            const prodId = btn.closest(".stock-row").getAttribute("data-prod");
+            const act = btn.getAttribute("data-act");
+            if (act === "add") {
+              btn.addEventListener("click", () => {
+                const s2 = getStore();
+                s2.movimentos.push({ id: uid("mov"), produto_id: prodId, tipo: "entrada", quantidade: 1, unidade: (s.produtos.find(p=>p.id===prodId)||{}).unidade || "un", motivo: "compra", created_at: new Date().toISOString() });
+                setStore(s2);
+                renderEstoque();
+              });
+            } else if (act === "sub") {
+              btn.addEventListener("click", () => {
+                const s2 = getStore();
+                s2.movimentos.push({ id: uid("mov"), produto_id: prodId, tipo: "saida", quantidade: 1, unidade: (s.produtos.find(p=>p.id===prodId)||{}).unidade || "un", motivo: "consumo", created_at: new Date().toISOString() });
+                setStore(s2);
+                renderEstoque();
+              });
+            } else if (act === "edit") {
+              btn.addEventListener("click", () => {
+                const p = getStore().produtos.find((x) => x.id === prodId);
+                showProdutoModal(p);
+              });
+            }
+          });
+        }
+
+        function showManageModal() {
+          const s = getStore();
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          modal.innerHTML = `
+            <style>
+              .mgrid { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+              .listbox { border:1px solid #f1e6ee; border-radius:12px; padding:12px; background:#fff; }
+              .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+              .row input { flex:1; border:1px solid #f1e6ee; border-radius:10px; padding:8px; }
+              .btn { border:1px solid #f1e6ee; border-radius:10px; padding:8px 10px; font-weight:800; color:#a1125b; background:#fff; }
+              .title { font-weight:900; color:#9d174d; margin-bottom:8px; }
+            </style>
+            <div class="mgrid">
+              <div class="listbox">
+                <div class="title">Categorias</div>
+                <div id="catList">
+                  ${s.categorias.map(c => `
+                    <div class="row" data-id="${c.id}">
+                      <input value="${c.nome}">
+                      <button class="btn" data-act="del">Excluir</button>
+                    </div>`).join("")}
+                </div>
+                <button class="btn" id="addCat">+ Adicionar categoria</button>
+              </div>
+              <div class="listbox">
+                <div class="title">Locais</div>
+                <div id="locList">
+                  ${s.locais.map(l => `
+                    <div class="row" data-id="${l.id}">
+                      <input value="${l.nome}">
+                      <button class="btn" data-act="del">Excluir</button>
+                    </div>`).join("")}
+                </div>
+                <button class="btn" id="addLoc">+ Adicionar local</button>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+              <button class="btn" data-close>Fechar</button>
+              <button class="btn" id="saveMgmt" style="background:linear-gradient(90deg,var(--bella-500),var(--bella-400));color:#fff;border:0;">Salvar</button>
+            </div>
+          `;
+          modals.style.display = "flex";
+
+          modal.querySelector("#addCat").addEventListener("click", () => {
+            const wrapper = modal.querySelector("#catList");
+            const id = uid("cat");
+            const row = document.createElement("div");
+            row.className = "row";
+            row.setAttribute("data-id", id);
+            row.innerHTML = `<input value=""><button class="btn" data-act="del">Excluir</button>`;
+            wrapper.appendChild(row);
+            row.querySelector('[data-act="del"]').addEventListener("click", () => row.remove());
+          });
+          modal.querySelector("#addLoc").addEventListener("click", () => {
+            const wrapper = modal.querySelector("#locList");
+            const id = uid("loc");
+            const row = document.createElement("div");
+            row.className = "row";
+            row.setAttribute("data-id", id);
+            row.innerHTML = `<input value=""><button class="btn" data-act="del">Excluir</button>`;
+            wrapper.appendChild(row);
+            row.querySelector('[data-act="del"]').addEventListener("click", () => row.remove());
+          });
+
+          // Remover existentes
+          modal.querySelectorAll('[data-act="del"]').forEach((b) =>
+            b.addEventListener("click", () => b.closest(".row").remove())
+          );
+
+          modal.querySelector("#saveMgmt").addEventListener("click", () => {
+            const s2 = getStore();
+            const cats = Array.from(modal.querySelectorAll("#catList .row")).map((r) => ({
+              id: r.getAttribute("data-id") || uid("cat"),
+              nome: r.querySelector("input").value.trim() || "Sem nome",
+            })).filter(x => x.nome);
+            const locs = Array.from(modal.querySelectorAll("#locList .row")).map((r) => ({
+              id: r.getAttribute("data-id") || uid("loc"),
+              nome: r.querySelector("input").value.trim() || "Sem nome",
+            })).filter(x => x.nome);
+            s2.categorias = cats;
+            s2.locais = locs;
+            setStore(s2);
+            modals.style.display = "none";
+            renderEstoque();
+          });
+
+          modals.addEventListener("click", (e) => {
+            if (e.target === modals || e.target.hasAttribute("data-close")) {
+              modals.style.display = "none";
+            }
+          }, { once: true });
+        }
+
+        function showProdutoModal(existing) {
+          const s = getStore();
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+
+          const p = existing ? { ...existing } : {
+            id: uid("prod"),
+            nome: "",
+            codigo_barras: "",
+            unidade: "un",
+            fator_pacote: 1,
+            fracionavel: false,
+            categoria_id: "",
+            local_id: "",
+            validade: "",
+            alerta_validade_dias: 7,
+            alerta_estoque_qtd: 1,
+            foto: "",
+            created_at: new Date().toISOString(),
+          };
+
+          modal.innerHTML = `
+            <style>
+              .amodal h3 { margin:0 0 14px; font-weight:900; color:var(--bella-800); font-size:22px; }
+              .amodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .amodal .field { display:grid; gap:8px; }
+              .amodal label { color:#a1125b; font-weight:900; }
+              .amodal input, .amodal select { border:2px solid #f3c6d9; border-radius:14px; padding:12px; font-weight:700; color:#a1125b; background:#fff; }
+              .amodal .row { display:flex; gap:8px; align-items:center; }
+              .amodal .btn { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
+              .amodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:8px; }
+              .amodal .photo { width:64px; height:64px; border-radius:12px; border:1px solid #f1e6ee; display:grid; place-items:center; overflow:hidden; background:#fff7fb; }
+              @media(max-width:520px){ .amodal .grid2 { grid-template-columns: 1fr; } }
+            </style>
+
+            <div class="amodal">
+              <h3>${existing ? "Editar Produto" : "Novo Produto"}</h3>
+              <div class="grid2">
+                <div class="field">
+                  <label>Nome *</label>
+                  <input id="pNome" value="${p.nome || ""}" placeholder="Ex.: Removedor de esmalte">
+                </div>
+                <div class="field">
+                  <label>Código de barras</label>
+                  <div class="row">
+                    <input id="pCode" value="${p.codigo_barras || ""}" placeholder="Escaneie ou digite" style="flex:1;">
+                    <input type="file" id="pScan" accept="image/*;capture=camera" style="display:none;">
+                    <button class="btn" id="btnScan">Escanear</button>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label>Unidade</label>
+                  <select id="pUn">
+                    ${["un","pct","ml","g","l","kg"].map(u => `<option value="${u}" ${p.unidade===u?"selected":""}>${u}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Fator por pacote (se pct)</label>
+                  <input type="number" id="pFator" min="1" step="1" value="${p.fator_pacote || 1}">
+                </div>
+
+                <div class="row">
+                  <input type="checkbox" id="pFrac" ${p.fracionavel ? "checked":""}>
+                  <label for="pFrac">Fracionável (permite decimais)</label>
+                </div>
+
+                <div class="field">
+                  <label>Categoria</label>
+                  <select id="pCat"><option value="">Selecionar</option>${s.categorias.map(c=>`<option value="${c.id}" ${p.categoria_id===c.id?"selected":""}>${c.nome}</option>`).join("")}</select>
+                </div>
+                <div class="field">
+                  <label>Local</label>
+                  <select id="pLoc"><option value="">Selecionar</option>${s.locais.map(l=>`<option value="${l.id}" ${p.local_id===l.id?"selected":""}>${l.nome}</option>`).join("")}</select>
+                </div>
+
+                <div class="field">
+                  <label>Validade (opcional)</label>
+                  <input type="date" id="pVal" value="${p.validade || ""}">
+                </div>
+                <div class="grid2">
+                  <div class="field">
+                    <label>Alerta validade (dias)</label>
+                    <input type="number" id="pAlVal" min="1" step="1" value="${p.alerta_validade_dias || 7}">
+                  </div>
+                  <div class="field">
+                    <label>Alerta baixo estoque (qtd)</label>
+                    <input type="number" id="pAlEst" step="0.01" value="${p.alerta_estoque_qtd || 1}">
+                  </div>
+                </div>
+
+                <div class="field" style="grid-column: 1 / -1;">
+                  <label>Foto do produto</label>
+                  <div class="row">
+                    <div class="photo" id="pThumb">${p.foto ? `<img src="${p.foto}" style="width:100%;height:100%;object-fit:cover;">` : "📷"}</div>
+                    <input type="file" id="pFoto" accept="image/*;capture=camera" style="display:none;">
+                    <button class="btn" id="btnFoto">Tirar/Escolher foto</button>
+                  </div>
+                </div>
+
+                ${existing ? "" : `
+                <div class="grid2" style="grid-column:1 / -1;">
+                  <div class="field">
+                    <label>Movimentação inicial</label>
+                    <select id="mTipo"><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
+                  </div>
+                  <div class="field">
+                    <label>Quantidade</label>
+                    <input type="number" id="mQtd" step="0.01" value="1">
+                  </div>
+                </div>`}
+              </div>
+
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn" id="saveProd" style="background:linear-gradient(90deg,var(--bella-500),var(--bella-400));color:#fff;border:0;">Salvar</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+
+          // buttons
+          modal.querySelector("#btnScan").addEventListener("click", () => modal.querySelector("#pScan").click());
+          modal.querySelector("#pScan").addEventListener("change", async (ev) => {
+            const f = ev.target.files && ev.target.files[0];
+            if (!f) return;
+            const code = await detectBarcodeFromFile(f);
+            if (code) modal.querySelector("#pCode").value = code;
+            else alert("Não foi possível ler o código. Tente outra foto.");
+            ev.target.value = "";
+          });
+
+          modal.querySelector("#btnFoto").addEventListener("click", () => modal.querySelector("#pFoto").click());
+          modal.querySelector("#pFoto").addEventListener("change", async (ev) => {
+            const f = ev.target.files && ev.target.files[0];
+            if (!f) return;
+            try {
+              const dataUrl = await compressImageToDataUrl(f, 900, 0.8);
+              const ph = modal.querySelector("#pThumb");
+              ph.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+              p.foto = dataUrl;
+            } catch (e) { console.warn(e); }
+            ev.target.value = "";
+          });
+
+          modal.querySelector("#saveProd").addEventListener("click", () => {
+            const s2 = getStore();
+            p.nome = modal.querySelector("#pNome").value.trim();
+            if (!p.nome) { alert("Informe o nome do produto"); return; }
+            p.codigo_barras = modal.querySelector("#pCode").value.trim() || "";
+            p.unidade = modal.querySelector("#pUn").value;
+            p.fator_pacote = Number(modal.querySelector("#pFator").value || 1);
+            p.fracionavel = !!modal.querySelector("#pFrac").checked;
+            p.categoria_id = modal.querySelector("#pCat").value || "";
+            p.local_id = modal.querySelector("#pLoc").value || "";
+            p.validade = modal.querySelector("#pVal").value || "";
+            p.alerta_validade_dias = Number(modal.querySelector("#pAlVal").value || 7);
+            p.alerta_estoque_qtd = Number(modal.querySelector("#pAlEst").value || 1);
+
+            if (existing) {
+              const idx = s2.produtos.findIndex((x) => x.id === existing.id);
+              if (idx >= 0) s2.produtos[idx] = p;
+            } else {
+              s2.produtos.push(p);
+              const tipo = modal.querySelector("#mTipo").value;
+              const qtd = Number(modal.querySelector("#mQtd").value || 0);
+              if (qtd > 0) {
+                s2.movimentos.push({
+                  id: uid("mov"),
+                  produto_id: p.id,
+                  tipo,
+                  quantidade: qtd,
+                  unidade: p.unidade,
+                  motivo: tipo === "entrada" ? "compra" : "consumo",
+                  created_at: new Date().toISOString(),
+                });
+              }
+            }
+            setStore(s2);
+            modals.style.display = "none";
+            renderEstoque();
+          });
+
+          modals.addEventListener("click", (e) => {
+            if (e.target === modals || e.target.hasAttribute("data-close")) modals.style.display = "none";
+          }, { once: true });
+        }
+
+        // Primeira renderização da página Estoque
+        renderEstoque();
       }
     }
 
