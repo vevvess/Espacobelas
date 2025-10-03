@@ -33,6 +33,7 @@ const Relatorios = lazy(() => import("./pages/Relatorios"));
 const FichaCliente = lazy(() => import("./pages/FichaCliente"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
 const ConfiguracoesSistema = lazy(() => import("./pages/ConfiguracoesSistema"));
+const Estoque = lazy(() => import("./pages/Estoque"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -158,6 +159,20 @@ const AppRoutes = () => {
             <Layout>
               <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-bella-500 border-t-transparent rounded-full animate-spin"/></div>}>
                 <Caixa />
+              </Suspense>
+            </Layout>
+          </RoleProtectedRoute>
+        }
+      />
+
+      {/* Protected routes - Estoque (Admin only) */}
+      <Route
+        path="/estoque"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin"]}>
+            <Layout>
+              <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-bella-500 border-t-transparent rounded-full animate-spin"/></div>}>
+                <Estoque />
               </Suspense>
             </Layout>
           </RoleProtectedRoute>
