@@ -609,6 +609,97 @@
       <div id="caixa-root"></div>
     `;
 
+    const Estoque = () => `
+      <style>
+        .stock-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; }
+        .stock-hero p { margin: 0; color: #9d3a69; font-weight: 600; }
+        .stock-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+        .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+        .stock-filters { display:grid; gap:10px; margin:12px 0; }
+        .stock-filters .field { display:grid; gap:6px; }
+        .stock-filters input, .stock-filters select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+        .stock-list { display:grid; gap:10px; }
+        .stock-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #f1e6ee; background:#fff; border-radius:12px; padding:12px; }
+        .stock-row .left { display:flex; gap:10px; align-items:center; }
+        .thumb { width:44px; height:44px; border-radius:12px; background:#fff; border:1px solid #f1e6ee; display:grid; place-items:center; color:#a1125b; font-weight:900; }
+        .badge { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; }
+        .warn { background:#fff7ed; border:1px solid #fed7aa; color:#b45309; }
+        .danger { background:#fee2e2; border:1px solid #fecaca; color:#b91c1c; }
+      </style>
+
+      <div class="stock-hero">
+        <h1>Estoque</h1>
+        <p>Visualização estática para revisão de layout. O app real possui cadastro, scanner e histórico.</p>
+      </div>
+
+      <div class="stock-actions">
+        <button class="btn primary">+ Novo Produto</button>
+        <button class="btn">Exportar CSV</button>
+        <button class="btn">Exportar XLSX</button>
+      </div>
+
+      <section class="section stock-filters">
+        <div class="field">
+          <label class="muted">Buscar</label>
+          <input placeholder="Nome, código de barras ou categoria" />
+        </div>
+        <div class="field">
+          <label class="muted">Categoria</label>
+          <select><option>Todas</option><option>Manicure/Pedicure</option><option>Coloração</option></select>
+        </div>
+        <div class="field">
+          <label class="muted">Local</label>
+          <select><option>Todos</option><option>Armário</option><option>Recepção</option></select>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Produtos</h2>
+        <div class="stock-list">
+          <div class="stock-row">
+            <div class="left">
+              <div class="thumb">E</div>
+              <div>
+                <div style="font-weight:900;color:#7a0f3f;">Esmalte Rosa</div>
+                <div class="muted">Manicure/Pedicure • Armário • 12 un</div>
+              </div>
+            </div>
+            <div>
+              <span class="badge warn">Baixo estoque</span>
+            </div>
+          </div>
+
+          <div class="stock-row">
+            <div class="left">
+              <div class="thumb">R</div>
+              <div>
+                <div style="font-weight:900;color:#7a0f3f;">Removedor de Esmalte 500ml</div>
+                <div class="muted">Manicure/Pedicure • Armário • 0.5 l</div>
+              </div>
+            </div>
+            <div>
+              <span class="badge danger">Vencido</span>
+            </div>
+          </div>
+
+          <div class="stock-row">
+            <div class="left">
+              <div class="thumb">A</div>
+              <div>
+                <div style="font-weight:900;color:#7a0f3f;">Alicate (pacote x12)</div>
+                <div class="muted">Equipamentos • Recepção • 24 un</div>
+              </div>
+            </div>
+            <div>
+              <button class="btn">−1</button>
+              <button class="btn">+1</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+
     const Usuarios = () => `
       <div class="hero"><h1>Usuários</h1><p>Times, permissões e perfis</p></div>
       <section class="section list">
@@ -634,6 +725,7 @@
       "/clientes-mensais": { title: "Clientes Mensais", view: ClientesMensais },
       "/servicos": { title: "Serviços", view: Servicos },
       "/caixa": { title: "Caixa", view: Caixa },
+      "/estoque": { title: "Estoque", view: Estoque },
       "/usuarios": { title: "Usuários", view: Usuarios },
       "/configuracoes": { title: "Configurações", view: Configuracoes },
     };
@@ -680,6 +772,7 @@
             <a class="item" href="#/clientes-mensais" data-link="/clientes-mensais"><span class="icon">🗓️</span><span class="label">Clientes Mensais</span></a>
             <a class="item" href="#/servicos" data-link="/servicos"><span class="icon">⚙️</span><span class="label">Serviços</span></a>
             <a class="item" href="#/caixa" data-link="/caixa"><span class="icon">💵</span><span class="label">Caixa</span></a>
+            <a class="item" href="#/estoque" data-link="/estoque"><span class="icon">📦</span><span class="label">Estoque</span></a>
           </nav>
 
           <div class="section-divider"><span>ADMINISTRAÇÃO</span></div>
