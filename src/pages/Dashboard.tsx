@@ -266,7 +266,7 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 mb-8">
         <div className="animate-slide-up">
           <h1 className="text-3xl sm:text-4xl font-bold text-bella-800 mb-2">
-            Bem-vindo, {user?.nome}! 👋
+            ok tudo bem
           </h1>
           <p className="text-lg text-bella-600">
             Aqui está um resumo das suas atividades de hoje
