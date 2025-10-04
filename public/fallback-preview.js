@@ -1715,10 +1715,134 @@
 
           async function exportImage() {
             await ensureHtml2Canvas();
+
+            // Ensure QR generator for embedding QR codes of expense receipts
+            async function ensureQRious() {
+              if (!window.QRious) {
+                await loadScriptOnce("https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js");
+              }
+            }
+            await ensureQRious();
+
             const s2 = snapshot(selectedDate);
             const brDate = fmtBR(selectedDate);
             const genStr = new Date().toLocaleString("pt-BR");
-            const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+            const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+            // Group attendances by client and explode multiple services
+            function groupAttsByClient(atts) {
+              const map = {};
+              (atts || []).forEach((a) => {
+                const cliente = a.cliente || "-";
+                if (!map[cliente]) map[cliente] = [];
+                const pagamento = a.pagamento || "";
+                if (Array.isArray(a.servicos) && a.servicos.length) {
+                  a.servicos.forEach((sv) => {
+                    map[cliente].push({
+                      servico: sv?.nome || a.servico || "-",
+                      profissional: sv?.profissional || a.profissional || "-",
+                      pagamento,
+                      valor: Number(sv?.valor ?? 0) || 0,
+                    });
+                  });
+                } else {
+                  map[cliente].push({
+                    servico: a.servico || "-",
+                    profissional: a.profissional || "-",
+                    pagamento,
+                    valor: Number(a.valor ?? 0) || 0,
+                  });
+                }
+              });
+              return map;
+            }
+
+            function renderGroupedAttsTable(groups) {
+              const entries = Object.entries(groups || {});
+              if (!entries.length) {
+                return `<div class="muted">Sem atendimentos para esta data</div>`;
+              }
+              let body = "";
+              entries.forEach(([cliente, items]) => {
+                if (!items || !items.length) return;
+                const total = items.reduce((acc, it) => acc + (Number(it.valor) || 0), 0);
+                const first = items[0];
+                body += `
+                  <tr>
+                    <td class="r-client-cell" rowspan="${items.length}">
+                      <div class="nm">${cliente}</div>
+                      <div class="muted sm">Total: ${money(total)}</div>
+                    </td>
+                    <td>${first.servico || "-"}</td>
+                    <td>${first.profissional || "-"}</td>
+                    <td>${(first.pagamento || "").toUpperCase()}</td>
+                    <td class="num">${money(first.valor)}</td>
+                  </tr>
+                `;
+                for (let i = 1; i < items.length; i++) {
+                  const it = items[i];
+                  body += `
+                    <tr>
+                      <td>${it.servico || "-"}</td>
+                      <td>${it.profissional || "-"}</td>
+                      <td>${(it.pagamento || "").toUpperCase()}</td>
+                      <td class="num">${money(it.valor)}</td>
+                    </tr>
+                  `;
+                }
+              });
+              return `
+                <table>
+                  <thead><tr><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Pagamento</th><th>Valor</th></tr></thead>
+                  <tbody>${body}</tbody>
+                </table>
+              `;
+            }
+
+            // Build QR image for expense proof if qr_text exists
+            function qrImgFor(text) {
+              try {
+                if (!text) return "";
+                const qr = new window.QRious({ value: text, size: 88, level: "H", background: "white", foreground: "#111827" });
+                // Some builds expose toDataURL on instance; otherwise use underlying image/canvas
+                if (typeof qr.toDataURL === "function") return qr.toDataURL();
+                if (qr.image && qr.image.src) return qr.image.src;
+                if (qr.canvas && qr.canvas.toDataURL) return qr.canvas.toDataURL("image/png");
+              } catch {}
+              return "";
+            }
+
+            // Compose HTML strings for tables
+            const grouped = groupAttsByClient(s2.atts || []);
+            const attTableHTML = renderGroupedAttsTable(grouped);
+
+            const depTableHTML =
+              (s2.deps || []).length
+                ? `
+                  <table>
+                    <thead><tr><th>Descrição</th><th>Origem</th><th>Comprovante</th><th>Valor</th></tr></thead>
+                    <tbody>
+                      ${(s2.deps || [])
+                        .map((d) => {
+                          const qrData = d.qr_text ? qrImgFor(d.qr_text) : "";
+                          const proof =
+                            qrData
+                              ? `<img class="qrimg" src="${qrData}" alt="QR da nota">`
+                              : (d.qr_image ? `<img class="qrimg" src="${d.qr_image}" alt="QR (imagem)">` : `<span class="muted">—</span>`);
+                          return `
+                            <tr>
+                              <td>${d.descricao}</td>
+                              <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
+                              <td class="qr-cell">${proof}</td>
+                              <td class="num">${money(d.valor)}</td>
+                            </tr>
+                          `;
+                        })
+                        .join("")}
+                    </tbody>
+                  </table>
+                `
+                : `<div class="muted">Sem despesas para esta data</div>`;
 
             const container = document.createElement("div");
             container.id = "report-capture";
@@ -1751,7 +1875,12 @@
                 td, th { padding:8px 10px; border:1px solid #f1e6ee; background:#fff; }
                 td.num { text-align:right; font-weight:900; }
                 .muted { color:#64748b; }
+                .sm { font-size:12px; }
                 .foot { margin-top: 8px; color:#64748b; font-size:12px; }
+                .r-client-cell { background:#fff7fb; border-width:2px; border-color:#f1e6ee; min-width:180px; vertical-align:top; }
+                .r-client-cell .nm { font-weight:900; color:#9d174d; }
+                .qrimg { width:84px; height:84px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+                .qr-cell { text-align:center; }
               </style>
 
               <div class="r-title">Fechamento de Caixa — Espaço Bella's</div>
@@ -1772,65 +1901,19 @@
 
               <div class="sec">
                 <h3>Detalhes dos Atendimentos</h3>
-                ${
-                  s2.atts.length
-                    ? `<table>
-                        <thead><tr><th>Cliente</th><th>Serviços</th><th>Funcionário</th><th>Pagamento</th><th>Valor</th></tr></thead>
-                        <tbody>
-                          ${s2.atts.map(a => `
-                            <tr>
-                              <td>${a.cliente || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-"}</td>
-                              <td>${(a.pagamento || "").toUpperCase()}</td>
-                              <td class="num">${money(a.valor)}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>`
-                    : `<div class="muted">Sem atendimentos para esta data</div>`
-                }
+                ${attTableHTML}
               </div>
 
-              ${
-                s2.atts.filter(a => a.pagamento === "mensal").length
-                  ? `<div class="sec">
-                      <h3>Débito Mensal (Não Pago)</h3>
-                      <table>
-                        <thead><tr><th>Cliente</th><th>Serviços</th><th>Funcionário</th><th>Valor</th></tr></thead>
-                        <tbody>
-                          ${s2.atts.filter(a => a.pagamento === "mensal").map(a => `
-                            <tr>
-                              <td>${a.cliente || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-"}</td>
-                              <td class="num">${money(a.valor)}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>
-                    </div>`
-                  : ""
-              }
+              ${ (s2.atts || []).some(a => a.pagamento === "mensal")
+                ? `<div class="sec">
+                    <h3>Débito Mensal (Não Pago)</h3>
+                    ${renderGroupedAttsTable(groupAttsByClient((s2.atts || []).filter(a => a.pagamento === "mensal")))}
+                  </div>`
+                : "" }
 
               <div class="sec">
                 <h3>Detalhes das Despesas</h3>
-                ${
-                  s2.deps.length
-                    ? `<table>
-                        <thead><tr><th>Descrição</th><th>Origem</th><th>Valor</th></tr></thead>
-                        <tbody>
-                          ${s2.deps.map(d => `
-                            <tr>
-                              <td>${d.descricao}</td>
-                              <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
-                              <td class="num">${money(d.valor)}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>`
-                    : `<div class="muted">Sem despesas para esta data</div>`
-                }
+                ${depTableHTML}
               </div>
 
               <div class="sec">
