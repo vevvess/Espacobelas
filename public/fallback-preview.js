@@ -622,10 +622,39 @@
     `;
 
     const Configuracoes = () => `
-      <div class="hero"><h1>Configurações</h1><p>Preferências do sistema</p></div>
+      <style>
+        .cfg-grid { display:grid; gap:12px; }
+        .cfg .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+        .cfg .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+      </style>
+      <div class="hero"><h1>Configurações</h1><p>Preferências do sistema e ferramentas</p></div>
       <section class="section list">
         <div class="row"><div><strong>Tema</strong><div class="muted">Claro</div></div><button class="btn-outline">Alterar</button></div>
         <div class="row"><div><strong>Notificações</strong><div class="muted">Ativadas</div></div><button class="btn-outline">Editar</button></div>
+      </section>
+
+      <section class="section cfg">
+        <h2>Gerar dist.zip (para Netlify Drop)</h2>
+        <p class="muted">Roda o GitHub Actions do repositório e entrega o <strong>dist.zip</strong> para baixar. O token é usado apenas nesta página (não é salvo).</p>
+        <div class="cfg-grid">
+          <div class="field">
+            <label>GitHub Personal Access Token (escopos: repo, actions)</label>
+            <input id="ghToken" type="password" placeholder="cole o token aqui">
+          </div>
+          <div class="field">
+            <label>Branch/Ref a buildar</label>
+            <input id="ghRef" value="main" placeholder="ex.: main ou cosine/refactor/app-edit-kli5fx">
+          </div>
+          <div class="field">
+            <label>Workflow</label>
+            <input id="ghWf" value="build-dist.yml" readonly>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button class="btn primary" id="runBuild">Gerar e baixar dist.zip</button>
+            <a class="btn" id="openActions" target="_blank" rel="noreferrer">Abrir Actions</a>
+          </div>
+          <div id="buildStatus" class="muted"></div>
+        </div>
       </section>
     `;
 
