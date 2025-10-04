@@ -1111,7 +1111,7 @@
                   <table class="list-table">
                     <thead>
                       <tr>
-                        <th>Descrição</th><th>Origem</th><th class="right">Valor (R$)</th><th>QR</th><th>Ações</th>
+                        <th>Descrição</th><th>Origem</th><th>Comprovante</th><th class="right">Valor (R$)</th><th>Ações</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1121,8 +1121,26 @@
                         <tr>
                           <td>${d.descricao}</td>
                           <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
+                          <td>
+                            ${
+                              (d.qr_text || d.qr_image)
+                                ? `
+                                  <span class="badge">QR anexado</span>
+                                  ${
+                                    d.qr_image ? `<img src="${d.qr_image}" alt="QR" style="width:48px;height:48px;object-fit:contain;border:1px solid #eee;border-radius:6px;display:block;margin-top:4px;">` : ``
+                                  }
+                                  ${
+                                    d.qr_text
+                                      ? (/^https?:/i.test(d.qr_text)
+                                          ? `<a href="${d.qr_text}" target="_blank" rel="noopener" class="muted2" style="max-width:160px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.qr_text}</a>`
+                                          : `<div class="muted2" style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.qr_text}</div>`)
+                                      : ``
+                                  }
+                                `
+                                : `<span class="muted2">—</span>`
+                            }
+                          </td>
                           <td class="right">${money(d.valor)}</td>
-                          <td>${d.qr_text ? "QR" : "-"}</td>
                           <td>
                             <button class="btn" data-edit-dep="${d.id}">Editar</button>
                             <button class="btn" data-del-dep="${d.id}">Excluir</button>
@@ -1650,6 +1668,7 @@
             const depRows = (s2.deps || []).map(d => [
               d.descricao || "-",
               d.origem === "caixa" ? "Retirada do Caixa" : "Outro",
+              (d.qr_text || d.qr_image) ? "QR" : "—",
               money(d.valor)
             ]);
             doc.setTextColor(161,18,91);
@@ -1660,11 +1679,11 @@
             doc.setTextColor(15,23,42);
             doc.autoTable({
               startY: y,
-              head: [["Descrição","Origem","Valor"]],
+              head: [["Descrição","Origem","QR","Valor"]],
               body: depRows,
               styles: { font:"helvetica", fontSize: 9, cellPadding: 2 },
               headStyles: { fillColor: [254,226,226], textColor: [153,27,27] },
-              columnStyles: { 2: { halign: "right" } },
+              columnStyles: { 3: { halign: "right" } },
               theme: "grid",
               margin: { left: margin, right: margin },
             });
