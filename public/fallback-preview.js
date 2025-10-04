@@ -1424,6 +1424,7 @@
               const f = ev.target.files && ev.target.files[0];
               if (!f) return;
               let text = "";
+              // 1) Tenta via BarcodeDetector (nativo)
               try {
                 if (window.BarcodeDetector) {
                   const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
@@ -1433,11 +1434,47 @@
                 }
               } catch {}
               const fr = new FileReader();
-              fr.onload = () => {
+              fr.onload = async () => {
                 const dataUrl = String(fr.result || "");
+                // 2) Se não conseguiu via nativo, tenta decodificar via jsQR (fallback)
+                if (!text && dataUrl) {
+                  try {
+                    await (async function ensureJsQR() {
+                      if (!window.jsQR) {
+                        await new Promise((resolve, reject) => {
+                          const s = document.createElement("script");
+                          s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
+                          s.onload = resolve;
+                          s.onerror = reject;
+                          document.head.appendChild(s);
+                        });
+                      }
+                    })();
+                    if (window.jsQR) {
+                      await new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                          try {
+                            const canvas = document.createElement("canvas");
+                            canvas.width = img.naturalWidth || img.width;
+                            canvas.height = img.naturalHeight || img.height;
+                            const ctx = canvas.getContext("2d");
+                            ctx.drawImage(img, 0, 0);
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const result = window.jsQR(imageData.data, imageData.width, imageData.height);
+                            if (result && result.data) text = result.data;
+                          } catch {}
+                          resolve();
+                        };
+                        img.onerror = () => resolve();
+                        img.src = dataUrl;
+                      });
+                    }
+                  } catch {}
+                }
+                // Atualiza UI e armazena
                 qrPayload.textContent = text ? ("Payload: " + text) : "";
                 qrPreview.innerHTML = dataUrl ? `<img src="${dataUrl}" style="max-width:140px;border:1px solid #f1e6ee;border-radius:8px;">` : "";
-                // stash temporário nos elementos
                 qrPayload.setAttribute("data-qrtext", text);
                 qrPreview.setAttribute("data-qrimg", dataUrl);
               };
@@ -1824,11 +1861,9 @@
                     <tbody>
                       ${(s2.deps || [])
                         .map((d) => {
-                          const qrData = d.qr_text ? qrImgFor(d.qr_text) : "";
-                          const proof =
-                            qrData
-                              ? `<img class="qrimg" src="${qrData}" alt="QR da nota">`
-                              : (d.qr_image ? `<img class="qrimg" src="${d.qr_image}" alt="QR (imagem)">` : `<span class="muted">—</span>`);
+                          const proof = d.qr_text
+                            ? `<img class="qrimg" src="${qrImgFor(d.qr_text)}" alt="QR da nota">`
+                            : `<span class="muted">—</span>`;
                           return `
                             <tr>
                               <td>${d.descricao}</td>
