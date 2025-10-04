@@ -241,14 +241,14 @@ export default function Caixa() {
       return;
     }
 
-    // Adicionar novo movimento manual
+    // Adicionar novo movimento manual (respeitando a data selecionada no filtro)
     adicionarMovimentoManual({
       tipo: novoMovimento.tipo,
       descricao: novoMovimento.descricao,
       valor: novoMovimento.valor,
       categoria: novoMovimento.categoria,
       formaPagamento: novoMovimento.formaPagamento,
-      data: new Date(),
+      data: new Date(selectedDate.getTime()),
       observacoes: novoMovimento.observacoes,
     });
 
@@ -633,12 +633,49 @@ export default function Caixa() {
             <label className="block text-sm font-medium text-bella-700 mb-2">
               Data
             </label>
-            <input
-              type="date"
-              value={dataAtual}
-              onChange={(e) => setDataAtual(e.target.value)}
-              className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
-            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const d = parseYMDToLocalDate(dataAtual);
+                  d.setDate(d.getDate() - 1);
+                  setDataAtual(formatLocalYMD(d));
+                }}
+                className="px-3 py-2 rounded-lg border border-bella-200 hover:bg-bella-50"
+                aria-label="Dia anterior"
+                title="Dia anterior"
+              >
+                ◀
+              </button>
+              <input
+                type="date"
+                value={dataAtual}
+                onChange={(e) => setDataAtual(e.target.value)}
+                className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const d = parseYMDToLocalDate(dataAtual);
+                  d.setDate(d.getDate() + 1);
+                  setDataAtual(formatLocalYMD(d));
+                }}
+                className="px-3 py-2 rounded-lg border border-bella-200 hover:bg-bella-50"
+                aria-label="Próximo dia"
+                title="Próximo dia"
+              >
+                ▶
+              </button>
+              <button
+                type="button"
+                onClick={() => setDataAtual(formatLocalYMD(new Date()))}
+                className="px-3 py-2 rounded-lg border border-bella-200 hover:bg-bella-50"
+                aria-label="Hoje"
+                title="Hoje"
+              >
+                Hoje
+              </button>
+            </div>
           </div>
 
           <div>
