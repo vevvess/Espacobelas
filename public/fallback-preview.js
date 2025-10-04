@@ -870,8 +870,10 @@
         };
 
         function renderCaixa() {
-          const s = snapshot(selectedDate);
-          const brDate = fmtBR(selectedDate);
+            // Recarrega sempre a data selecionada do localStorage para evitar fechamento por valor antigo no closure
+            const selectedDate = localStorage.getItem("bella_caixa_selected_date") || todayYMD;
+            const s = snapshot(selectedDate);
+            const brDate = fmtBR(selectedDate);
 
           page.innerHTML = `
             <style>
