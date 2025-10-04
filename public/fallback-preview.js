@@ -1028,7 +1028,7 @@
                   <table class="list-table">
                     <thead>
                       <tr>
-                        <th>Descrição</th><th>Origem</th><th class="right">Valor (R$)</th><th>Ações</th>
+                        <th>Descrição</th><th>Origem</th><th>Comprovante</th><th class="right">Valor (R$)</th><th>Ações</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1038,6 +1038,22 @@
                         <tr>
                           <td>${d.descricao}</td>
                           <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
+                          <td>
+                            ${
+                              d.qr && (d.qr.image || d.qr.text)
+                                ? `
+                                  ${d.qr.image ? `<img src="${d.qr.image}" alt="QR" style="width:48px;height:48px;object-fit:contain;border:1px solid #eee;border-radius:6px;display:block;margin-bottom:4px;">` : ``}
+                                  ${
+                                    d.qr.text
+                                      ? (/^https?:/i.test(d.qr.text)
+                                          ? `<a href="${d.qr.text}" target="_blank" rel="noopener" class="muted2" style="max-width:160px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.qr.text}</a>`
+                                          : `<div class="muted2" style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.qr.text}</div>`)
+                                      : ``
+                                  }
+                                `
+                                : `<span class="muted2">—</span>`
+                            }
+                          </td>
                           <td class="right">${money(d.valor)}</td>
                           <td>
                             <button class="btn" data-edit-dep="${d.id}">Editar</button>
@@ -1288,6 +1304,14 @@
             const modals = document.getElementById("modals");
             const modal = modals.querySelector(".modal");
             modal.innerHTML = `
+              <style>
+                .qr-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+                .qr-preview { width:72px; height:72px; border:1px solid #f1e6ee; border-radius:8px; display:grid; place-items:center; background:#fff; color:#a1125b; }
+                .qr-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:50; padding:16px; }
+                .qr-panel { background:#fff; border-radius:12px; padding:12px; width:100%; max-width:420px; }
+                .qr-video { width:100%; height:auto; background:#000; border-radius:8px; }
+                .qr-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+              </style>
               <h3 id="modal-title">${existing ? "Editar Despesa" : "Nova Despesa"}</h3>
               <div class="field"><label>Descrição</label><input id="dDesc" placeholder="Ex.: Compra de produtos" value="${existing?.descricao || ""}"></div>
               <div class="field"><label>Valor</label><input id="dVal" type="number" step="0.01" min="0" value="${existing ? existing.valor : 0}"></div>
@@ -1297,12 +1321,147 @@
                   <option value="outro" ${existing?.origem === "outro" ? "selected" : ""}>Outro</option>
                 </select>
               </div>
+              <div class="field">
+                <label>Comprovante (QR code) — opcional</label>
+                <div class="qr-actions">
+                  <div id="qrPreview" class="qr-preview">${existing?.qr?.image ? `<img src="${existing.qr.image}" style="width:100%;height:100%;object-fit:contain;">` : "QR"}</div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn" id="qrScanCam">Ler QR (Câmera)</button>
+                    <input type="file" id="qrFile" accept="image/*;capture=camera" style="display:none">
+                    <button class="btn" id="qrScanImg">Ler QR (Imagem)</button>
+                    <button class="btn" id="qrClear" ${existing?.qr ? "" : "style='display:none'"}>Remover QR</button>
+                  </div>
+                  <div id="qrTextWrap" class="muted2" style="flex-basis:100%;max-width:100%;word-break:break-all;${existing?.qr?.text ? "" : "display:none;"}">${existing?.qr?.text || ""}</div>
+                </div>
+              </div>
               <div style="display:flex; justify-content:flex-end; gap:8px;">
                 <button class="btn" data-close>Cancelar</button>
                 <button class="btn primary" id="saveDesp">${existing ? "Salvar alterações" : "Salvar"}</button>
               </div>
             `;
             modals.style.display = "flex";
+
+            // Estado local do QR
+            let qrText = existing?.qr?.text || "";
+            let qrImage = existing?.qr?.image || "";
+
+            const qrPreview = modal.querySelector("#qrPreview");
+            const qrTextWrap = modal.querySelector("#qrTextWrap");
+            const qrClearBtn = modal.querySelector("#qrClear");
+
+            function updateQrUI() {
+              if (qrImage) {
+                qrPreview.innerHTML = `<img src="${qrImage}" style="width:100%;height:100%;object-fit:contain;">`;
+              } else {
+                qrPreview.textContent = "QR";
+              }
+              if (qrText) {
+                qrTextWrap.style.display = "";
+                qrTextWrap.textContent = qrText;
+                qrClearBtn && (qrClearBtn.style.display = "");
+              } else {
+                qrTextWrap.style.display = "none";
+                qrTextWrap.textContent = "";
+                qrClearBtn && (qrClearBtn.style.display = "none");
+              }
+            }
+
+            // Ler QR via imagem
+            const qrFileInput = modal.querySelector("#qrFile");
+            modal.querySelector("#qrScanImg").addEventListener("click", () => qrFileInput.click());
+            qrFileInput.addEventListener("change", async (ev) => {
+              const f = ev.target.files && ev.target.files[0];
+              if (!f) return;
+              const code = await detectBarcodeFromFile(f);
+              if (code) {
+                qrText = code;
+                qrImage = await makeQrDataUrl(code);
+                updateQrUI();
+              } else {
+                alert("Não foi possível ler o QR desta imagem. Tente outra foto.");
+              }
+              ev.target.value = "";
+            });
+
+            // Ler QR via câmera
+            modal.querySelector("#qrScanCam").addEventListener("click", async () => {
+              if (!navigator.mediaDevices?.getUserMedia) {
+                alert("Câmera não disponível neste dispositivo/navegador.");
+                return;
+              }
+              const overlay = document.createElement("div");
+              overlay.className = "qr-overlay";
+              overlay.innerHTML = `
+                <div class="qr-panel">
+                  <div class="qr-head">
+                    <strong>Escanear QR</strong>
+                    <button class="btn" id="qrClose">Fechar</button>
+                  </div>
+                  <video class="qr-video" id="qrVideo" autoplay playsinline muted></video>
+                  <div class="muted2" style="margin-top:6px;">Aponte a câmera para o QR do cupom/notinha</div>
+                </div>
+              `;
+              document.body.appendChild(overlay);
+              const video = overlay.querySelector("#qrVideo");
+              const closeBtn = overlay.querySelector("#qrClose");
+
+              let stream;
+              let stopped = false;
+              try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+                video.srcObject = stream;
+              } catch (e) {
+                alert("Não foi possível acessar a câmera.");
+                overlay.remove();
+                return;
+              }
+
+              async function stopAll() {
+                if (stream) stream.getTracks().forEach(t => t.stop());
+                overlay.remove();
+                stopped = true;
+              }
+              closeBtn.addEventListener("click", stopAll);
+
+              // Detecção por BarcodeDetector (quando disponível)
+              let detector;
+              if (window.BarcodeDetector) {
+                try {
+                  detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+                } catch {}
+              }
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
+
+              async function loop() {
+                if (stopped) return;
+                try {
+                  if (detector) {
+                    const results = await detector.detect(video);
+                    if (results && results.length && (results[0].rawValue || results[0].raw)) {
+                      const raw = results[0].rawValue || results[0].raw;
+                      qrText = raw;
+                      qrImage = await makeQrDataUrl(raw);
+                      updateQrUI();
+                      await stopAll();
+                      return;
+                    }
+                  } else if (video.videoWidth && video.videoHeight) {
+                    // Fallback: captura frame (não decodifica sem detector)
+                    // Se não houver BarcodeDetector, pedimos usar a leitura por imagem
+                  }
+                } catch {}
+                requestAnimationFrame(loop);
+              }
+              requestAnimationFrame(loop);
+            });
+
+            // Limpar QR
+            qrClearBtn && qrClearBtn.addEventListener("click", () => {
+              qrText = "";
+              qrImage = "";
+              updateQrUI();
+            });
 
             modal.querySelector("#saveDesp").addEventListener("click", () => {
               const descricao = modal.querySelector("#dDesc").value.trim();
@@ -1321,12 +1480,13 @@
                   return;
                 }
               }
+              const qr = qrText ? { text: qrText, image: qrImage } : undefined;
               if (existing) {
                 const idx = day.despesas.findIndex(
                   (d) => String(d.id) === String(existing.id)
                 );
                 if (idx >= 0)
-                  day.despesas[idx] = { ...existing, descricao, valor, origem };
+                  day.despesas[idx] = { ...existing, descricao, valor, origem, qr };
               } else {
                 day.despesas.push({
                   id: "dep-" + Date.now(),
@@ -1334,6 +1494,7 @@
                   descricao,
                   valor,
                   origem,
+                  qr,
                 });
               }
               setStore(store);
@@ -1370,6 +1531,19 @@
           async function ensureHtml2Canvas() {
             if (!window.html2canvas) {
               await loadScriptOnce("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
+            }
+          }
+          async function ensureQRCode() {
+            if (!window.QRCode) {
+              await loadScriptOnce("https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js");
+            }
+          }
+          async function makeQrDataUrl(text) {
+            try {
+              await ensureQRCode();
+              return await window.QRCode.toDataURL(String(text || ""), { width: 128, errorCorrectionLevel: "M" });
+            } catch {
+              return "";
             }
           }
 
@@ -1584,6 +1758,42 @@
             container.style.color = "#0f172a";
             container.style.padding = "20px";
             container.style.fontFamily = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+
+            const attTableHTML = (() => {
+              const rows = [];
+              (s2.atts || []).forEach((a) => {
+                const services = (a.servicos && a.servicos.length)
+                  ? a.servicos
+                  : [{ nome: a.servico || "-", profissional: a.profissional || "-", valor: a.valor }];
+                services.forEach((sv) => {
+                  rows.push(
+                    `<tr><td>${a.cliente || "-"}</td><td>${sv.nome || "-"}</td><td>${sv.profissional || "-"}</td><td>${(a.pagamento || "").toUpperCase()}</td><td class="num">${money(sv.valor ?? a.valor)}</td></tr>`
+                  );
+                });
+              });
+              if (!rows.length) return `<div class="muted">Sem atendimentos para esta data</div>`;
+              return `<table><thead><tr><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Pagamento</th><th>Valor</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+            })();
+
+            const depTableHTML = (() => {
+              if (!(s2.deps || []).length) return `<div class="muted">Sem despesas para esta data</div>`;
+              const rows = (s2.deps || []).map((d) => {
+                const comp = (d.qr && (d.qr.image || d.qr.text))
+                  ? `<div style="display:flex;align-items:center;gap:8px;">
+                      ${d.qr.image ? `<img src="${d.qr.image}" style="width:48px;height:48px;object-fit:contain;border:1px solid #eee;border-radius:6px;">` : ``}
+                      ${
+                        d.qr.text
+                          ? (/^https?:/i.test(d.qr.text)
+                              ? `<a href="${d.qr.text}" target="_blank" rel="noopener" class="muted">${d.qr.text}</a>`
+                              : `<span class="muted">${d.qr.text}</span>`)
+                          : ``
+                      }
+                     </div>`
+                  : `<span class="muted">—</span>`;
+                return `<tr><td>${d.descricao}</td><td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td><td>${comp}</td><td class="num">${money(d.valor)}</td></tr>`;
+              }).join("");
+              return `<table><thead><tr><th>Descrição</th><th>Origem</th><th>Comprovante</th><th>Valor</th></tr></thead><tbody>${rows}</tbody></table>`;
+            })();
 
             container.innerHTML = `
               <style>
