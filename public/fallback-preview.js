@@ -1836,24 +1836,7 @@
 
               <div class="sec">
                 <h3>Detalhes dos Atendimentos</h3>
-                ${
-                  s2.atts.length
-                    ? `<table>
-                        <thead><tr><th>Cliente</th><th>Serviços</th><th>Funcionário</th><th>Pagamento</th><th>Valor</th></tr></thead>
-                        <tbody>
-                          ${s2.atts.map(a => `
-                            <tr>
-                              <td>${a.cliente || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-"}</td>
-                              <td>${(a.pagamento || "").toUpperCase()}</td>
-                              <td class="num">${money(a.valor)}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>`
-                    : `<div class="muted">Sem atendimentos para esta data</div>`
-                }
+                ${attTableHTML}
               </div>
 
               ${
@@ -1879,22 +1862,7 @@
 
               <div class="sec">
                 <h3>Detalhes das Despesas</h3>
-                ${
-                  s2.deps.length
-                    ? `<table>
-                        <thead><tr><th>Descrição</th><th>Origem</th><th>Valor</th></tr></thead>
-                        <tbody>
-                          ${s2.deps.map(d => `
-                            <tr>
-                              <td>${d.descricao}</td>
-                              <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
-                              <td class="num">${money(d.valor)}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>`
-                    : `<div class="muted">Sem despesas para esta data</div>`
-                }
+                ${depTableHTML}
               </div>
 
               <div class="sec">
