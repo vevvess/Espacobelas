@@ -921,11 +921,23 @@
             totalDinheiro = 0,
             totalDebitos = 0;
           atts.forEach((a) => {
-            const v = Number(a.valor) || 0;
-            if (a.pagamento === "pix") totalPix += v;
-            else if (a.pagamento === "cartao") totalCartao += v;
-            else if (a.pagamento === "dinheiro") totalDinheiro += v;
-            else if (a.pagamento === "mensal") totalDebitos += v;
+            if (Array.isArray(a.servicos) && a.servicos.length) {
+              a.servicos.forEach((sv) => {
+                const v = Number(sv.valor) || 0;
+                const p = sv.pagamento || a.pagamento;
+                if (p === "pix") totalPix += v;
+                else if (p === "cartao") totalCartao += v;
+                else if (p === "dinheiro") totalDinheiro += v;
+                else if (p === "mensal") totalDebitos += v;
+              });
+            } else {
+              const v = Number(a.valor) || 0;
+              const p = a.pagamento;
+              if (p === "pix") totalPix += v;
+              else if (p === "cartao") totalCartao += v;
+              else if (p === "dinheiro") totalDinheiro += v;
+              else if (p === "mensal") totalDebitos += v;
+            }
           });
           let totalDespesas = 0,
             totalDespesasCaixa = 0;
@@ -957,6 +969,20 @@
         function renderCaixa() {
           const s = snapshot(selectedDate);
           const brDate = fmtBR(selectedDate);
+
+          function payBadge(att) {
+            const pays = (att.servicos || []).map(s => s.pagamento).filter(Boolean);
+            let lab = att.pagamento || "";
+            if (pays.length) {
+              const uniq = Array.from(new Set(pays));
+              lab = uniq.length === 1 ? uniq[0] : "misto";
+            }
+            if (lab === "pix") return '<span class="badge pay-pix">pix</span>';
+            if (lab === "cartao") return '<span class="badge pay-cartao">cartao</span>';
+            if (lab === "dinheiro") return '<span class="badge pay-dinheiro">dinheiro</span>';
+            if (lab === "mensal") return '<span class="badge pay-mensal">mensal</span>';
+            return '<span class="badge" style="background:#f1f5f9;border:1px solid #e2e8f0;color:#334155;">misto</span>';
+          }
 
           page.innerHTML = `
             <style>
@@ -1075,15 +1101,7 @@
                             .join(", ") || a.profissional || "-"}</td>
                           <td class="right">${money(a.valor)}</td>
                           <td>
-                            <span class="badge ${
-                              a.pagamento === "pix"
-                                ? "pay-pix"
-                                : a.pagamento === "cartao"
-                                ? "pay-cartao"
-                                : a.pagamento === "dinheiro"
-                                ? "pay-dinheiro"
-                                : "pay-mensal"
-                            }">${a.pagamento}</span>
+                            ${payBadge(a)}
                           </td>
                           <td>
                             <button class="btn" data-edit-att="${a.id}">Editar</button>
@@ -1252,7 +1270,7 @@
                 .amodal .hint { color:#9ca3af; font-weight:700; }
                 .amodal .svc-head { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
                 .amodal .svc-row {
-                  display:grid; grid-template-columns: 1fr 130px 180px 42px; gap:8px; align-items:center;
+                  display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; gap:8px; align-items:center;
                 }
                 .amodal .svc-add { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
                 .amodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:8px; }
@@ -1301,13 +1319,18 @@
                 </div>
 
                 <div class="field">
-                  <label>Forma de Pagamento</label>
+                  <label>Forma de Pagamento (padrão)</label>
                   <select id="fPagamento">
-                    <option value="dinheiro" ${!existing || existing?.pagamento === "dinheiro" ? "selected" : ""}>Dinheiro</option>
+                    <option value="dinheiro" ${!existing || (existing?.pagamento ?? "dinheiro") === "dinheiro" ? "selected" : ""}>Dinheiro</option>
                     <option value="pix" ${existing?.pagamento === "pix" ? "selected" : ""}>PIX</option>
                     <option value="cartao" ${existing?.pagamento === "cartao" ? "selected" : ""}>Cartão</option>
                     <option value="mensal" ${existing?.pagamento === "mensal" ? "selected" : ""}>Mensal (débito)</option>
                   </select>
+                </div>
+
+                <div class="field">
+                  <label>Observação</label>
+                  <input id="fObs" placeholder="Opcional (ex.: combo unhas + cabelos R$ 100)" value="${existing?.obs || ""}">
                 </div>
 
                 <div class="footer">
@@ -1321,13 +1344,21 @@
 
             const svcList = modal.querySelector("#svcList");
 
-            function addRow(svc = { nome: "", valor: "", profissional: "" }) {
+            function addRow(svc = { nome: "", valor: "", profissional: "", pagamento: "" }) {
               const row = document.createElement("div");
               row.className = "svc-row";
+              const gpay = (modal.querySelector("#fPagamento")?.value) || "dinheiro";
+              const sel = (val) => ((svc.pagamento ? svc.pagamento === val : gpay === val) ? "selected" : "");
               row.innerHTML = `
                 <input placeholder="Serviço" class="svc-nome" value="${svc.nome || ""}">
                 <input type="number" step="0.01" min="0" placeholder="Valor" class="svc-valor" value="${svc.valor || ""}">
                 <input placeholder="Profissional" class="svc-prof" value="${svc.profissional || ""}">
+                <select class="svc-pay">
+                  <option value="dinheiro" ${sel("dinheiro")}>Dinheiro</option>
+                  <option value="pix" ${sel("pix")}>PIX</option>
+                  <option value="cartao" ${sel("cartao")}>Cartão</option>
+                  <option value="mensal" ${sel("mensal")}>Mensal</option>
+                </select>
                 <button class="closex svc-del" type="button" title="Remover">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 </button>
@@ -1355,13 +1386,19 @@
 
             modal.querySelector("#saveAtt").addEventListener("click", () => {
               const cliente = modal.querySelector("#fCliente").value.trim();
-              const pagamento = modal.querySelector("#fPagamento").value;
+              const pagamentoDefault = modal.querySelector("#fPagamento").value;
+              const obs = (modal.querySelector("#fObs")?.value || "").trim();
               const total = parseFloat(modal.querySelector("#fTotal").value || "0") || 0;
               const servicos = Array.from(modal.querySelectorAll("#svcList .svc-row")).map((r) => ({
                 nome: r.querySelector(".svc-nome").value.trim(),
                 valor: parseFloat(r.querySelector(".svc-valor").value || "0") || 0,
                 profissional: r.querySelector(".svc-prof").value.trim(),
+                pagamento: (r.querySelector(".svc-pay")?.value) || pagamentoDefault,
               }));
+
+              // pagamento do atendimento: se todos iguais, usa o único; senão, "misto"
+              const uniquePays = Array.from(new Set(servicos.map((s) => s.pagamento).filter(Boolean)));
+              const pagamentoTop = uniquePays.length === 1 ? uniquePays[0] : "misto";
 
               const store = getStore();
               const day = getDay(store, selectedDate);
@@ -1369,15 +1406,16 @@
               if (existing) {
                 const idx = day.atendimentos.findIndex((a) => String(a.id) === String(existing.id));
                 if (idx >= 0)
-                  day.atendimentos[idx] = { ...existing, cliente, pagamento, valor: total, servicos };
+                  day.atendimentos[idx] = { ...existing, cliente, pagamento: pagamentoTop, valor: total, servicos, obs };
               } else {
                 day.atendimentos.push({
                   id: "att-" + Date.now(),
                   data: selectedDate,
                   cliente,
-                  pagamento,
+                  pagamento: pagamentoTop,
                   valor: total,
                   servicos,
+                  obs,
                 });
               }
               setStore(store);
@@ -1771,19 +1809,20 @@
               const map = {};
               (atts || []).forEach((a) => {
                 const cliente = a.cliente || "-";
-                if (!map[cliente]) map[cliente] = [];
+                if (!map[cliente]) map[cliente] = { items: [], obs: [] };
+                if (a.obs) map[cliente].obs.push(a.obs);
                 const pagamento = a.pagamento || "";
                 if (Array.isArray(a.servicos) && a.servicos.length) {
                   a.servicos.forEach((sv) => {
-                    map[cliente].push({
+                    map[cliente].items.push({
                       servico: sv?.nome || a.servico || "-",
                       profissional: sv?.profissional || a.profissional || "-",
-                      pagamento,
+                      pagamento: sv?.pagamento || pagamento,
                       valor: Number(sv?.valor ?? 0) || 0,
                     });
                   });
                 } else {
-                  map[cliente].push({
+                  map[cliente].items.push({
                     servico: a.servico || "-",
                     profissional: a.profissional || "-",
                     pagamento,
@@ -1799,49 +1838,83 @@
               if (!entries.length) {
                 return `<div class="muted">Sem atendimentos para esta data</div>`;
               }
-              let body = "";
-              entries.forEach(([cliente, items]) => {
-                if (!items || !items.length) return;
+              const paymentSummary = (items) => {
+                const counts = { pix: 0, cartao: 0, dinheiro: 0, mensal: 0 };
+                (items || []).forEach((it) => {
+                  const p = (it.pagamento || "").toLowerCase();
+                  if (counts[p] != null) counts[p] += 1;
+                });
+                const used = Object.entries(counts).filter(([, v]) => v > 0);
+                const uniform = used.length <= 1;
+                const label = used
+                  .map(([k, v]) => (k.toUpperCase() + (v > 1 ? ` ${v}` : "")))
+                  .join(" • ");
+                return { counts, uniform, label, unique: used.map(([k]) => k) };
+              };
+
+              let html = "";
+              entries.forEach(([cliente, data]) => {
+                const items = (data && data.items) || [];
+                if (!items.length) return;
                 const total = items.reduce((acc, it) => acc + (Number(it.valor) || 0), 0);
-                const first = items[0];
-                body += `
-                  <tr>
-                    <td class="r-client-cell" rowspan="${items.length}">
-                      <div class="nm">${cliente}</div>
-                      <div class="muted sm">Total: ${money(total)}</div>
-                    </td>
-                    <td>${first.servico || "-"}</td>
-                    <td>${first.profissional || "-"}</td>
-                    <td>${(first.pagamento || "").toUpperCase()}</td>
-                    <td class="num">${money(first.valor)}</td>
-                  </tr>
+                const stats = paymentSummary(items);
+                const showPayCol = !stats.uniform;
+
+                const obsHtml =
+                  (data && data.obs && data.obs.length)
+                    ? `<div class="client-obs" style="color:#64748b; font-size:12px;">${data.obs.map((o) => String(o)).join(" • ")}</div>`
+                    : "";
+
+                const header = `
+                  <div class="client-group" style="border:1px solid #f1e6ee; border-radius:14px; margin:10px 0; overflow:hidden;">
+                    <div class="client-head" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#fff7fb; border-bottom:1px solid #f9e0ea; padding:10px 12px;">
+                      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div class="stripe" style="width:4px; height:20px; background:#ec4899; border-radius:999px;"></div>
+                        <div class="client-name" style="font-weight:900; color:#9d174d; font-size:16px;">${cliente}</div>
+                        <div class="chips" style="display:flex; gap:6px; flex-wrap:wrap;">
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px;">Total ${money(total)}</span>
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px;">${items.length} serviços</span>
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px;">${stats.uniform ? (stats.unique[0] || "").toUpperCase() : stats.label}</span>
+                        </div>
+                      </div>
+                      ${obsHtml}
+                    </div>
+                    <div class="client-body" style="padding:8px 10px;">
+                      <table class="svc-table" style="width:100%; border-collapse:separate; border-spacing:0 6px; font-size:13px;">
+                        <thead>
+                          <tr>
+                            <th style="text-align:left; color:#9d174d; font-weight:800;">Serviço</th>
+                            <th style="text-align:left; color:#9d174d; font-weight:800;">Profissional</th>
+                            ${showPayCol ? `<th style="text-align:left; color:#9d174d; font-weight:800;">Pagamento</th>` : ``}
+                            <th style="text-align:right; color:#9d174d; font-weight:800;">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${items
+                            .map((it) => `
+                              <tr>
+                                <td style="padding:8px 10px; border:1px solid #f1e6ee; background:#fff;">${it.servico || "-"}</td>
+                                <td style="padding:8px 10px; border:1px solid #f1e6ee; background:#fff;">${it.profissional || "-"}</td>
+                                ${showPayCol ? `<td style="padding:8px 10px; border:1px solid #f1e6ee; background:#fff;">${(it.pagamento || "").toUpperCase()}</td>` : ``}
+                                <td class="num" style="padding:8px 10px; border:1px solid #f1e6ee; background:#fff; text-align:right; font-weight:900;">${money(it.valor)}</td>
+                              </tr>
+                            `)
+                            .join("")}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 `;
-                for (let i = 1; i < items.length; i++) {
-                  const it = items[i];
-                  body += `
-                    <tr>
-                      <td>${it.servico || "-"}</td>
-                      <td>${it.profissional || "-"}</td>
-                      <td>${(it.pagamento || "").toUpperCase()}</td>
-                      <td class="num">${money(it.valor)}</td>
-                    </tr>
-                  `;
-                }
+                html += header;
               });
-              return `
-                <table>
-                  <thead><tr><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Pagamento</th><th>Valor</th></tr></thead>
-                  <tbody>${body}</tbody>
-                </table>
-              `;
+              return html;
             }
 
             // Build QR image for expense proof if qr_text exists
             function qrImgFor(text) {
               try {
                 if (!text) return "";
-                const qr = new window.QRious({ value: text, size: 88, level: "H", background: "white", foreground: "#111827" });
-                // Some builds expose toDataURL on instance; otherwise use underlying image/canvas
+                const qr = new window.QRious({ value: text, size: 120, level: "H", background: "white", foreground: "#111827" });
                 if (typeof qr.toDataURL === "function") return qr.toDataURL();
                 if (qr.image && qr.image.src) return qr.image.src;
                 if (qr.canvas && qr.canvas.toDataURL) return qr.canvas.toDataURL("image/png");
@@ -1852,6 +1925,51 @@
             // Compose HTML strings for tables
             const grouped = groupAttsByClient(s2.atts || []);
             const attTableHTML = renderGroupedAttsTable(grouped);
+
+            const mensalHTML = (() => {
+              const filtered = (s2.atts || [])
+                .map(a => ({ ...a, servicos: (a.servicos || []).filter(sv => (sv.pagamento || a.pagamento) === "mensal") }))
+                .filter(a => (a.servicos || []).length);
+              const has = filtered.length > 0;
+              return has ? `<div class="sec"><h3>Débito Mensal (Não Pago)</h3>${renderGroupedAttsTable(groupAttsByClient(filtered))}</div>` : "";
+            })();
+
+            const payAgg = (() => {
+              const sums = { pix:0, cartao:0, dinheiro:0, mensal:0 };
+              const cnt = { pix:0, cartao:0, dinheiro:0, mensal:0 };
+              (s2.atts || []).forEach(a => {
+                if (Array.isArray(a.servicos) && a.servicos.length) {
+                  a.servicos.forEach(sv => {
+                    const v = Number(sv.valor)||0;
+                    const p = sv.pagamento || a.pagamento;
+                    if (p === "pix") { sums.pix += v; cnt.pix++; }
+                    else if (p === "cartao") { sums.cartao += v; cnt.cartao++; }
+                    else if (p === "dinheiro") { sums.dinheiro += v; cnt.dinheiro++; }
+                    else if (p === "mensal") { sums.mensal += v; cnt.mensal++; }
+                  });
+                } else {
+                  const v = Number(a.valor)||0;
+                  const p = a.pagamento;
+                  if (p === "pix") { sums.pix += v; cnt.pix++; }
+                  else if (p === "cartao") { sums.cartao += v; cnt.cartao++; }
+                  else if (p === "dinheiro") { sums.dinheiro += v; cnt.dinheiro++; }
+                  else if (p === "mensal") { sums.mensal += v; cnt.mensal++; }
+                }
+              });
+              return { sums, cnt };
+            })();
+
+            const paySummaryHTML = `
+              <div class="sec">
+                <h3>Resumo por Forma de Pagamento</h3>
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;">
+                  <div class="r-card blue"><div class="t">PIX</div><div class="v">${money(payAgg.sums.pix)}</div><div class="muted sm">(${payAgg.cnt.pix} itens)</div></div>
+                  <div class="r-card purple"><div class="t">Cartão</div><div class="v">${money(payAgg.sums.cartao)}</div><div class="muted sm">(${payAgg.cnt.cartao} itens)</div></div>
+                  <div class="r-card green"><div class="t">Dinheiro</div><div class="v">${money(payAgg.sums.dinheiro)}</div><div class="muted sm">(${payAgg.cnt.dinheiro} itens)</div></div>
+                  <div class="r-card amber"><div class="t">Mensal (Débito)</div><div class="v">${money(payAgg.sums.mensal)}</div><div class="muted sm">(${payAgg.cnt.mensal} itens)</div></div>
+                </div>
+              </div>
+            `;
 
             const depTableHTML =
               (s2.deps || []).length
@@ -1892,7 +2010,7 @@
 
             container.innerHTML = `
               <style>
-                .r-title { font-weight:900; font-size:24px; color:#9d174d; margin-bottom:4px; }
+                .r-title { font-weight:900; font-size:26px; color:#9d174d; margin-bottom:4px; }
                 .r-sub { color:#475569; font-weight:700; }
                 .r-grid { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0 6px; }
                 .r-card { border:2px solid #f1e6ee; border-radius:12px; padding:10px; }
@@ -1914,13 +2032,17 @@
                 .foot { margin-top: 8px; color:#64748b; font-size:12px; }
                 .r-client-cell { background:#fff7fb; border-width:2px; border-color:#f1e6ee; min-width:180px; vertical-align:top; }
                 .r-client-cell .nm { font-weight:900; color:#9d174d; }
-                .qrimg { width:84px; height:84px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+                .qrimg { width:120px; height:120px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
                 .qr-cell { text-align:center; }
               </style>
 
-              <div class="r-title">Fechamento de Caixa — Espaço Bella's</div>
-              <div class="r-sub">Data do caixa: <strong>${brDate}</strong> • Gerado em: ${genStr}</div>
-              <div class="r-sub">CNPJ: 30.504.701/0001-29 • Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 • Tel: (81) 98628-8749</div>
+              <div style="display:flex; align-items:flex-end; justify-content:space-between; gap: 10px; margin-bottom: 4px;">
+                <div>
+                  <div class="r-title" style="font-size:26px;">Fechamento de Caixa — Espaço Bella's</div>
+                  <div class="r-day" style="font-size:22px; font-weight:900; color:#7a0f3f;">Dia: <strong>${brDate}</strong></div>
+                </div>
+                <div class="r-meta" style="color:#64748b; font-weight:700; text-align:right;">Gerado em: ${genStr}</div>
+              </div>
 
               <div class="r-grid">
                 <div class="r-card green"><div class="t">Total Entradas (PIX+Cartão+Dinheiro)</div><div class="v">${money(s2.entradas)}</div></div>
@@ -1933,18 +2055,14 @@
                 <div class="r-card"><div class="t">Dinheiro em Caixa (Informado)</div><div class="v">${money(s2.dinheiroInformado)}</div></div>
                 <div class="r-card ${ (s2.dinheiroCalculado - s2.dinheiroInformado) === 0 ? 'green' : 'red' }"><div class="t">Diferença</div><div class="v">${money(s2.dinheiroCalculado - s2.dinheiroInformado)}</div></div>
               </div>
+              ${paySummaryHTML}
 
               <div class="sec">
                 <h3>Detalhes dos Atendimentos</h3>
                 ${attTableHTML}
               </div>
 
-              ${ (s2.atts || []).some(a => a.pagamento === "mensal")
-                ? `<div class="sec">
-                    <h3>Débito Mensal (Não Pago)</h3>
-                    ${renderGroupedAttsTable(groupAttsByClient((s2.atts || []).filter(a => a.pagamento === "mensal")))}
-                  </div>`
-                : "" }
+              ${mensalHTML}
 
               <div class="sec">
                 <h3>Detalhes das Despesas</h3>
@@ -1964,7 +2082,10 @@
                 </table>
               </div>
 
-              <div class="foot">Gerado em ${genStr}</div>
+              <div class="foot">
+                <div style="margin-bottom:4px;">CNPJ: 30.504.701/0001-29 • Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 • Tel: (81) 98628-8749</div>
+                <div>Gerado em ${genStr}</div>
+              </div>
             `;
 
             document.body.appendChild(container);
