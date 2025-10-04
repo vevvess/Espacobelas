@@ -1072,6 +1072,13 @@
                 <label class="muted2">Dinheiro em Caixa (Informado)</label>
                 <input type="number" id="cxDinheiro" value="${s.dinheiroInformado}" step="0.01" min="0">
               </div>
+              <div class="field">
+                <label class="muted2">Exportação compacta</label>
+                <label style="display:flex;align-items:center;gap:8px;font-weight:800;color:#a1125b;">
+                  <input type="checkbox" id="cxExportCompact">
+                  <span>2 colunas, menos espaçamento</span>
+                </label>
+              </div>
             </section>
 
             <section class="section">
@@ -1190,6 +1197,14 @@
             setStore(store);
             renderCaixa();
           });
+
+          const expC = byId("cxExportCompact");
+          if (expC) {
+            expC.checked = localStorage.getItem("bella_export_compact") === "1";
+            expC.addEventListener("change", (e) => {
+              localStorage.setItem("bella_export_compact", e.target.checked ? "1" : "0");
+            });
+          }
 
           // Ações
           byId("btnAtendimento").addEventListener("click", () => showAtendimentoModal());
@@ -1796,6 +1811,7 @@
             const brDate = fmtBR(selectedDate);
             const genStr = new Date().toLocaleString("pt-BR");
             const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+            const compact = localStorage.getItem("bella_export_compact") === "1";
 
             // Group attendances by client and explode multiple services
             function groupAttsByClient(atts) {
@@ -1826,7 +1842,7 @@
               return map;
             }
 
-            function renderGroupedAttsTable(groups) {
+            function renderGroupedAttsTable(groups, isCompact) {
               const entries = Object.entries(groups || {});
               if (!entries.length) {
                 return `<div class="muted">Sem atendimentos para esta data</div>`;
@@ -1845,6 +1861,15 @@
                 return { counts, uniform, label, unique: used.map(([k]) => k) };
               };
 
+              const headPad = isCompact ? "6px 8px" : "10px 12px";
+              const chipPad = isCompact ? "3px 6px" : "4px 8px";
+              const chipFont = isCompact ? "11px" : "12px";
+              const groupRadius = isCompact ? "10px" : "14px";
+              const groupMargin = isCompact ? "8px 0" : "10px 0";
+              const bodyPad = isCompact ? "6px 8px" : "8px 10px";
+              const cellPad = isCompact ? "6px 8px" : "8px 10px";
+              const rowSpace = isCompact ? 4 : 6;
+
               let html = "";
               entries.forEach(([cliente, data]) => {
                 const items = (data && data.items) || [];
@@ -1859,21 +1884,21 @@
                     : "";
 
                 const header = `
-                  <div class="client-group" style="border:1px solid #f1e6ee; border-radius:14px; margin:10px 0; overflow:hidden;">
-                    <div class="client-head" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#fff7fb; border-bottom:1px solid #f9e0ea; padding:10px 12px;">
+                  <div class="client-group" style="border:1px solid #f1e6ee; border-radius:${groupRadius}; margin:${groupMargin}; overflow:hidden;">
+                    <div class="client-head" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#fff7fb; border-bottom:1px solid #f9e0ea; padding:${headPad};">
                       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                        <div class="stripe" style="width:4px; height:20px; background:#ec4899; border-radius:999px;"></div>
-                        <div class="client-name" style="font-weight:900; color:#9d174d; font-size:16px;">${cliente}</div>
+                        <div class="stripe" style="width:4px; height:${isCompact ? "18px" : "20px"}; background:#ec4899; border-radius:999px;"></div>
+                        <div class="client-name" style="font-weight:900; color:#9d174d; font-size:${isCompact ? "15px" : "16px"};">${cliente}</div>
                         <div class="chips" style="display:flex; gap:6px; flex-wrap:wrap;">
-                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px;">Total ${money(total)}</span>
-                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px;">${items.length} serviços</span>
-                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px;">${stats.uniform ? (stats.unique[0] || "").toUpperCase() : stats.label}</span>
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:${chipFont}; padding:${chipPad}; border-radius:999px;">Total ${money(total)}</span>
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:${chipFont}; padding:${chipPad}; border-radius:999px;">${items.length} serviços</span>
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:${chipFont}; padding:${chipPad}; border-radius:999px;">${stats.uniform ? (stats.unique[0] || "").toUpperCase() : stats.label}</span>
                         </div>
                       </div>
                       ${obsHtml}
                     </div>
-                    <div class="client-body" style="padding:8px 10px;">
-                      <table class="svc-table" style="width:100%; border-collapse:separate; border-spacing:0 6px; font-size:13px;">
+                    <div class="client-body" style="padding:${bodyPad};">
+                      <table class="svc-table" style="width:100%; border-collapse:separate; border-spacing:0 ${rowSpace}px; font-size:13px;">
                         <thead>
                           <tr>
                             <th style="text-align:left; color:#9d174d; font-weight:800;">Serviço</th>
@@ -1886,10 +1911,10 @@
                           ${items
                             .map((it) => `
                               <tr>
-                                <td style="padding:8px 10px; border:1px solid #f1e6ee; background:#fff;">${it.servico || "-"}</td>
-                                <td style="padding:8px 10px; border:1px solid #f1e6ee; background:#fff;">${it.profissional || "-"}</td>
-                                ${showPayCol ? `<td style="padding:8px 10px; border:1px solid #f1e6ee; background:#fff;">${(it.pagamento || "").toUpperCase()}</td>` : ``}
-                                <td class="num" style="padding:8px 10px; border:1px solid #f1e6ee; background:#fff; text-align:right; font-weight:900;">${money(it.valor)}</td>
+                                <td style="padding:${cellPad}; border:1px solid #f1e6ee; background:#fff;">${it.servico || "-"}</td>
+                                <td style="padding:${cellPad}; border:1px solid #f1e6ee; background:#fff;">${it.profissional || "-"}</td>
+                                ${showPayCol ? `<td style="padding:${cellPad}; border:1px solid #f1e6ee; background:#fff;">${(it.pagamento || "").toUpperCase()}</td>` : ``}
+                                <td class="num" style="padding:${cellPad}; border:1px solid #f1e6ee; background:#fff; text-align:right; font-weight:900;">${money(it.valor)}</td>
                               </tr>
                             `)
                             .join("")}
@@ -1907,9 +1932,9 @@
             function qrImgFor(text) {
               try {
                 if (!text) return "";
-                const qr = new window.QRious({ value: text, size: 120, level: "H", background: "white", foreground: "#111827" });
+                const qr = new window.QRious({ value: text, size: compact ? 105 : 120, level: "H", background: "white", foreground: "#111827" });
                 if (typeof qr.toDataURL === "function") return qr.toDataURL();
-                if (qr.image && qr.image.src) return qr.image.src;
+if (qr.image && qr.image.src) return qr.image.src;
                 if (qr.canvas && qr.canvas.toDataURL) return qr.canvas.toDataURL("image/png");
               } catch {}
               return "";
@@ -1917,7 +1942,7 @@
 
             // Compose HTML strings for tables
             const grouped = groupAttsByClient(s2.atts || []);
-            const attTableHTML = renderGroupedAttsTable(grouped);
+            const attTableHTML = renderGroupedAttsTable(grouped, compact);
 
             const mensalHTML = (() => {
               const filtered = (s2.atts || [])
@@ -1990,6 +2015,8 @@
                 `
                 : `<div class="muted">Sem despesas para esta data</div>`;
 
+            const gridClass = compact ? "client-grid grid2" : "client-grid";
+
             const container = document.createElement("div");
             container.id = "report-capture";
             container.style.position = "fixed";
@@ -2016,16 +2043,18 @@
                 .r-card .v { color:#0f172a; font-weight:900; font-size:18px; margin-top:4px; }
                 .sec { margin-top:14px; }
                 .sec h3 { margin: 0 0 6px; color:#9d174d; font-size:16px; }
-                table { width:100%; border-collapse:separate; border-spacing:0 6px; font-size:13px; }
+                .client-grid { display:block; }
+                .client-grid.grid2 { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:8px; }
+                table { width:100%; border-collapse:separate; border-spacing:0 ${compact ? 4 : 6}px; font-size:13px; }
                 th { text-align:left; color:#9d174d; font-weight:800; }
-                td, th { padding:8px 10px; border:1px solid #f1e6ee; background:#fff; }
+                td, th { padding:${compact ? "6px 8px" : "8px 10px"}; border:1px solid #f1e6ee; background:#fff; }
                 td.num { text-align:right; font-weight:900; }
                 .muted { color:#64748b; }
                 .sm { font-size:12px; }
                 .foot { margin-top: 8px; color:#64748b; font-size:12px; }
                 .r-client-cell { background:#fff7fb; border-width:2px; border-color:#f1e6ee; min-width:180px; vertical-align:top; }
                 .r-client-cell .nm { font-weight:900; color:#9d174d; }
-                .qrimg { width:120px; height:120px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+                .qrimg { width:${compact ? 105 : 120}px; height:${compact ? 105 : 120}px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
                 .qr-cell { text-align:center; }
               </style>
 
@@ -2052,7 +2081,7 @@
 
               <div class="sec">
                 <h3>Detalhes dos Atendimentos</h3>
-                ${attTableHTML}
+                <div class="${gridClass}">${attTableHTML}</div>
               </div>
 
               ${mensalHTML}
