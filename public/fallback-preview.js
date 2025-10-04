@@ -17,6 +17,7 @@
           --surface:#ffffff; --line:#f3e6ee; --shadow: 0 10px 30px rgba(173,24,94,.08);
         }
         html, body, #root { height: 100%; margin: 0; }
+        *, *::before, *::after { box-sizing: border-box; }
         body {
           background:
             radial-gradient(1200px 400px at -10% -5%, rgba(236,72,153,.08), transparent 60%),
@@ -157,7 +158,7 @@
 
         /* Modals */
         .modals { position: fixed; inset: 0; display:none; align-items:center; justify-content:center; background: rgba(15,23,42,.45); padding: 16px; z-index:40; }
-        .modal { width: 100%; max-width: 520px; background: #fff; border-radius: 16px; border:1px solid #e5e7eb; padding: 16px; }
+        .modal { width: 100%; max-width: 520px; background: #fff; border-radius: 16px; border:1px solid #e5e7eb; padding: 16px; max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; }
         .modal h3 { margin: 0 0 12px; }
         .field { display:grid; gap:6px; margin-bottom: 10px; }
         .field label { font-size: 13px; color: #334155; font-weight: 600; }
@@ -1279,15 +1280,20 @@
                 .amodal .field { display:grid; gap:8px; }
                 .amodal label { color:#a1125b; font-weight:900; }
                 .amodal input, .amodal select {
-                  border:2px solid #f3c6d9; border-radius:14px; padding:12px; font-weight:700; color:#a1125b; background:#fff;
+                  border:2px solid #f3c6d9; border-radius:14px; padding:12px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
                 }
                 .amodal input[readonly] { background:#fff7fb; }
                 .amodal .hint { color:#9ca3af; font-weight:700; }
                 .amodal .svc-head { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
                 .amodal .svc-row {
-                  display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; gap:8px; align-items:center;
+                  display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; grid-template-areas: "nome valor prof pay del"; gap:8px; align-items:center;
                 }
-                .amodal .svc-add { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
+                .amodal .svc-row .svc-nome { grid-area: nome; }
+                .amodal .svc-row .svc-valor { grid-area: valor; }
+                .amodal .svc-row .svc-prof { grid-area: prof; }
+                .amodal .svc-row .svc-pay { grid-area: pay; }
+                .amodal .svc-row .svc-del { grid-area: del; justify-self:end; }
+                .amodal .svc-add { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; display:inline-flex; align-items:center; gap:8px; max-width:100%; }
                 .amodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:8px; }
                 .amodal .btn-cancel {
                   border:2px solid #f3c6d9; border-radius:16px; padding:12px 16px; background:#fff; color:#a1125b; font-weight:900;
@@ -1296,9 +1302,12 @@
                   border:0; border-radius:16px; padding:12px 16px; font-weight:900; color:#fff;
                   background:linear-gradient(90deg,var(--bella-500),var(--bella-400));
                 }
-                @media(max-width: 520px){
+                @media(max-width: 640px){
                   .amodal .grid2 { grid-template-columns: 1fr; }
-                  .amodal .svc-row { grid-template-columns: 1fr 110px 1fr 42px; }
+                  .amodal .svc-row { grid-template-columns: 1fr 110px 42px; grid-template-areas:
+                    "nome nome del"
+                    "prof pay del";
+                  }
                 }
               </style>
 
