@@ -26,6 +26,80 @@ export default function ConfiguracoesSistema() {
   const [usuarios, setUsuarios] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
+  const loadScript = (src: string) =>
+    new Promise<void>((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  const ensureJSZip = async () => {
+    // @ts-ignore
+    if (!(window as any).JSZip) {
+      await loadScript("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js");
+    }
+  };
+  const fetchText = async (path: string) => {
+    try {
+      const res = await fetch(path);
+      return res.ok ? await res.text() : "";
+    } catch {
+      return "";
+    }
+  };
+  const fetchBlob = async (path: string) => {
+    try {
+      const res = await fetch(path);
+      return res.ok ? await res.blob() : new Blob([]);
+    } catch {
+      return new Blob([]);
+    }
+  };
+  const exportDistZip = async () => {
+    try {
+      await ensureJSZip();
+      const JSZip = (window as any).JSZip;
+      const zip = new JSZip();
+      // Base files (preview estático)
+      const idx = await fetchText("/index.html");
+      if (idx) zip.file("index.html", idx);
+      const fb = await fetchText("/public/fallback-preview.js");
+      if (fb) zip.file("public/fallback-preview.js", fb);
+      const manRoot = await fetchText("/cosine-manifest.json");
+      if (manRoot) zip.file("cosine-manifest.json", manRoot);
+      const manPub = await fetchText("/public/cosine-manifest.json");
+      if (manPub) zip.file("public/cosine-manifest.json", manPub);
+
+      // Public assets (best-effort)
+      const assets: Array<{ path: string; name: string; binary?: boolean }> = [
+        { path: "/public/favicon.ico", name: "public/favicon.ico", binary: true },
+        { path: "/public/robots.txt", name: "public/robots.txt" },
+        { path: "/public/placeholder.svg", name: "public/placeholder.svg" },
+      ];
+      for (const a of assets) {
+        if (a.binary) {
+          const blob = await fetchBlob(a.path);
+          if (blob.size) zip.file(a.name, blob);
+        } else {
+          const txt = await fetchText(a.path);
+          if (txt) zip.file(a.name, txt);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = `bella-app-dist-snapshot_${new Date().toISOString().slice(0,10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    } catch (e) {
+      console.warn("Falha ao gerar dist snapshot:", e);
+    }
+  };
+
   // Verificar se é admin
   if (!user?.is_admin) {
     return (
@@ -371,6 +445,22 @@ export default function ConfiguracoesSistema() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Exportar Build/Dist */}
+      <div className="bella-card">
+        <h3 className="text-lg font-semibold text-bella-800 mb-4">
+          Exportar Build/Dist
+        </h3>
+        <p className="text-sm text-bella-600 mb-3">
+          Gera um snapshot ZIP do preview estático (index.html, manifesto e assets públicos).
+        </p>
+        <button
+          onClick={exportDistZip}
+          className="bella-button"
+        >
+          Gerar e baixar dist (zip)
+        </button>
       </div>
 
       {/* Quick Actions */}

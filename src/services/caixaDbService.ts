@@ -21,6 +21,8 @@ export type DespesaManualDB = {
   descricao: string | null;
   origem: "caixa" | "outro" | null;
   valor: number;
+  qr_text?: string | null;
+  qr_image?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -71,6 +73,9 @@ export async function ensureCaixaSchema() {
     await sql`${TABLES_SQL.caixa_dias}`;
     await sql`${TABLES_SQL.caixa_atendimentos}`;
     await sql`${TABLES_SQL.caixa_despesas}`;
+    // Garantir colunas de QR nas despesas
+    await sql`ALTER TABLE caixa_despesas ADD COLUMN IF NOT EXISTS qr_text TEXT`;
+    await sql`ALTER TABLE caixa_despesas ADD COLUMN IF NOT EXISTS qr_image TEXT`;
   } catch (e) {
     // Algumas instalações de Neon não aceitam múltiplos statements com template literal,
     // então tentamos individualmente como strings.
@@ -101,9 +106,14 @@ export async function ensureCaixaSchema() {
       descricao TEXT,
       origem TEXT,
       valor NUMERIC NOT NULL DEFAULT 0,
+      qr_text TEXT,
+      qr_image TEXT,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     )`;
+    // Garantir colunas via ALTER em casos onde a tabela já exista sem as novas colunas
+    await sql`ALTER TABLE caixa_despesas ADD COLUMN IF NOT EXISTS qr_text TEXT`;
+    await sql`ALTER TABLE caixa_despesas ADD COLUMN IF NOT EXISTS qr_image TEXT`;
   }
   ensured = true;
 }
@@ -161,15 +171,17 @@ export async function createDespesaManual(userId: string, ymd: YMD, payload: {
   descricao: string;
   valor: number;
   origem?: "caixa" | "outro";
-}): Promise<DespesaManualDB> {
+  qr_text?: string;
+  qr_image?: string;
+}): Promis<hDespesaManualDB> {
   await ensureCaixaSchema();
   const id = makeId("dep");
   const created = nowIso();
   const updated = created;
 
   const result = await sql`
-    INSERT INTO caixa_despesas (id, user_simple_id, data, descricao, origem, valor, created_at, updated_at)
-    VALUES (${id}, ${userId}, ${ymd}, ${payload.descricao || null}, ${payload.origem || "caixa"}, ${payload.valor || 0}, ${created}, ${updated})
+    INSERT INTO caixa_despesas (id, user_simple_id, data, descricao, origem, valor, qr_text, qr_image, created_at, updated_at)
+    VALUES (${idd.origem || "caixa"}, ${payload.valor || 0}, ${created}, ${updated})
     RETURNING *
   `;
   return result[0] as DespesaManualDB;

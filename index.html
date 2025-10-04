@@ -64,8 +64,9 @@
       }
 
       if (isCosine) {
-        if (wantsVercel) {
-          // Modo: embutir Vercel explicitamente (?vercel=1)
+        // Em cosine.page: por padrão incorporar o app real (Vercel) via iframe
+        const wantsFallback = params.get("fallback") === "1";
+        if (!wantsFallback) {
           const container = document.createElement("div");
           container.className = "embed-container";
           const iframe = document.createElement("iframe");
@@ -75,7 +76,7 @@
           container.appendChild(iframe);
           root.replaceWith(container);
         } else {
-          // Padrão em cosine.page: mostrar o preview estático (WIP)
+          // Forçar preview estático com ?fallback=1
           await loadFallback();
         }
       } else {

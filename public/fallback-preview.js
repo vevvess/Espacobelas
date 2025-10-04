@@ -627,6 +627,12 @@
         <div class="row"><div><strong>Tema</strong><div class="muted">Claro</div></div><button class="btn-outline">Alterar</button></div>
         <div class="row"><div><strong>Notificações</strong><div class="muted">Ativadas</div></div><button class="btn-outline">Editar</button></div>
       </section>
+      <section class="section list">
+        <div class="row">
+          <div><strong>Exportar Build/Dist</strong><div class="muted">Gera um snapshot ZIP do preview estático</div></div>
+          <button class="btn-outline" id="btnDistZip">Gerar ZIP</button>
+        </div>
+      </section>
     `;
 
     // Rotas (sem Relatórios, conforme pedido)
@@ -773,6 +779,85 @@
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeModal();
       });
+
+      // Configurações: gerar ZIP do dist (snapshot)
+      async function ensureJSZip() {
+        // @ts-ignore
+        if (!window.__loadedScripts) window.__loadedScripts = {};
+        const src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+        if (!window.__loadedScripts[src]) {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+          window.__loadedScripts[src] = true;
+        }
+      }
+      async function generateDistZip() {
+        try {
+          await ensureJSZip();
+          const JSZip = window.JSZip;
+          const zip = new JSZip();
+          const fetchText = async (path) => {
+            try {
+              const res = await fetch(path);
+              return res.ok ? await res.text() : "";
+            } catch {
+              return "";
+            }
+          };
+          const fetchBlob = async (path) => {
+            try {
+              const res = await fetch(path);
+              return res.ok ? await res.blob() : new Blob([]);
+            } catch {
+              return new Blob([]);
+            }
+          };
+
+          const idx = await fetchText("/index.html");
+          if (idx) zip.file("index.html", idx);
+          const fb = await fetchText("/public/fallback-preview.js");
+          if (fb) zip.file("public/fallback-preview.js", fb);
+          const manRoot = await fetchText("/cosine-manifest.json");
+          if (manRoot) zip.file("cosine-manifest.json", manRoot);
+          const manPub = await fetchText("/public/cosine-manifest.json");
+          if (manPub) zip.file("public/cosine-manifest.json", manPub);
+
+          const assets = [
+            { path: "/public/favicon.ico", name: "public/favicon.ico", binary: true },
+            { path: "/public/robots.txt", name: "public/robots.txt" },
+            { path: "/public/placeholder.svg", name: "public/placeholder.svg" },
+          ];
+          for (const a of assets) {
+            if (a.binary) {
+              const blob = await fetchBlob(a.path);
+              if (blob.size) zip.file(a.name, blob);
+            } else {
+              const txt = await fetchText(a.path);
+              if (txt) zip.file(a.name, txt);
+            }
+          }
+
+          const content = await zip.generateAsync({ type: "blob" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(content);
+          a.download = `bella-app-dist-snapshot_${new Date().toISOString().slice(0,10)}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          URL.revokeObjectURL(a.href);
+          a.remove();
+        } catch (e) {
+          console.warn("Falha ao gerar dist snapshot:", e);
+        }
+      }
+      if (hash === "/configuracoes") {
+        const btn = page.querySelector("#btnDistZip");
+        btn && btn.addEventListener("click", generateDistZip);
+      }
 
       // Interações específicas da Agenda (progresso e atualizar)
       if (hash === "/agenda") {
@@ -1026,7 +1111,7 @@
                   <table class="list-table">
                     <thead>
                       <tr>
-                        <th>Descrição</th><th>Origem</th><th class="right">Valor (R$)</th><th>Ações</th>
+                        <th>Descrição</th><th>Origem</th><th class="right">Valor (R$)</th><th>QR</th><th>Ações</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1037,6 +1122,7 @@
                           <td>${d.descricao}</td>
                           <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
                           <td class="right">${money(d.valor)}</td>
+                          <td>${d.qr_text ? "QR" : "-"}</td>
                           <td>
                             <button class="btn" data-edit-dep="${d.id}">Editar</button>
                             <button class="btn" data-del-dep="${d.id}">Excluir</button>
@@ -1295,12 +1381,51 @@
                   <option value="outro" ${existing?.origem === "outro" ? "selected" : ""}>Outro</option>
                 </select>
               </div>
+              <div class="field"><label>QR da Despesa (opcional)</label>
+                <input type="file" id="dQRFile" accept="image/*;capture=camera" style="display:none;">
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <button class="btn" id="dQrScan">Escanear QR (foto)</button>
+                  <span class="muted" id="dQrPayload">${existing?.qr_text ? "Payload: " + existing.qr_text : ""}</span>
+                </div>
+                <div id="dQrPreview" style="margin-top:6px;">${existing?.qr_image ? `<img src="${existing.qr_image}" style="max-width:140px;border:1px solid #f1e6ee;border-radius:8px;">` : ""}</div>
+              </div>
               <div style="display:flex; justify-content:flex-end; gap:8px;">
                 <button class="btn" data-close>Cancelar</button>
                 <button class="btn primary" id="saveDesp">${existing ? "Salvar alterações" : "Salvar"}</button>
               </div>
             `;
             modals.style.display = "flex";
+
+            // QR: scan handlers
+            const qrFile = modal.querySelector("#dQRFile");
+            const qrScanBtn = modal.querySelector("#dQrScan");
+            const qrPayload = modal.querySelector("#dQrPayload");
+            const qrPreview = modal.querySelector("#dQrPreview");
+            qrScanBtn && qrScanBtn.addEventListener("click", () => qrFile.click());
+            qrFile && qrFile.addEventListener("change", async (ev) => {
+              const f = ev.target.files && ev.target.files[0];
+              if (!f) return;
+              let text = "";
+              try {
+                if (window.BarcodeDetector) {
+                  const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+                  const bmp = await createImageBitmap(f);
+                  const res = await detector.detect(bmp);
+                  if (res && res.length) text = res[0].rawValue || res[0].raw || "";
+                }
+              } catch {}
+              const fr = new FileReader();
+              fr.onload = () => {
+                const dataUrl = String(fr.result || "");
+                qrPayload.textContent = text ? ("Payload: " + text) : "";
+                qrPreview.innerHTML = dataUrl ? `<img src="${dataUrl}" style="max-width:140px;border:1px solid #f1e6ee;border-radius:8px;">` : "";
+                // stash temporário nos elementos
+                qrPayload.setAttribute("data-qrtext", text);
+                qrPreview.setAttribute("data-qrimg", dataUrl);
+              };
+              fr.readAsDataURL(f);
+              ev.target.value = "";
+            });
 
             modal.querySelector("#saveDesp").addEventListener("click", () => {
               const descricao = modal.querySelector("#dDesc").value.trim();
@@ -1319,12 +1444,14 @@
                   return;
                 }
               }
+              const qr_text = qrPayload.getAttribute("data-qrtext") || (existing && existing.qr_text) || "";
+              const qr_image = qrPreview.getAttribute("data-qrimg") || (existing && existing.qr_image) || "";
               if (existing) {
                 const idx = day.despesas.findIndex(
                   (d) => String(d.id) === String(existing.id)
                 );
                 if (idx >= 0)
-                  day.despesas[idx] = { ...existing, descricao, valor, origem };
+                  day.despesas[idx] = { ...existing, descricao, valor, origem, qr_text, qr_image };
               } else {
                 day.despesas.push({
                   id: "dep-" + Date.now(),
@@ -1332,6 +1459,8 @@
                   descricao,
                   valor,
                   origem,
+                  qr_text,
+                  qr_image,
                 });
               }
               setStore(store);

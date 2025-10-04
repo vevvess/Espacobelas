@@ -32,6 +32,8 @@ interface MovimentoCaixa {
   agendamentoId?: string;
   clienteNome?: string;
   profissional?: string;
+  qrCodeText?: string;
+  qrImage?: string;
 }
 
 interface AtendimentoDia {
@@ -205,6 +207,8 @@ export default function Caixa() {
     categoria: "Atendimento",
     formaPagamento: "dinheiro",
     observacoes: "",
+    qrCodeText: "",
+    qrImage: "",
   });
 
   const resetForm = () => {
@@ -215,6 +219,8 @@ export default function Caixa() {
       categoria: "Atendimento",
       formaPagamento: "dinheiro",
       observacoes: "",
+      qrCodeText: "",
+      qrImage: "",
     });
   };
 
@@ -310,6 +316,31 @@ export default function Caixa() {
     setMovimentoEditando(null);
     resetForm();
   };
+
+  const [qrProcessing, setQrProcessing] = useState(false);
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result));
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  const handleQrFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      setQrProcessing(true);
+      let text = "";
+      try {
+        // @ts-ignore
+        if ((window as any).BarcodeDetector) {
+          // @ts-ignore
+          const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+          const bmp = await createImageBitmap(f);
+          const res = await detector.detect(bmp);
+          if (res && res.length) {
+            // @ts-ignore
+            text = (res[0] as };
 
   // Filtrar movimentos por data e tipo
   const dataFiltro = selectedDate;
@@ -437,15 +468,13 @@ export default function Caixa() {
     <div class="section">
       <h2 style="margin:0 0 6px;font-size:16px">Detalhes das Despesas</h2>
       <table>
-        <thead><tr><th>Descrição</th><th>Valor</th></tr></thead>
-        <tbody>
+        <thea><<t><<th>Descriç</</t><<th>Val</</t><<th><//t></d>></  thead>
+       < tbody>
           ${despesasDia
             .map(
               (d) =>
-                `<tr><td>${d.descricao}</td><td>${moeda(Number(d.valor) || 0)}</td></tr>`,
-            )
-            .join("")}
-        </tbody>
+               `<.t><ctd>${d.descric}</mot><(td>${moeda(Number(d.valor) ||)}</,
+t>< td>${(d as any).qrCodeText ? "QR" : "-"  </tbody>
       </table>
     </div>
 
@@ -794,9 +823,14 @@ export default function Caixa() {
                       </span>
                     )}
                     {movimento.clienteNome && (
-                      <span className="text-bella-500">
+                     <<span className="text-bella-500">
                         • {movimento.clienteNome}
-                      </span>
+                    </</span>
+                    )}
+                    {movimento.tipo === "saida" && (movimento.qrCodeText || movimento.qrImage) && (
+                     < span className="bg-green-100 text-green-700 px-2 py-1 rounded">
+                        QR anexado
+                    </  span>
                     )}
                   </div>
                   {movimento.observacoes && (
@@ -1096,6 +1130,49 @@ export default function Caixa() {
                   className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
                   placeholder="0,00"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-bella-700 mb-2">
+                  QR da Despesa (opcional)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="qrScanInput"
+                    type="file"
+                    accept="image/*;capture=camera"
+                    className="hidden"
+                    onChange={handleQrFileChange}
+                  />
+                  <button
+                    onClick={() => document.getElementById("qrScanInput")?.click()}
+                    className="px-3 py-2 border border-bella-300 text-bella-700 rounded-lg hover:bg-bella-50 transition-colors"
+                  >
+                    {qrProcessing ? "Lendo..." : "Escanear QR (foto)"}
+                  </button>
+                  {novoMovimento.qrImage && (
+                    <>
+                      <button
+                        onClick={() => window.open(novoMovimento.qrImage, "_blank")}
+                        className="px-3 py-2 border border-bella-300 text-bella-700 rounded-lg hover:bg-bella-50 transition-colors"
+                      >
+                        Ver imagem
+                      </button>
+                      <button
+                        onClick={() =>
+                          setNovoMovimento((p) => ({ ...p, qrImage: "", qrCodeText: "" }))
+                        }
+                        className="px-3 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        Remover QR
+                      </button>
+                    </>
+                  )}
+                </div>
+                {novoMovimento.qrCodeText && (
+                  <p className="text-xs text-bella-500 mt-2 break-all">
+                    Payload: {novoMovimento.qrCodeText}
+                  </p>
+                )}
               </div>
               <div className="flex gap-3">
                 <button
