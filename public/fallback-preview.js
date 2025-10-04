@@ -1318,15 +1318,7 @@
                   <input value="Atendimento" readonly>
                 </div>
 
-                <div class="field">
-                  <label>Forma de Pagamento (padrão)</label>
-                  <select id="fPagamento">
-                    <option value="dinheiro" ${!existing || (existing?.pagamento ?? "dinheiro") === "dinheiro" ? "selected" : ""}>Dinheiro</option>
-                    <option value="pix" ${existing?.pagamento === "pix" ? "selected" : ""}>PIX</option>
-                    <option value="cartao" ${existing?.pagamento === "cartao" ? "selected" : ""}>Cartão</option>
-                    <option value="mensal" ${existing?.pagamento === "mensal" ? "selected" : ""}>Mensal (débito)</option>
-                  </select>
-                </div>
+                
 
                 <div class="field">
                   <label>Observação</label>
@@ -1344,11 +1336,13 @@
 
             const svcList = modal.querySelector("#svcList");
 
+            const defaultPay = existing?.pagamento || "dinheiro";
+
             function addRow(svc = { nome: "", valor: "", profissional: "", pagamento: "" }) {
               const row = document.createElement("div");
               row.className = "svc-row";
-              const gpay = (modal.querySelector("#fPagamento")?.value) || "dinheiro";
-              const sel = (val) => ((svc.pagamento ? svc.pagamento === val : gpay === val) ? "selected" : "");
+              const payVal = svc.pagamento || defaultPay || "dinheiro";
+              const sel = (val) => (payVal === val ? "selected" : "");
               row.innerHTML = `
                 <input placeholder="Serviço" class="svc-nome" value="${svc.nome || ""}">
                 <input type="number" step="0.01" min="0" placeholder="Valor" class="svc-valor" value="${svc.valor || ""}">
@@ -1386,14 +1380,13 @@
 
             modal.querySelector("#saveAtt").addEventListener("click", () => {
               const cliente = modal.querySelector("#fCliente").value.trim();
-              const pagamentoDefault = modal.querySelector("#fPagamento").value;
               const obs = (modal.querySelector("#fObs")?.value || "").trim();
               const total = parseFloat(modal.querySelector("#fTotal").value || "0") || 0;
               const servicos = Array.from(modal.querySelectorAll("#svcList .svc-row")).map((r) => ({
                 nome: r.querySelector(".svc-nome").value.trim(),
                 valor: parseFloat(r.querySelector(".svc-valor").value || "0") || 0,
                 profissional: r.querySelector(".svc-prof").value.trim(),
-                pagamento: (r.querySelector(".svc-pay")?.value) || pagamentoDefault,
+                pagamento: (r.querySelector(".svc-pay")?.value) || defaultPay || "dinheiro",
               }));
 
               // pagamento do atendimento: se todos iguais, usa o único; senão, "misto"
