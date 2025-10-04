@@ -158,7 +158,7 @@
 
         /* Modals */
         .modals { position: fixed; inset: 0; display:none; align-items:center; justify-content:center; background: rgba(15,23,42,.45); padding: 16px; z-index:40; }
-        .modal { width: 100%; max-width: 520px; background: #fff; border-radius: 16px; border:1px solid #e5e7eb; padding: 16px; max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; }
+        .modal { width: min(92vw, 520px); max-width: 520px; background: #fff; border-radius: 16px; border:1px solid #e5e7eb; padding: 16px; max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; }
         .modal h3 { margin: 0 0 12px; }
         .field { display:grid; gap:6px; margin-bottom: 10px; }
         .field label { font-size: 13px; color: #334155; font-weight: 600; }
@@ -1006,6 +1006,11 @@
               .list-table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
               .list-table th{ text-align:left; color:#a1125b; font-size:12px; }
               .list-table td{ background:#fff; border:1px solid #f1e6ee; padding:10px; border-radius:10px; }
+              @media(max-width:640px){
+                .list-table{ display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+                .list-table thead, .list-table tbody, .list-table tr{ display:table; width:100%; table-layout:fixed; }
+                .list-table th, .list-table td{ white-space:nowrap; }
+              }
               .badge{ display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; }
               .pay-pix{ background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
               .pay-cartao{ background:#f3e8ff; border:1px solid #e9d5ff; color:#6d28d9; }
@@ -1305,9 +1310,13 @@
                 @media(max-width: 640px){
                   .amodal .grid2 { grid-template-columns: 1fr; }
                   .amodal .svc-row { grid-template-columns: 1fr 110px 42px; grid-template-areas:
-                    "nome nome del"
+                    "nome valor del"
                     "prof pay del";
                   }
+                  .amodal .svc-row .svc-nome,
+                  .amodal .svc-row .svc-valor,
+                  .amodal .svc-row .svc-prof,
+                  .amodal .svc-row .svc-pay { min-width: 0; }
                 }
               </style>
 
