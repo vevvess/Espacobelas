@@ -81,11 +81,28 @@ export default function Caixa() {
   };
 
   const [dataAtual, setDataAtual] = useState(formatLocalYMD(new Date()));
+  // Handler seguro para mudanças de data (evita valores vazios/parsings parciais de mobile)
+  const handleDateChange = (val?: string) => {
+    if (!val) return;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      setDataAtual(val);
+    }
+  };
   // Data selecionada e overrides de dinheiro informado
   const selectedDate = useMemo(
     () => parseYMDToLocalDate(dataAtual),
     [dataAtual],
   );
+  const selectedLabel = useMemo(() => {
+    try {
+      return selectedDate.toLocaleDateString("pt-BR");
+    } catch {
+      // fallback simples para evitar exceptions se a data ficar inválida
+      const p = dataAtual.split("-");
+      if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+      return "—";
+    }
+  }, [selectedDate, dataAtual]);
   const cashKey = useMemo(
     () => `caixa_cash_override_${dataAtual}`,
     [dataAtual],
@@ -650,9 +667,9 @@ export default function Caixa() {
               <input
                 type="date"
                 value={dataAtual}
-                onChange={(e) => setDataAtual(e.target.value)}
-                onInput={(e) => setDataAtual((e.target as HTMLInputElement).value)}
-                onBlur={(e) => setDataAtual((e.target as HTMLInputElement).value)}
+                onChange={(e) => handleDateChange((e.target as HTMLInputElement).value)}
+                onInput={(e) => handleDateChange((e.target as HTMLInputElement).value)}
+                onBlur={(e) => handleDateChange((e.target as HTMLInputElement).value)}
                 className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
               />
               <button
@@ -717,7 +734,7 @@ export default function Caixa() {
       <div className="bella-card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-bella-800">
-            Atendimentos do Caixa ({selectedDate.toLocaleDateString("pt-BR")})
+            Atendimentos do Caixa ({selectedLabel})
           </h2>
         </div>
         <div className="overflow-x-auto">
