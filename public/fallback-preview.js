@@ -25,7 +25,7 @@
           color: #0f172a;
           font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
         }
-        .shell { max-width: 980px; margin: 0 auto; padding: 16px 14px 56px; }
+        .shell { max-width: 980px; width: 100%; margin: 0 auto; padding: 16px 14px 56px; overflow-x: hidden; }
 
         /* Topbar mobile */
         .topnav {

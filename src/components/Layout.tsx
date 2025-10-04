@@ -382,7 +382,7 @@ export default function Layout({ children }: LayoutProps) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navigation */}
         <header className="bg-white shadow-sm border-b border-bella-100 animate-slide-down mobile-safe-top">
-          <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-4 lg:px-6">
+          <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-4 lg:px-6 overflow-x-hidden">
             <div className="flex items-center space-x-2 sm:space-x-4 flex-1 min-w-0">
               {/* Mobile menu button */}
               <button
@@ -432,7 +432,7 @@ export default function Layout({ children }: LayoutProps) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-gradient-to-br from-bella-50 via-white to-bella-50 relative mobile-safe-bottom">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-bella-50 via-white to-bella-50 relative mobile-safe-bottom">
           {/* Background decoration */}
           <div className="absolute inset-0 opacity-5 hidden sm:block">
             <div className="absolute top-20 left-10 w-32 sm:w-64 h-32 sm:h-64 bg-bella-500 rounded-full blur-3xl"></div>
