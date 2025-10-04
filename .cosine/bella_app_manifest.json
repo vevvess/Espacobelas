@@ -1,0 +1,45 @@
+{
+  "id": "bella-app-estoque-caixa-v2",
+  "sentinel": "BELLA_APP_SENTINEL::ESTOQUE_CAIXA_V2",
+  "name": "Espaço Bella’s — App (Agenda, Caixa, Estoque)",
+  "description": "Manifesto do app principal (Agenda/Caixa/Estoque) usado neste workspace do Cosine para continuar a estruturação em novos chats.",
+  "preview": {
+    "cosine_url": "https://yemvroiy1p5k.cosine.page",
+    "notes": "Este link é o preview funcional no Cosine. Em casos de novos deploys, URLs podem mudar; use a busca pelo sentinel no repositório."
+  },
+  "how_to_find_in_new_chat": [
+    "Pesquisar no repositório pela string exata: BELLA_APP_SENTINEL::ESTOQUE_CAIXA_V2",
+    "Abrir index.html e publicar o preview padrão do Cosine",
+    "Se necessário, usar public/fallback-preview.js (rota hash) enquanto o dist oficial não estiver gerado"
+  ],
+  "routes_health": [
+    "/#/dashboard",
+    "/#/agenda",
+    "/#/caixa",
+    "/#/estoque",
+    "/#/configuracoes"
+  ],
+  "features_done": [
+    "Agenda — layout móvel, ícones SVG, progresso sem percentual",
+    "Caixa — data selecionada correta, atendimentos manuais multi-serviço, despesas com origem (retirada/Outro), bloqueio de saldo, totalizações; exportar PDF/Imagem; QR de despesa salvo e exportado como miniatura + link",
+    "Estoque — CRUD completo, categorias/locais, histórico de movimentos, alertas (baixo estoque/validade), export CSV/XLSX, scanner por foto (BarcodeDetector) e modo vídeo quando suportado",
+    "Responsividade — correções de overflow (overflow-x:hidden), container 100%, modais e listas adaptadas",
+    "Fallback SPA — public/fallback-preview.js com navegação por hash e páginas estáticas interativas",
+    "GitHub Actions — build-dist.yml com input build_ref; upload de artifact dist.zip; commit opcional do dist",
+    "Configurações — ação 1-clique para acionar o workflow e baixar dist.zip diretamente (necessita token do GitHub no navegador)"
+  ],
+  "planned_next": [
+    "Adicionar imagem do QR também ao PDF exportado",
+    "Editar (update) de movimentos no Caixa",
+    "CRUD de categorias/locais no app React real (não só no fallback)",
+    "Melhorias finas de responsividade em tabelas grandes e modais longos",
+    "Botão para baixar o último dist.zip bem-sucedido sem rodar novo build"
+  ],
+  "env": {
+    "required": [
+      "VITE_DATABASE_URL"
+    ],
+    "notes": "Em Vercel/CI, definir VITE_DATABASE_URL; a aplicação usa Neon/Postgres e cria tabelas de Caixa/Estoque na primeira execução quando necessário."
+  },
+  "last_updated": "2025-10-04T00:00:00Z"
+}

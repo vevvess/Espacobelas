@@ -1,3 +1,4 @@
+/* BELLA_APP_SENTINEL::ESTOQUE_CAIXA_V2 (manifesto: .cosine/bella_app_manifest.json) */
 (function () {
   window.__runFallbackPreview = function (root) {
     const formatDateLong = () =>
