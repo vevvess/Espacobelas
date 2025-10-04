@@ -1007,8 +1007,7 @@
               .list-table th{ text-align:left; color:#a1125b; font-size:12px; }
               .list-table td{ background:#fff; border:1px solid #f1e6ee; padding:10px; border-radius:10px; }
               @media(max-width:640px){
-                .list-table{ display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-                .list-table thead, .list-table tbody, .list-table tr{ display:table; width:100%; table-layout:fixed; }
+                .list-table{ display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; min-width:720px; }
                 .list-table th, .list-table td{ white-space:nowrap; }
               }
               .badge{ display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; }
@@ -1290,8 +1289,10 @@
                 .amodal input[readonly] { background:#fff7fb; }
                 .amodal .hint { color:#9ca3af; font-weight:700; }
                 .amodal .svc-head { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+                .amodal #svcList { display:grid; gap:10px; }
                 .amodal .svc-row {
-                  display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; grid-template-areas: "nome valor prof pay del"; gap:8px; align-items:center;
+                  display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; grid-template-areas: "nome valor prof pay del"; gap:10px; align-items:center;
+                  background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:10px;
                 }
                 .amodal .svc-row .svc-nome { grid-area: nome; }
                 .amodal .svc-row .svc-valor { grid-area: valor; }
