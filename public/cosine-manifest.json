@@ -1,0 +1,28 @@
+{
+  "id": "bella-app-v1",
+  "sentinel": "COSINE_APP_SENTINEL: BELLA-APP-V1",
+  "name": "Espaço Bella’s — App Principal (Agenda, Caixa, Estoque)",
+  "preview_url_reference": "https://yemvroiy1p5k.cosine.page/",
+  "routes_health": ["/#/dashboard", "/#/agenda", "/#/caixa", "/#/estoque", "/#/configuracoes"],
+  "how_to_use_in_new_chat": [
+    "Diga: 'Procure por cosine-app-id=bella-app-v1' ou 'Procure pelo sentinela COSINE_APP_SENTINEL: BELLA-APP-V1'.",
+    "Abra index.html e publique o preview.",
+    "Se build não estiver disponível, use o fallback public/fallback-preview.js (hash router)."
+  ],
+  "features_done": [
+    "Agenda visual mobile, ícones SVG, cards e progresso.",
+    "Caixa: data correta, atendimentos manuais multi-serviço, despesas (origem), totais; export PDF/Imagem; QR salvo e incluso na exportação de imagem; persistência Neon/Postgres no React real.",
+    "Estoque: CRUD, categorias/locais, balanço por movimentos, filtros, scanner (foto e vídeo), export CSV/XLSX.",
+    "Responsividade: correções de overflow, largura 100%, safe areas, cabeçalhos.",
+    "Workflow GitHub build-dist.yml com artifact dist.zip e commit opcional.",
+    "Configurações: ferramenta para rodar workflow e baixar dist.zip."
+  ],
+  "planned_next": [
+    "Incluir imagem do QR no PDF exportado.",
+    "Editar (update) movimentos no Caixa.",
+    "CRUD de categorias/locais no React real.",
+    "Melhorias finas de responsividade em tabelas/modais.",
+    "Botão para baixar o último dist.zip já gerado (sem novo build)."
+  ],
+  "last_updated": "2025-10-04T00:00:00Z"
+}

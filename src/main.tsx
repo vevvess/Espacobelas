@@ -1,3 +1,4 @@
+// COSINE_APP_SENTINEL: BELLA-APP-V1 (Estoque + Caixa + UI nova)
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";

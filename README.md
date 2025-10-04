@@ -2,6 +2,13 @@
 
 Este repositório é um app React + Vite + TypeScript com Tailwind, React Router e React Query. Já está configurado para rodar em ambiente local e em produção (Vercel). Abaixo estão os passos para “abrir o app” e começar a editar.
 
+Importante — como reabrir este app no Cosine
+- Sentinela: COSINE_APP_SENTINEL: BELLA-APP-V1
+- Manifesto público: /cosine-manifest.json
+- Manifesto interno: .cosine/bella_app_manifest.json
+- Diga em um chat novo: “Procure pelo sentinela COSINE_APP_SENTINEL: BELLA-APP-V1 e publique o preview”.
+- Preview de referência (Cosine): https://yemvroiy1p5k.cosine.page/
+
 ## Requisitos
 
 - Node.js 18+ (recomendado Node 20 LTS)
@@ -84,12 +91,19 @@ Obs.: A aplicação cliente pode se conectar diretamente ao Neon (serverless) vi
 - vite.config.ts, tailwind.config.ts
 - vercel.json
 
-## Próximos passos sugeridos
+## Histórico e próximos passos (resumo)
 
-- Me dizer se você quer:
-  - Configuração de Docker/devcontainer para desenvolvimento “1‑click”
-  - Integração com GitHub Codespaces ou Gitpod
-  - Publicação de um preview automático (posso configurar pipeline)
-  - Melhorias específicas de UI/UX, performance, ou arquitetura (me diga o foco)
+Implementado:
+- Caixa: data correta, atendimentos manuais multi-serviço, despesas com origem, totais, export PDF/Imagem; QR salvo e incluso na imagem; persistência Neon/Postgres na versão React.
+- Estoque: CRUD, categorias/locais, histórico, filtros, scanner (foto/vídeo), export CSV/XLSX.
+- Agenda: visual móvel com ícones SVG e progresso.
+- Responsividade: correções de overflow.
+- Workflow build-dist.yml com artifact dist.zip.
+- Configurações: botão para rodar workflow e baixar dist.zip.
 
-Se preferir, posso também “refazer” partes do app (refatoração guiada) — por exemplo: organização de rotas, split de bundles, melhorias de acessibilidade, padronização de componentes, testes, etc. É só dizer o que priorizar.
+Planejado:
+- QR também no PDF.
+- Edição de movimentos no Caixa.
+- CRUD de categorias/locais no React real.
+- Melhorias finas mobile.
+- Botão “baixar último dist.zip” sem rodar novo build.
