@@ -651,6 +651,8 @@ export default function Caixa() {
                 type="date"
                 value={dataAtual}
                 onChange={(e) => setDataAtual(e.target.value)}
+                onInput={(e) => setDataAtual((e.target as HTMLInputElement).value)}
+                onBlur={(e) => setDataAtual((e.target as HTMLInputElement).value)}
                 className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
               />
               <button
