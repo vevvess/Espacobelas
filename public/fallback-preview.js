@@ -1715,7 +1715,7 @@
 
             // Helpers
             const $q = (sel) => modal.querySelector(sel);
-            const onlyDigits = (s) => (s || "").replace(/\\D+/g, "");
+            const onlyDigits = (s) => (s || "").replace(/\D+/g, "");
 
             // OTP
             let currentCode = "";
@@ -1731,9 +1731,9 @@
               const nome = ($q("#rcNome").value || "").trim();
               const de = $q("#rcDe").value || "";
               const ate = $q("#rcAte").value || "";
-              const text = encodeURIComponent(`Código de confirmação do recibo — Espaço Bella's: ${currentCode}\\nProfissional: ${nome}\\nPeríodo: ${de} a ${ate}.`);
+              const text = encodeURIComponent(`Código de confirmação do recibo — Espaço Bella's: ${currentCode}\nProfissional: ${nome}\nPeríodo: ${de} a ${ate}.`);
               const raw = onlyDigits($q("#rcWhats").value);
-              const url = raw ? \`https://wa.me/\${raw}?text=\${text}\` : \`https://wa.me/?text=\${text}\`;
+              const url = raw ? `https://wa.me/${raw}?text=${text}` : `https://wa.me/?text=${text}`;
               window.open(url, "_blank");
             });
 
@@ -1890,9 +1890,9 @@
               const valorBR = (Number(valor) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
               const body =
-                \`Eu, \${nome}, CPF \${cpf}\${rg ? \`, RG \${rg}\` : ""}, declaro para os devidos fins que recebi nesta data a quantia de \${valorBR} do estabelecimento Espaço Bella's, referente aos serviços prestados no período de \${de} até \${ate}, na condição de autônomo, não caracterizando vínculo empregatício.\n\n\` +
+                `Eu, ${nome}, CPF ${cpf}${rg ? `, RG ${rg}` : ""}, declaro para os devidos fins que recebi nesta data a quantia de ${valorBR} do estabelecimento Espaço Bella's, referente aos serviços prestados no período de ${de} até ${ate}, na condição de autônomo, não caracterizando vínculo empregatício.\n\n` +
                 "Declaro ainda estar de pleno acordo com os valores descritos e dou plena quitação dos serviços prestados no período informado.\n\n" +
-                \`Local e data: \${cidade}, \${new Date(dataRec + "T00:00:00").toLocaleDateString("pt-BR")}\n\`;
+                `Local e data: ${cidade}, ${new Date(dataRec + "T00:00:00").toLocaleDateString("pt-BR")}\n`;
 
               const lines = doc.splitTextToSize(body, 210 - margin * 2);
               doc.text(lines, margin, y);
@@ -1910,15 +1910,15 @@
               doc.line(sigX, sigY + sigH + 2, sigX + sigW, sigY + sigH + 2);
               doc.setFontSize(10);
               doc.text("Assinatura do Autônomo", sigX, sigY + sigH + 7);
-              doc.text(\`Nome: \${nome}\`, sigX + sigW + 10, sigY + sigH - 2);
+              doc.text(`Nome: ${nome}`, sigX + sigW + 10, sigY + sigH - 2);
               y = sigY + sigH + 16;
 
               // Rodapé: identificadores
               const createdAt = new Date().toLocaleString("pt-BR");
               doc.setFontSize(9);
               doc.setTextColor(107,114,128);
-              doc.text(\`Nº: \${numero}\`, margin, 297 - margin - 6);
-              doc.text(\`Gerado em: \${createdAt}\`, margin, 297 - margin);
+              doc.text(`Nº: ${numero}`, margin, 297 - margin - 6);
+              doc.text(`Gerado em: ${createdAt}`, margin, 297 - margin);
 
               // Evidências
               const ua = navigator.userAgent || "";
@@ -1940,7 +1940,7 @@
               // Carimba hash de dados no PDF
               doc.setTextColor(107,114,128);
               doc.setFontSize(8);
-              doc.text(\`Hash dos dados: \${evidHash || "-"}\`, 210 - margin, 297 - margin, { align: "right" });
+              doc.text(`Hash dos dados: ${evidHash || "-"}`, 210 - margin, 297 - margin, { align: "right" });
 
               // Gerar blob/arraybuffer para hash do PDF
               const pdfArrayBuf = doc.output("arraybuffer");
@@ -1957,7 +1957,7 @@
               };
 
               // Downloads
-              const base = \`recibo_semanal_\${dataRec}_\${safeName(nome)}\`;
+              const base = `recibo_semanal_${dataRec}_${safeName(nome)}`;
               downloadBlob(pdfBlob, base + ".pdf");
               downloadBlob(new Blob([JSON.stringify(evidFull, null, 2)], { type: "application/json" }), base + "_evidencias.json");
 
