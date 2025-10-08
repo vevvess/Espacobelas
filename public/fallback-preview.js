@@ -1025,6 +1025,7 @@
             <div class="cx-actions">
               <button class="btn primary" id="btnAtendimento">+ Atendimento Manual</button>
               <button class="btn" id="btnDespesa">+ Despesa</button>
+              <button class="btn" id="btnRecibo">Recibo Semanal</button>
               <button class="btn" id="btnPdf">Exportar PDF</button>
               <button class="btn" id="btnImg">Exportar Imagem</button>
             </div>
@@ -1214,6 +1215,8 @@
           // Ações
           byId("btnAtendimento").addEventListener("click", () => showAtendimentoModal());
           byId("btnDespesa").addEventListener("click", () => showDespesaModal());
+          const recBtn = byId("btnRecibo");
+          if (recBtn) recBtn.addEventListener("click", () => showReciboModal());
           const pdfBtn = byId("btnPdf");
           if (pdfBtn) pdfBtn.addEventListener("click", () => exportPDF());
           const imgBtn = byId("btnImg");
@@ -1586,6 +1589,379 @@
               setStore(store);
               modals.style.display = "none";
               renderCaixa();
+            });
+          }
+
+          // ======== Recibo Semanal (assinatura eletrônica simples, sem custo) ========
+          function showReciboModal() {
+            const modals = document.getElementById("modals");
+            const modal = modals.querySelector(".modal");
+
+            modal.innerHTML = `
+              <style>
+                .rmodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+                .rmodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+                .rmodal .grid3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+                .rmodal .field { display:grid; gap:6px; }
+                .rmodal label { color:#a1125b; font-weight:900; font-size:13px; }
+                .rmodal input, .rmodal select, .rmodal textarea {
+                  border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
+                }
+                .rmodal textarea { resize: vertical; min-height: 64px; }
+                .rmodal .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+                .rmodal .btn { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
+                .rmodal .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+                .rmodal .sigbox { border:2px dashed #f3c6d9; border-radius:14px; padding:8px; background:#fff7fb; }
+                .rmodal .sig-actions { display:flex; justify-content:space-between; gap:8px; margin-top:6px; }
+                .rmodal canvas { width:100%; height:160px; display:block; background:#fff; border-radius:10px; }
+                .rmodal .hint { color:#64748b; font-weight:700; font-size:12px; }
+                .rmodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+                @media(max-width:640px){ .rmodal .grid2, .rmodal .grid3 { grid-template-columns: 1fr; } }
+              </style>
+
+              <div class="rmodal">
+                <div class="row" style="justify-content:space-between;">
+                  <h3>Recibo Semanal — Assinatura</h3>
+                  <button class="btn" data-close aria-label="Fechar">Fechar</button>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label>Nome do Autônomo *</label>
+                    <input id="rcNome" placeholder="Ex.: Kelly Monice">
+                  </div>
+                  <div class="field">
+                    <label>Valor (R$) *</label>
+                    <input id="rcValor" type="number" step="0.01" min="0" placeholder="0,00">
+                  </div>
+                </div>
+
+                <div class="grid3" style="margin-top:8px;">
+                  <div class="field">
+                    <label>CPF *</label>
+                    <input id="rcCPF" placeholder="Somente números">
+                  </div>
+                  <div class="field">
+                    <label>RG</label>
+                    <input id="rcRG" placeholder="Opcional">
+                  </div>
+                  <div class="field">
+                    <label>WhatsApp (p/ enviar código)</label>
+                    <input id="rcWhats" placeholder="(DDD) 9xxxx-xxxx">
+                  </div>
+                </div>
+
+                <div class="grid2" style="margin-top:8px;">
+                  <div class="field">
+                    <label>Período — De *</label>
+                    <input id="rcDe" type="date" value="${selectedDate}">
+                  </div>
+                  <div class="field">
+                    <label>Até *</label>
+                    <input id="rcAte" type="date" value="${selectedDate}">
+                  </div>
+                </div>
+
+                <div class="grid3" style="margin-top:8px;">
+                  <div class="field">
+                    <label>Cidade</label>
+                    <input id="rcCidade" value="Recife">
+                  </div>
+                  <div class="field">
+                    <label>Data do recibo</label>
+                    <input id="rcData" type="date" value="${selectedDate}">
+                  </div>
+                  <div class="field">
+                    <label>Nº (gerado)</label>
+                    <input id="rcNum" value="REC-${Date.now().toString().slice(-6)}" readonly>
+                  </div>
+                </div>
+
+                <div class="field" style="margin-top:8px;">
+                  <label>Confirmação por código (opcional, recomendado)</label>
+                  <div class="row">
+                    <button class="btn" id="rcGenCode">Gerar código</button>
+                    <div class="hint">Código: <strong id="rcCode">—</strong></div>
+                    <button class="btn" id="rcSendWA">Enviar por WhatsApp</button>
+                    <input id="rcOtp" placeholder="Digite o código recebido" style="max-width:220px;">
+                  </div>
+                </div>
+
+                <div class="field" style="margin-top:6px;">
+                  <label>Assinatura do Autônomo *</label>
+                  <div class="sigbox">
+                    <canvas id="sigPad"></canvas>
+                    <div class="sig-actions">
+                      <span class="hint">Assine com o dedo (celular) ou mouse (PC). Use o botão limpar se necessário.</span>
+                      <div>
+                        <button class="btn" id="sigClear">Limpar</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="hint" style="margin-top:6px;">
+                  Ao gerar, salvaremos o PDF do recibo e um arquivo “evidências.json” contendo hash dos dados, IP (quando disponível),
+                  data/hora, dispositivo e a imagem da assinatura. Isso fortalece a prova da assinatura (assinatura eletrônica simples).
+                </div>
+
+                <div class="footer">
+                  <button class="btn" data-close>Cancelar</button>
+                  <button class="btn primary" id="rcGerar">Gerar Recibo (PDF + evidências)</button>
+                </div>
+              </div>
+            `;
+            modals.style.display = "flex";
+
+            // Helpers
+            const $q = (sel) => modal.querySelector(sel);
+            const onlyDigits = (s) => (s || "").replace(/\\D+/g, "");
+
+            // OTP
+            let currentCode = "";
+            $q("#rcGenCode").addEventListener("click", () => {
+              currentCode = String(Math.floor(100000 + Math.random() * 900000));
+              $q("#rcCode").textContent = currentCode;
+            });
+            $q("#rcSendWA").addEventListener("click", () => {
+              if (!currentCode) {
+                alert("Gere um código primeiro.");
+                return;
+              }
+              const nome = ($q("#rcNome").value || "").trim();
+              const de = $q("#rcDe").value || "";
+              const ate = $q("#rcAte").value || "";
+              const text = encodeURIComponent(`Código de confirmação do recibo — Espaço Bella's: ${currentCode}\\nProfissional: ${nome}\\nPeríodo: ${de} a ${ate}.`);
+              const raw = onlyDigits($q("#rcWhats").value);
+              const url = raw ? \`https://wa.me/\${raw}?text=\${text}\` : \`https://wa.me/?text=\${text}\`;
+              window.open(url, "_blank");
+            });
+
+            // Signature pad
+            const canvas = $q("#sigPad");
+            const ctx = canvas.getContext("2d");
+            let drawing = false;
+            let hasInk = false;
+
+            function resizeCanvas() {
+              const dpr = Math.max(1, window.devicePixelRatio || 1);
+              const rect = canvas.getBoundingClientRect();
+              canvas.width = Math.floor(rect.width * dpr);
+              canvas.height = Math.floor(rect.height * dpr);
+              ctx.scale(dpr, dpr);
+              ctx.lineWidth = 2;
+              ctx.lineJoin = "round";
+              ctx.lineCap = "round";
+              ctx.strokeStyle = "#111827";
+              ctx.fillStyle = "#ffffff";
+              ctx.clearRect(0, 0, rect.width, rect.height);
+            }
+            // Need to reset transform on resize
+            const initCanvas = () => {
+              const rect = canvas.getBoundingClientRect();
+              const dpr = Math.max(1, window.devicePixelRatio || 1);
+              canvas.width = Math.floor(rect.width * dpr);
+              canvas.height = Math.floor(rect.height * dpr);
+              ctx.setTransform(1,0,0,1,0,0);
+              ctx.scale(dpr, dpr);
+              ctx.lineWidth = 2;
+              ctx.lineJoin = "round";
+              ctx.lineCap = "round";
+              ctx.strokeStyle = "#111827";
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(0, 0, rect.width, rect.height);
+            };
+            initCanvas();
+            window.addEventListener("resize", initCanvas, { once: true });
+
+            const pos = (ev) => {
+              const r = canvas.getBoundingClientRect();
+              const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+              const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - r.top;
+              return { x, y };
+            };
+
+            function start(ev) {
+              drawing = true;
+              hasInk = true;
+              const p = pos(ev);
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ev.preventDefault();
+            }
+            function move(ev) {
+              if (!drawing) return;
+              const p = pos(ev);
+              ctx.lineTo(p.x, p.y);
+              ctx.stroke();
+              ev.preventDefault();
+            }
+            function end() { drawing = false; }
+
+            canvas.addEventListener("mousedown", start);
+            canvas.addEventListener("mousemove", move);
+            window.addEventListener("mouseup", end);
+
+            canvas.addEventListener("touchstart", start, { passive: false });
+            canvas.addEventListener("touchmove", move, { passive: false });
+            canvas.addEventListener("touchend", end);
+
+            $q("#sigClear").addEventListener("click", () => {
+              initCanvas();
+              hasInk = false;
+            });
+
+            // Utils
+            async function sha256HexFromArrayBuffer(buf) {
+              try {
+                const hash = await crypto.subtle.digest("SHA-256", buf);
+                return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,"0")).join("");
+              } catch { return null; }
+            }
+            async function sha256HexFromString(text) {
+              try {
+                const enc = new TextEncoder();
+                return await sha256HexFromArrayBuffer(enc.encode(text));
+              } catch { return null; }
+            }
+            async function getPublicIP() {
+              try {
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), 2500);
+                const r = await fetch("https://api.ipify.org?format=json", { signal: ctrl.signal });
+                clearTimeout(t);
+                if (!r.ok) return null;
+                const j = await r.json();
+                return j?.ip || null;
+              } catch { return null; }
+            }
+            function downloadBlob(blob, filename) {
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+            }
+            function safeName(s) {
+              return String(s || "").normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").replace(/[^a-z0-9_\\-\\.]+/gi,"-").slice(0,80);
+            }
+
+            $q("[data-close]").addEventListener("click", () => (modals.style.display = "none"));
+
+            $q("#rcGerar").addEventListener("click", async () => {
+              const nome = ($q("#rcNome").value || "").trim();
+              const cpf = onlyDigits($q("#rcCPF").value);
+              const rg = ($q("#rcRG").value || "").trim();
+              const valor = parseFloat($q("#rcValor").value || "0") || 0;
+              const de = $q("#rcDe").value || "";
+              const ate = $q("#rcAte").value || "";
+              const cidade = ($q("#rcCidade").value || "Recife").trim();
+              const dataRec = $q("#rcData").value || selectedDate;
+              const numero = ($q("#rcNum").value || ("REC-" + Date.now())).trim();
+              const otpIn = ($q("#rcOtp").value || "").trim();
+
+              if (!nome || !cpf || !valor || !de || !ate) {
+                alert("Preencha Nome, CPF, Valor e o Período (De/Até).");
+                return;
+              }
+              if (!hasInk) {
+                alert("Por favor, colha a assinatura do profissional.");
+                return;
+              }
+
+              const otpOk = currentCode && otpIn ? (otpIn === currentCode) : false;
+
+              await ensureJsPDF();
+              const { jsPDF } = window.jspdf || {};
+              const doc = new jsPDF({ unit: "mm", format: "a4" });
+              const margin = 18;
+              let y = margin;
+
+              // Cabeçalho
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(16);
+              doc.text("Espaço Bella's — Recibo de Pagamento por Serviços Prestados", margin, y);
+              y += 8;
+
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(11);
+
+              const valorBR = (Number(valor) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+              const body =
+                \`Eu, \${nome}, CPF \${cpf}\${rg ? \`, RG \${rg}\` : ""}, declaro para os devidos fins que recebi nesta data a quantia de \${valorBR} do estabelecimento Espaço Bella's, referente aos serviços prestados no período de \${de} até \${ate}, na condição de autônomo, não caracterizando vínculo empregatício.\n\n\` +
+                "Declaro ainda estar de pleno acordo com os valores descritos e dou plena quitação dos serviços prestados no período informado.\n\n" +
+                \`Local e data: \${cidade}, \${new Date(dataRec + "T00:00:00").toLocaleDateString("pt-BR")}\n\`;
+
+              const lines = doc.splitTextToSize(body, 210 - margin * 2);
+              doc.text(lines, margin, y);
+              y += lines.length * 5 + 10;
+
+              // Linha de assinatura
+              const sigW = 80, sigH = 28;
+              const sigX = margin, sigY = y;
+              // Desenha a assinatura
+              try {
+                const sigData = canvas.toDataURL("image/png");
+                doc.addImage(sigData, "PNG", sigX, sigY, sigW, sigH);
+              } catch {}
+              doc.setDrawColor(51, 65, 85);
+              doc.line(sigX, sigY + sigH + 2, sigX + sigW, sigY + sigH + 2);
+              doc.setFontSize(10);
+              doc.text("Assinatura do Autônomo", sigX, sigY + sigH + 7);
+              doc.text(\`Nome: \${nome}\`, sigX + sigW + 10, sigY + sigH - 2);
+              y = sigY + sigH + 16;
+
+              // Rodapé: identificadores
+              const createdAt = new Date().toLocaleString("pt-BR");
+              doc.setFontSize(9);
+              doc.setTextColor(107,114,128);
+              doc.text(\`Nº: \${numero}\`, margin, 297 - margin - 6);
+              doc.text(\`Gerado em: \${createdAt}\`, margin, 297 - margin);
+
+              // Evidências
+              const ua = navigator.userAgent || "";
+              const ip = await getPublicIP();
+              const evidBase = {
+                numero,
+                createdAt: new Date().toISOString(),
+                device: { userAgent: ua, screen: { w: window.screen?.width || null, h: window.screen?.height || null } },
+                ip: ip || null,
+                profissional: { nome, cpf, rg },
+                periodo: { de, ate },
+                valor: valor,
+                cidade,
+                dataRecibo: dataRec,
+                otp: currentCode ? { generated: true, provided: !!otpIn, verified: otpOk, code: currentCode, verifiedAt: otpOk ? new Date().toISOString() : null } : { generated: false },
+              };
+              const evidHash = await sha256HexFromString(JSON.stringify(evidBase));
+
+              // Carimba hash de dados no PDF
+              doc.setTextColor(107,114,128);
+              doc.setFontSize(8);
+              doc.text(\`Hash dos dados: \${evidHash || "-"}\`, 210 - margin, 297 - margin, { align: "right" });
+
+              // Gerar blob/arraybuffer para hash do PDF
+              const pdfArrayBuf = doc.output("arraybuffer");
+              const pdfBlob = new Blob([pdfArrayBuf], { type: "application/pdf" });
+              const pdfSha = await sha256HexFromArrayBuffer(pdfArrayBuf);
+
+              const sigDataUrl = canvas.toDataURL("image/png");
+
+              const evidFull = {
+                ...evidBase,
+                dataHash: evidHash || null,
+                pdfSha256: pdfSha || null,
+                signature: sigDataUrl,
+              };
+
+              // Downloads
+              const base = \`recibo_semanal_\${dataRec}_\${safeName(nome)}\`;
+              downloadBlob(pdfBlob, base + ".pdf");
+              downloadBlob(new Blob([JSON.stringify(evidFull, null, 2)], { type: "application/json" }), base + "_evidencias.json");
+
+              modals.style.display = "none";
             });
           }
 
