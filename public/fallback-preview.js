@@ -200,38 +200,10 @@
           <div class="empty">Nenhum agendamento próximo</div>
         </section>
       </div>
-      <section class="section">
+      <section class="section" id="birthSection">
         <div class="birth-head"><span>🎂</span><span>ANIVERSARIANTES</span><span>🎉</span></div>
-        <div class="month-box">
-          <h3 style="margin:0 0 10px; display:flex; align-items:center; gap:8px;"><span>📅</span><span>📅 TODOS DESTE MÊS (7)</span></h3>
-          ${[
-            ["R", "Rafael", "02/10", "(81) 9556-3242"],
-            ["C", "Claudia Maria da Silva", "03/10", "(81) 99635-8025"],
-            ["E", "Emanuel Ferreira", "05/10", "(81) 99671-8111"],
-            ["D", "Dona Fátima", "20/10", ""],
-            ["M", "Magnalva Madalena (Nalva)", "20/10", ""],
-            ["M", "Mari", "20/10", "(81) 98376-0490"],
-            ["G", "Gabriela Cavalcanti", "30/10", "(81) 99811-9739"],
-          ]
-            .map(
-              ([ch, name, date, tel]) => `
-              <div class="month-item">
-                <div style="display:flex; gap:10px; align-items:center;">
-                  <div class="circle">${ch}</div>
-                  <div>
-                    <div style="font-weight:900;">${name}</div>
-                    <div class="muted"><span>📅</span> ${date}</div>
-                  </div>
-                </div>
-                ${
-                  tel
-                    ? `<a class="tel" href="tel:${tel}" title="Ligar para o cliente">Ligar para o cliente</a>`
-                    : `<span></span>`
-                }
-              </div>
-            `
-            )
-            .join("")}
+        <div class="month-box" id="birthBox">
+          <div class="empty">Sem dados de aniversariantes. Importe clientes do Notion em “Clientes › Importar do Notion”.</div>
         </div>
       </section>
       <section class="section">
@@ -567,16 +539,23 @@
     `;
 
     const Clientes = () => `
-      <div class="hero"><h1>Clientes</h1><p>Cadastro, consulta e ficha</p></div>
+      <div class="hero"><h1>Clientes</h1><p>Integração e cadastro</p></div>
       <section class="section">
         <div class="list">
-          <div class="row"><div><strong>Claudia Maria</strong><div class="muted">+55 81 99635-8025</div></div><span class="pill">Ativa</span></div>
-          <div class="row"><div><strong>Rafael</strong><div class="muted">+55 81 9556-3242</div></div><span class="pill">Ativo</span></div>
-          <div class="row"><div><strong>Mari</strong><div class="muted">+55 81 98376-0490</div></div><span class="pill">Ativa</span></div>
+          <div class="row" style="justify-content:space-between; gap:8px;">
+            <div>
+              <strong>Integração com Notion</strong>
+              <div class="muted">Importe clientes e datas de aniversário a partir de uma base do Notion</div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn-primary" id="btnNotionImport">Importar do Notion</button>
+            </div>
+          </div>
         </div>
       </section>
       <section class="section">
-        <button class="btn-primary" data-open="cliente">Novo Cliente</button>
+        <h2 style="margin:0 0 8px;">Lista de clientes</h2>
+        <div class="list" id="clientsList"></div>
       </section>
     `;
 
@@ -858,6 +837,207 @@
       if (hash === "/configuracoes") {
         const btn = page.querySelector("#btnDistZip");
         btn && btn.addEventListener("click", generateDistZip);
+      }
+
+      // ==== Clientes: armazenamento e integração com Notion ====
+      const CLIENTS_KEY = "bella_clients_v1";
+      function getClientsStore() {
+        try {
+          return JSON.parse(localStorage.getItem(CLIENTS_KEY) || '{"clients":[]}');
+        } catch {
+          return { clients: [] };
+        }
+      }
+      function setClientsStore(s) {
+        localStorage.setItem(CLIENTS_KEY, JSON.stringify(s));
+      }
+      function onlyDigitsLocal(s) { return String(s || "").replace(/\D+/g, ""); }
+      function fmtDDMMLocal(iso) {
+        if (!iso) return "";
+        try { const [y,m,d] = iso.slice(0,10).split("-"); return `${d}/${m}`; } catch { return ""; }
+      }
+      function monthDayLocal(iso) {
+        try { const [y,m,d] = iso.slice(0,10).split("-").map(Number); return { m, d }; } catch { return { m:null, d:null }; }
+      }
+      const NOTION_CFG_KEY = "bella_notion_cfg";
+      function getNotionCfg() {
+        try {
+          return JSON.parse(localStorage.getItem(NOTION_CFG_KEY) || '{"secret":"","dbid":"","map":{"name":"Name","phone":"Phone","birth":"Birthday"}}');
+        } catch {
+          return { secret:"", dbid:"", map:{ name:"Name", phone:"Phone", birth:"Birthday" } };
+        }
+      }
+      function setNotionCfg(cfg) {
+        localStorage.setItem(NOTION_CFG_KEY, JSON.stringify(cfg));
+      }
+
+      // Dashboard: renderizar aniversariantes dinamicamente
+      if (hash === "/dashboard") {
+        const box = page.querySelector("#birthBox");
+        if (box) {
+          const s = getClientsStore();
+          const list = (s.clients || []).filter(c => !!c.birthdate);
+          const now = new Date();
+          const cm = now.getMonth() + 1;
+          const cd = now.getDate();
+          const curr = list.filter(c => monthDayLocal(c.birthdate).m === cm)
+                           .sort((a,b) => monthDayLocal(a.birthdate).d - monthDayLocal(b.birthdate).d);
+          const today = curr.filter(c => monthDayLocal(c.birthdate).d === cd);
+          const past = curr.filter(c => monthDayLocal(c.birthdate).d < cd);
+          const upcoming = curr.filter(c => monthDayLocal(c.birthdate).d > cd);
+
+          function item(c, tag) {
+            const ch = (c.name || "?").slice(0,1).toUpperCase();
+            const tel = onlyDigitsLocal(c.phone || "");
+            const badge = tag ? `<span class="pill" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca;">${tag}</span>` : "";
+            return `
+              <div class="month-item">
+                <div style="display:flex; gap:10px; align-items:center;">
+                  <div class="circle">${ch}</div>
+                  <div>
+                    <div style="font-weight:900;">${c.name || "-"}</div>
+                    <div class="muted"><span>📅</span> ${fmtDDMMLocal(c.birthdate)} ${badge}</div>
+                  </div>
+                </div>
+                ${tel ? `<a class="tel" href="tel:+55${tel}" title="Ligar para o cliente">Ligar</a>` : `<span></span>`}
+              </div>
+            `;
+          }
+
+          if (!curr.length) {
+            box.innerHTML = `<div class="empty">Nenhum aniversariante deste mês. Importe clientes do Notion em “Clientes › Importar do Notion”.</div>`;
+          } else {
+            const parts = [];
+            parts.push(`<h3 style="margin:0 0 10px; display:flex; align-items:center; gap:8px;"><span>📅</span><span>Todos deste mês (${curr.length})</span></h3>`);
+            if (today.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Hoje</div>`);
+              parts.push(today.map(c => item(c, "hoje")).join(""));
+            }
+            if (upcoming.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Próximos</div>`);
+              parts.push(upcoming.map(c => item(c, "")).join(""));
+            }
+            if (past.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Já passaram</div>`);
+              parts.push(past.map(c => item(c, "passou")).join(""));
+            }
+            box.innerHTML = parts.join("");
+          }
+        }
+      }
+
+      // Clientes: listar e importar do Notion
+      if (hash === "/clientes") {
+        const listEl = page.querySelector("#clientsList");
+        function renderClientsList() {
+          if (!listEl) return;
+          const s = getClientsStore();
+          const arr = (s.clients || []).slice().sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+          if (!arr.length) {
+            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum cliente cadastrado. Importe do Notion.</div>`;
+            return;
+          }
+          listEl.innerHTML = arr.map(c => `
+            <div class="row">
+              <div>
+                <strong>${c.name || "-"}</strong>
+                <div class="muted">${c.phone || ""}</div>
+              </div>
+              <span class="pill">${fmtDDMMLocal(c.birthdate) || "—"}</span>
+            </div>
+          `).join("");
+        }
+
+        function showNotionImportModal() {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const cfg = getNotionCfg();
+          modal.innerHTML = `
+            <h3>Importar do Notion</h3>
+            <div class="field"><label>Integration Secret *</label><input id="ntSecret" placeholder="secret_..." value="${cfg.secret || ""}"></div>
+            <div class="field"><label>Database ID *</label><input id="ntDb" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="${cfg.dbid || ""}"></div>
+            <div class="field"><label>Campo — Nome (Title)</label><input id="ntMapName" value="${(cfg.map && cfg.map.name) || "Name"}"></div>
+            <div class="field"><label>Campo — Telefone (Phone ou Rich text)</label><input id="ntMapPhone" value="${(cfg.map && cfg.map.phone) || "Phone"}"></div>
+            <div class="field"><label>Campo — Aniversário (Date)</label><input id="ntMapBirth" value="${(cfg.map && cfg.map.birth) || "Birthday"}"></div>
+            <div class="muted" style="font-size:12px;">Dica: no Notion, compartilhe sua base com a integração e use um campo do tipo "Date" para o aniversário.</div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+              <button class="btn-outline" data-close>Cancelar</button>
+              <button class="btn-primary" id="ntImport">Importar</button>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel) => modal.querySelector(sel);
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+
+          async function notionQueryAll(secret, dbid) {
+            let cursor = undefined;
+            let all = [];
+            for (let i = 0; i < 20; i++) {
+              const body = cursor ? { start_cursor: cursor, page_size: 100 } : { page_size: 100 };
+              const r = await fetch(`https://api.notion.com/v1/databases/${dbid}/query`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${secret}`,
+                  "Content-Type": "application/json",
+                  "Notion-Version": "2022-06-28",
+                },
+                body: JSON.stringify(body),
+              });
+              if (!r.ok) throw new Error("Falha ao consultar a base do Notion. Verifique o Secret, o Database ID e o compartilhamento.");
+              const j = await r.json();
+              all = all.concat(j.results || []);
+              if (j.has_more && j.next_cursor) cursor = j.next_cursor; else break;
+            }
+            return all;
+          }
+          function getTitle(prop){ try { return (prop?.title || []).map(t=>t.plain_text).join("").trim(); } catch { return ""; } }
+          function getText(prop){
+            try {
+              if (!prop) return "";
+              if (prop.type === "phone_number") return prop.phone_number || "";
+              if (prop.type === "rich_text") return (prop.rich_text || []).map(t=>t.plain_text).join(" ").trim();
+              if (prop.type === "title") return getTitle(prop);
+              return "";
+            } catch { return ""; }
+          }
+          function getDate(prop){ try { return (prop?.date?.start || "").slice(0,10); } catch { return ""; } }
+
+          $m("#ntImport").addEventListener("click", async () => {
+            try {
+              const secret = ($m("#ntSecret").value || "").trim();
+              const dbid = ($m("#ntDb").value || "").trim();
+              const map = {
+                name: ($m("#ntMapName").value || "Name").trim(),
+                phone: ($m("#ntMapPhone").value || "Phone").trim(),
+                birth: ($m("#ntMapBirth").value || "Birthday").trim(),
+              };
+              if (!secret || !dbid) { alert("Informe o Secret e o Database ID."); return; }
+              setNotionCfg({ secret, dbid, map });
+              const pages = await notionQueryAll(secret, dbid);
+              const clients = [];
+              pages.forEach(p => {
+                const props = p.properties || {};
+                const nameProp = props[map.name];
+                const phoneProp = props[map.phone];
+                const birthProp = props[map.birth];
+                const name = nameProp ? (getTitle(nameProp) || getText(nameProp)) : "";
+                if (!name) return;
+                const phone = phoneProp ? getText(phoneProp) : "";
+                const birthdate = birthProp ? getDate(birthProp) : "";
+                clients.push({ id: p.id, name, phone, birthdate });
+              });
+              setClientsStore({ clients });
+              modals.style.display = "none";
+              renderClientsList();
+              alert(`Importados ${clients.length} clientes do Notion.`);
+            } catch (e) {
+              alert(e.message || "Erro ao importar do Notion.");
+            }
+          });
+        }
+
+        page.querySelector("#btnNotionImport")?.addEventListener("click", showNotionImportModal);
+        renderClientsList();
       }
 
       // Interações específicas da Agenda (progresso e atualizar)
