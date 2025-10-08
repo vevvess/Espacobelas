@@ -577,11 +577,55 @@
     `;
 
     const Servicos = () => `
-      <div class="hero"><h1>Serviços</h1><p>Catálogo, preços e duração</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Corte</strong><div class="muted">30 min</div></div><strong>R$ 35,00</strong></div>
-        <div class="row"><div><strong>Coloração</strong><div class="muted">90 min</div></div><strong>R$ 120,00</strong></div>
-        <div class="row"><div><strong>Manicure</strong><div class="muted">45 min</div></div><strong>R$ 40,00</strong></div>
+      <style>
+        .svc-hero h1 { margin:0 0 6px; font-size:28px; color:var(--bella-800); font-weight:900; letter-spacing:.2px; }
+        .svc-hero p { margin:0; color:#9d3a69; font-weight:600; }
+        .svc-actions { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+        .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+        .svc-filters { display:grid; gap:10px; margin:12px 0; }
+        .svc-filters .field { display:grid; gap:6px; }
+        .svc-filters input, .svc-filters select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+        .tabs { display:flex; gap:8px; overflow:auto; padding-bottom:2px; }
+        .tab { white-space:nowrap; padding:8px 12px; border-radius:999px; border:1px solid #f3c6d9; color:#a1125b; font-weight:800; background:#fff; }
+        .tab.active { background:#fff4f9; border:2px solid #f3a1c8; }
+        .svc-list { display:grid; gap:12px; }
+        .svc-card { display:grid; grid-template-columns: 108px 1fr; gap:12px; background:#fff; border:1px solid #f1e6ee; border-radius:18px; padding:12px; box-shadow: var(--shadow); }
+        .svc-photo { width:100%; height:100%; max-height:92px; border-radius:14px; object-fit:cover; border:1px solid #f1e6ee; background:#fff7fb; }
+        .svc-title { font-weight:900; color:#9d174d; text-transform:uppercase; letter-spacing:.2px; }
+        .svc-desc { color:#6b7280; font-weight:600; font-size:13px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .svc-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; }
+        .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-weight:900; }
+        .chip.time { background:#eef2ff; border:1px solid #c7d2fe; color:#4338ca; }
+        .chip.price { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; }
+        .svc-actions-inline { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+        @media(max-width:520px){ .svc-card { grid-template-columns: 1fr; } .svc-photo { max-height:160px; } }
+      </style>
+
+      <div class="svc-hero">
+        <h1>Serviços</h1>
+        <p>Catálogo, preços e duração (usado nos agendamentos)</p>
+      </div>
+
+      <div class="svc-actions">
+        <button class="btn primary" id="svcNovo">+ Novo Serviço</button>
+        <button class="btn" id="svcCat">Gerenciar Categorias</button>
+      </div>
+
+      <section class="section svc-filters">
+        <div class="field">
+          <label class="muted">Pesquisar</label>
+          <input id="svcQ" placeholder="Nome ou descrição">
+        </div>
+        <div class="field">
+          <label class="muted">Categorias</label>
+          <div class="tabs" id="svcTabs"></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Lista</h2>
+        <div class="svc-list" id="svcList"></div>
       </section>
     `;
 
@@ -871,7 +915,40 @@
         localStorage.setItem(NOTION_CFG_KEY, JSON.stringify(cfg));
       }
 
-      // Dashboard: renderizar aniversariantes dinamicamente
+      // ==== Serviços: armazenamento local (catálogo usado nos agendamentos) ====
+      const SVC_KEY = "bella_services_v1";
+      function svcUid(p) { return `${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
+      function getSvcStore() {
+        try { return JSON.parse(localStorage.getItem(SVC_KEY) || '{"cats":[],"items":[]}'); } catch { return { cats:[], items:[] }; }
+      }
+      function setSvcStore(s) { localStorage.setItem(SVC_KEY, JSON.stringify(s)); }
+      function moneyBR(n) { return (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" }); }
+      function minsTxt(min) {
+        min = Number(min)||0;
+        if (min < 60) return `${min}min`;
+        const h = Math.floor(min/60); const m = min%60;
+        return m ? `${h}h ${m}min` : `${h}h`;
+      }
+      function ensureSvcDefaults() {
+        const s = getSvcStore();
+        if ((s.items||[]).length) return;
+        s.cats = [
+          { id: svcUid("cat"), nome: "Unhas" },
+          { id: svcUid("cat"), nome: "Cabelos" },
+          { id: svcUid("cat"), nome: "Sobrancelha" },
+          { id: svcUid("cat"), nome: "Depilação" },
+        ];
+        const cat = (name) => s.cats.find(c=>c.nome===name)?.id || s.cats[0].id;
+        s.items = [
+          { id: svcUid("svc"), nome: "Alongamento em Acrigel", cat_id: cat("Unhas"), preco: 150, duracao_min: 150, desc:"O que está incluso no serviço e principais benefícios. Tempo médio e objetivos.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Alongamento em Gel", cat_id: cat("Unhas"), preco: 150, duracao_min: 150, desc:"Descrição breve e objetiva do procedimento.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Alongamento Fibra de Vidro", cat_id: cat("Unhas"), preco: 180, duracao_min: 165, desc:"Durável e leve. Inclui manutenção básica.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Corte Feminino", cat_id: cat("Cabelos"), preco: 40, duracao_min: 40, desc:"Corte com acabamento escova simples.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Coloração", cat_id: cat("Cabelos"), preco: 120, duracao_min: 90, desc:"Coloração completa com tonalização.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Design de Sobrancelhas", cat_id: cat("Sobrancelha"), preco: 35, duracao_min: 30, desc:"Medição, marcação e alinhamento.", foto: "/public/placeholder.svg" },
+        ];
+        setSvcStore(s);
+      }
       if (hash === "/dashboard") {
         const box = page.querySelector("#birthBox");
         if (box) {
@@ -1040,7 +1117,282 @@
         renderClientsList();
       }
 
-      // Interações específicas da Agenda (progresso e atualizar)
+      // Serviços: catálogo com abas, busca, cards e integração com agendamento
+      if (hash === "/servicos") {
+        ensureSvcDefaults();
+        const st = getSvcStore();
+
+        // estado via querystring
+        const params = new URLSearchParams(location.hash.split("?")[1] || "");
+        let q = params.get("q") || "";
+        let cat = params.get("cat") || "all";
+
+        function setParams(newQ, newCat) {
+          const p = new URLSearchParams();
+          if (newQ) p.set("q", newQ);
+          if (newCat && newCat !== "all") p.set("cat", newCat);
+          location.hash = "/servicos" + (p.toString() ? "?" + p.toString() : "");
+        }
+
+        function catName(id) {
+          if (id === "all") return "Todas";
+          return (st.cats || []).find(c => c.id === id)?.nome || "";
+        }
+
+        function filtered() {
+          const items = (getSvcStore().items || []);
+          return items
+            .filter(s => (cat === "all" ? true : s.cat_id === cat))
+            .filter(s => {
+              if (!q) return true;
+              const v = `${s.nome} ${s.desc || ""}`.toLowerCase();
+              return v.includes(q.toLowerCase());
+            })
+            .sort((a,b) => a.nome.localeCompare(b.nome));
+        }
+
+        function renderTabs() {
+          const tabs = page.querySelector("#svcTabs");
+          const s = getSvcStore();
+          const catList = [{ id: "all", nome: "Todas" }, ...s.cats];
+          tabs.innerHTML = catList.map(c => `
+            <button class="tab ${cat === c.id ? "active": ""}" data-cat="${c.id}">${c.nome}</button>
+          `).join("");
+          tabs.querySelectorAll(".tab").forEach(b => {
+            b.addEventListener("click", () => {
+              cat = b.getAttribute("data-cat");
+              setParams(q, cat);
+            });
+          });
+        }
+
+        function cardHtml(svc) {
+          const foto = svc.foto || "/public/placeholder.svg";
+          return `
+            <article class="svc-card" data-id="${svc.id}">
+              <img class="svc-photo" src="${foto}" alt="${svc.nome}">
+              <div>
+                <div class="svc-title">${svc.nome}</div>
+                <div class="svc-desc">${svc.desc || ""}</div>
+                <div class="svc-meta">
+                  <span class="chip time">⏱️ ${minsTxt(svc.duracao_min)} </span>
+                  <span class="chip price"> ${moneyBR(svc.preco)} </span>
+                </div>
+                <div class="svc-actions-inline">
+                  <button class="btn" data-act="agendar">Agendar</button>
+                  <button class="btn" data-act="editar">Editar</button>
+                  <button class="btn" data-act="remover">Excluir</button>
+                </div>
+              </div>
+            </article>
+          `;
+        }
+
+        function renderList() {
+          const list = page.querySelector("#svcList");
+          const arr = filtered();
+          list.innerHTML = arr.length ? arr.map(cardHtml).join("") : `<div class="muted" style="padding:12px;">Nenhum serviço encontrado.</div>`;
+          list.querySelectorAll(".svc-card .btn").forEach(btn => {
+            const act = btn.getAttribute("data-act");
+            const id = btn.closest(".svc-card").getAttribute("data-id");
+            if (act === "agendar") {
+              btn.addEventListener("click", () => {
+                location.hash = "/agenda?addservice=" + encodeURIComponent(id);
+              });
+            } else if (act === "editar") {
+              btn.addEventListener("click", () => showServiceModal((getSvcStore().items||[]).find(i=>i.id===id)));
+            } else if (act === "remover") {
+              btn.addEventListener("click", () => {
+                const s2 = getSvcStore();
+                s2.items = (s2.items||[]).filter(i => i.id !== id);
+                setSvcStore(s2);
+                renderList();
+              });
+            }
+          });
+        }
+
+        function showCatsModal() {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const s = getSvcStore();
+          modal.innerHTML = `
+            <style>
+              .mgrid { display:grid; gap:10px; }
+              .row { display:flex; gap:8px; align-items:center; }
+              .row input { flex:1; border:1px solid #f1e6ee; border-radius:10px; padding:8px; }
+              .btn { border:1px solid #f1e6ee; border-radius:10px; padding:8px 10px; font-weight:800; color:#a1125b; background:#fff; }
+            </style>
+            <h3>Categorias de Serviços</h3>
+            <div id="catList" class="mgrid">
+              ${(s.cats||[]).map(c => `
+                <div class="row" data-id="${c.id}">
+                  <input value="${c.nome}">
+                  <button class="btn" data-del>Excluir</button>
+                </div>
+              `).join("")}
+            </div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn" id="addCat">+ Adicionar</button>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+              <button class="btn" data-close>Fechar</button>
+              <button class="btn primary" id="saveCats">Salvar</button>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+          $m("#addCat").addEventListener("click", () => {
+            const row = document.createElement("div");
+            row.className="row";
+            row.setAttribute("data-id", svcUid("cat"));
+            row.innerHTML = `<input value=""><button class="btn" data-del>Excluir</button>`;
+            $m("#catList").appendChild(row);
+            row.querySelector("[data-del]").addEventListener("click", ()=> row.remove());
+          });
+          modal.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", ()=> b.closest(".row").remove()));
+          $m("#saveCats").addEventListener("click", () => {
+            const cats = Array.from($m("#catList").children).map(r => ({
+              id: r.getAttribute("data-id"),
+              nome: r.querySelector("input").value.trim() || "Sem nome",
+            })).filter(c=>c.nome);
+            const s2 = getSvcStore();
+            s2.cats = cats;
+            setSvcStore(s2);
+            modals.style.display = "none";
+            renderTabs();
+            renderList();
+          });
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        function showServiceModal(existing) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const s = getSvcStore();
+          const it = existing ? { ...existing } : { id: svcUid("svc"), nome:"", cat_id: (s.cats[0]||{}).id || "", preco: 0, duracao_min: 60, desc:"", foto:"/public/placeholder.svg" };
+          modal.innerHTML = `
+            <style>
+              .amodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .amodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .amodal .field { display:grid; gap:8px; }
+              .amodal label { color:#a1125b; font-weight:900; }
+              .amodal input, .amodal select, .amodal textarea { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+              .amodal textarea { min-height: 80px; resize: vertical; }
+              .row { display:flex; gap:8px; align-items:center; }
+              .photo { width:92px; height:92px; border:1px solid #f1e6ee; border-radius:12px; overflow:hidden; display:grid; place-items:center; background:#fff7fb; }
+              .btn { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
+              .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              @media(max-width:520px){ .amodal .grid2 { grid-template-columns: 1fr; } }
+            </style>
+            <div class="amodal">
+              <h3>${existing ? "Editar Serviço" : "Novo Serviço"}</h3>
+              <div class="grid2">
+                <div class="field">
+                  <label>Nome *</label>
+                  <input id="sNome" value="${it.nome}">
+                </div>
+                <div class="field">
+                  <label>Categoria *</label>
+                  <select id="sCat">
+                    ${(s.cats||[]).map(c => `<option value="${c.id}" ${it.cat_id===c.id?"selected":""}>${c.nome}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Preço (R$) *</label>
+                  <input id="sPreco" type="number" step="0.01" min="0" value="${it.preco}">
+                </div>
+                <div class="field">
+                  <label>Duração (min) *</label>
+                  <input id="sDur" type="number" step="5" min="5" value="${it.duracao_min}">
+                </div>
+              </div>
+              <div class="field">
+                <label>Descrição</label>
+                <textarea id="sDesc" placeholder="O que está incluso, benefícios e observações">${it.desc || ""}</textarea>
+              </div>
+              <div class="field">
+                <label>Imagem</label>
+                <div class="row">
+                  <div class="photo" id="sThumb">${it.foto ? `<img src="${it.foto}" style="width:100%;height:100%;object-fit:cover;">` : "📷"}</div>
+                  <input type="file" id="sFoto" accept="image/*;capture=camera" style="display:none;">
+                  <button class="btn" id="btnFoto">Tirar/Escolher foto</button>
+                </div>
+              </div>
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="saveSvc">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          function compressImageToDataUrl(file, maxW = 900, quality = 0.85) {
+            return new Promise((resolve, reject) => {
+              const img = new Image(); const fr = new FileReader();
+              fr.onload = () => { img.onload = () => {
+                  const canvas = document.createElement("canvas");
+                  const scale = Math.min(1, maxW / img.width);
+                  canvas.width = Math.round(img.width * scale);
+                  canvas.height = Math.round(img.height * scale);
+                  const ctx = canvas.getContext("2d");
+                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  resolve(canvas.toDataURL("image/jpeg", quality));
+                }; img.onerror = reject; img.src = fr.result; };
+              fr.onerror = reject; fr.readAsDataURL(file);
+            });
+          }
+
+          $m("#btnFoto").addEventListener("click", () => $m("#sFoto").click());
+          $m("#sFoto").addEventListener("change", async (ev) => {
+            const f = ev.target.files && ev.target.files[0]; if (!f) return;
+            try {
+              const dataUrl = await compressImageToDataUrl(f);
+              $m("#sThumb").innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+              it.foto = dataUrl;
+            } catch {}
+            ev.target.value = "";
+          });
+
+          $m("#saveSvc").addEventListener("click", () => {
+            it.nome = $m("#sNome").value.trim();
+            it.cat_id = $m("#sCat").value || it.cat_id;
+            it.preco = parseFloat($m("#sPreco").value || "0") || 0;
+            it.duracao_min = parseInt($m("#sDur").value || "0", 10) || 0;
+            it.desc = ($m("#sDesc").value || "").trim();
+            if (!it.nome || !it.cat_id || !it.duracao_min) { alert("Preencha Nome, Categoria e Duração."); return; }
+            const s2 = getSvcStore();
+            if (existing) {
+              const idx = (s2.items||[]).findIndex(x => x.id === it.id);
+              if (idx >= 0) s2.items[idx] = it;
+            } else {
+              s2.items = (s2.items||[]).concat(it);
+            }
+            setSvcStore(s2);
+            modals.style.display = "none";
+            renderList();
+          });
+
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        // Inicializa UI
+        const qInput = page.querySelector("#svcQ");
+        qInput.value = q;
+        qInput.addEventListener("input", (e) => {
+          q = e.target.value || "";
+          setParams(q, cat);
+        });
+
+        renderTabs();
+        renderList();
+
+        page.querySelector("#svcNovo").addEventListener("click", () => showServiceModal());
+        page.querySelector("#svcCat").addEventListener("click", () => showCatsModal());
+      }
+
+      // Interações específicas da Agenda (progresso, atualizar e novo agendamento integrado a Serviços)
       if (hash === "/agenda") {
         const btnUpd = document.getElementById("btnAtualizar");
         const last = document.getElementById("lastUpdate");
@@ -1057,6 +1409,210 @@
           }
           requestAnimationFrame(step);
         }
+
+        // ---- Novo Agendamento (ligado ao catálogo de serviços)
+        const AGENDA_KEY = "bella_agenda_v1";
+        const getAgenda = () => { try { return JSON.parse(localStorage.getItem(AGENDA_KEY) || '{"items":[]}'); } catch { return { items: [] }; } };
+        const setAgenda = (s) => localStorage.setItem(AGENDA_KEY, JSON.stringify(s));
+
+        ensureSvcDefaults();
+
+        function parseDT(val) {
+          // returns Date or null
+          try { return val ? new Date(val) : null; } catch { return null; }
+        }
+        function addMinutes(date, mins) {
+          const d = new Date(date.getTime());
+          d.setMinutes(d.getMinutes() + (Number(mins)||0));
+          return d;
+        }
+        function dtLocalStr(d) {
+          if (!d) return "";
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth()+1).padStart(2,"0");
+          const dd = String(d.getDate()).padStart(2,"0");
+          const HH = String(d.getHours()).padStart(2,"0");
+          const MM = String(d.getMinutes()).padStart(2,"0");
+          return `${yyyy}-${mm}-${dd}T${HH}:${MM}`;
+        }
+        function fmtHourMin(d) {
+          if (!d) return "";
+          return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+        }
+
+        function showAgendamentoModal(preselectIds = []) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const svcStore = getSvcStore();
+          const services = (svcStore.items || []);
+          const cats = (svcStore.cats || []);
+          const now = new Date();
+          const startDefault = dtLocalStr(now);
+
+          modal.innerHTML = `
+            <style>
+              .amodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .amodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .amodal .field { display:grid; gap:8px; }
+              .amodal label { color:#a1125b; font-weight:900; }
+              .amodal input, .amodal select { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+              .srows { display:grid; gap:8px; margin-top:6px; }
+              .srow { display:grid; grid-template-columns: 1fr 100px 110px 42px; gap:8px; align-items:center; background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:8px; }
+              .srow .del { justify-self:end; border:1px solid #f3c6d9; border-radius:10px; background:#fff; padding:8px; color:#a1125b; }
+              .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              @media(max-width:640px){ .amodal .grid2 { grid-template-columns: 1fr; } .srow { grid-template-columns: 1fr 100px 110px 42px; } }
+              .muted { color:#6b7280; font-weight:700; }
+              .sum { display:flex; align-items:center; justify-content:space-between; background:#fff7fb; border:1px solid #f3c6d9; padding:10px; border-radius:12px; font-weight:900; color:#a1125b; }
+            </style>
+            <div class="amodal">
+              <h3>Novo Agendamento</h3>
+              <div class="grid2">
+                <div class="field">
+                  <label>Cliente *</label>
+                  <input id="agCli" placeholder="Nome do cliente">
+                </div>
+                <div class="field">
+                  <label>Telefone</label>
+                  <input id="agTel" placeholder="(DDD) 9xxxx-xxxx">
+                </div>
+              </div>
+
+              <div class="grid2">
+                <div class="field">
+                  <label>Início *</label>
+                  <input id="agIni" type="datetime-local" value="${startDefault}">
+                </div>
+                <div class="field">
+                  <label>Término previsto</label>
+                  <input id="agFim" type="time" readonly>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Serviços *</label>
+                <div class="srows" id="agRows"></div>
+                <button class="btn" id="agAdd">+ Adicionar serviço</button>
+              </div>
+
+              <div class="sum" id="agResumo">
+                <div>Total: R$ 0,00</div>
+                <div>Duração: 0min</div>
+              </div>
+
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="agSalvar">Salvar</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          function svcOption(s) { return `<option value="${s.id}">${s.nome}</option>`; }
+          function svcSelectHtml(val) {
+            const opts = services.map(svcOption).join("");
+            return `<select class="s-sel">${opts}</select>`;
+          }
+          function addRow(defaultId) {
+            const row = document.createElement("div");
+            row.className = "srow";
+            row.innerHTML = `
+              ${svcSelectHtml(defaultId)}
+              <input class="s-preco" type="number" step="0.01" min="0" placeholder="Preço">
+              <input class="s-dur" type="number" step="5" min="5" placeholder="Min">
+              <button class="del" title="Remover">✕</button>
+            `;
+            const sel = row.querySelector(".s-sel");
+            const ipP = row.querySelector(".s-preco");
+            const ipD = row.querySelector(".s-dur");
+            sel.value = defaultId || (services[0]?.id || "");
+            function fillBySvc() {
+              const svc = services.find(s => s.id === sel.value);
+              if (svc) {
+                ipP.value = String(svc.preco ?? 0);
+                ipD.value = String(svc.duracao_min ?? 60);
+              }
+              recalc();
+            }
+            sel.addEventListener("change", fillBySvc);
+            row.querySelector(".del").addEventListener("click", () => { row.remove(); recalc(); });
+            [$m("#agIni"), ipP, ipD].forEach(inp => inp.addEventListener("input", recalc));
+            $m("#agRows").appendChild(row);
+            fillBySvc();
+          }
+
+          function recalc() {
+            const start = parseDT($m("#agIni").value);
+            const rows = Array.from($m("#agRows").children);
+            const total = rows.reduce((acc,r)=>acc+(parseFloat(r.querySelector(".s-preco").value||"0")||0),0);
+            const dur = rows.reduce((acc,r)=>acc+(parseInt(r.querySelector(".s-dur").value||"0",10)||0),0);
+            const end = start ? addMinutes(start, dur) : null;
+            $m("#agResumo").children[0].textContent = "Total: " + moneyBR(total);
+            $m("#agResumo").children[1].textContent = "Duração: " + (dur?minsTxt(dur):"0min");
+            $m("#agFim").value = end ? fmtHourMin(end) : "";
+          }
+
+          $m("#agAdd").addEventListener("click", () => addRow());
+          // Pré-seleção de serviços vindos de /servicos
+          if (Array.isArray(preselectIds) && preselectIds.length) {
+            preselectIds.forEach(id => addRow(id));
+          } else {
+            addRow();
+          }
+          recalc();
+
+          $m("#agSalvar").addEventListener("click", () => {
+            const nome = ($m("#agCli").value || "").trim();
+            if (!nome) { alert("Informe o cliente"); return; }
+            const ini = parseDT($m("#agIni").value);
+            if (!ini) { alert("Informe o início"); return; }
+            const rows = Array.from($m("#agRows").children).map(r => ({
+              servico_id: r.querySelector(".s-sel").value,
+              nome: (services.find(s=>s.id===r.querySelector(".s-sel").value)||{}).nome || "",
+              preco: parseFloat(r.querySelector(".s-preco").value || "0") || 0,
+              duracao_min: parseInt(r.querySelector(".s-dur").value || "0", 10) || 0,
+            }));
+            if (!rows.length) { alert("Adicione pelo menos um serviço"); return; }
+            const total = rows.reduce((a,b)=>a+b.preco,0);
+            const dur = rows.reduce((a,b)=>a+b.duracao_min,0);
+            const fim = addMinutes(ini, dur);
+
+            const ag = getAgenda();
+            ag.items.push({
+              id: "ag-" + Date.now(),
+              cliente: nome,
+              telefone: ($m("#agTel").value || "").trim(),
+              inicio: ini.toISOString(),
+              fim: fim.toISOString(),
+              servicos: rows,
+              total,
+              duracao_min: dur,
+              created_at: new Date().toISOString(),
+            });
+            setAgenda(ag);
+            modals.style.display = "none";
+            alert("Agendamento salvo (preview local).");
+          });
+
+          modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        // Intercepta o botão padrão e abre o modal integrado
+        page.querySelectorAll("[data-open='agendamento']").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.preventDefault(); e.stopImmediatePropagation();
+            showAgendamentoModal();
+          });
+        });
+
+        // Se veio de /servicos com ?addservice=ID, abre direto com o serviço pré-selecionado
+        try {
+          const p = new URLSearchParams(location.hash.split("?")[1] || "");
+          const id = p.get("addservice");
+          if (id) showAgendamentoModal([id]);
+        } catch {}
       }
 
       // Interações específicas do Caixa (persistência local e cálculos)
