@@ -1821,6 +1821,20 @@
                   <span>2 colunas, menos espaçamento</span>
                 </label>
               </div>
+              <div class="field">
+                <label class="muted2">Exportação legível</label>
+                <label style="display:flex;align-items:center;gap:8px;font-weight:800;color:#a1125b;">
+                  <input type="checkbox" id="cxExportLegible">
+                  <span>Layout focado em leitura (blocos de cliente + observações destacadas)</span>
+                </label>
+              </div>
+              <div class="field">
+                <label class="muted2">Legível compacto</label>
+                <label style="display:flex;align-items:center;gap:8px;font-weight:800;color:#a1125b;">
+                  <input type="checkbox" id="cxExportLegibleCompact">
+                  <span>2 colunas no modo legível</span>
+                </label>
+              </div>
             </section>
 
             <section class="section">
@@ -1945,6 +1959,20 @@
             expC.checked = localStorage.getItem("bella_export_compact") === "1";
             expC.addEventListener("change", (e) => {
               localStorage.setItem("bella_export_compact", e.target.checked ? "1" : "0");
+            });
+          }
+          const expL = byId("cxExportLegible");
+          if (expL) {
+            expL.checked = localStorage.getItem("bella_export_legible") === "1";
+            expL.addEventListener("change", (e) => {
+              localStorage.setItem("bella_export_legible", e.target.checked ? "1" : "0");
+            });
+          }
+          const expLC = byId("cxExportLegibleCompact");
+          if (expLC) {
+            expLC.checked = localStorage.getItem("bella_export_legible_compact") === "1";
+            expLC.addEventListener("change", (e) => {
+              localStorage.setItem("bella_export_legible_compact", e.target.checked ? "1" : "0");
             });
           }
 
@@ -2943,6 +2971,15 @@
             const genStr = new Date().toLocaleString("pt-BR");
             const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
             const compact = localStorage.getItem("bella_export_compact") === "1";
+            const legible = localStorage.getItem("bella_export_legible") === "1";
+            const legibleCompact = localStorage.getItem("bella_export_legible_compact") === "1";
+            const useCompact = legible ? legibleCompact : compact;
+            const legendHTML = legible ? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 8px;">
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;padding:4px 8px;border-radius:999px;font-weight:800;">PIX</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#f3e8ff;border:1px solid #e9d5ff;color:#6d28d9;padding:4px 8px;border-radius:999px;font-weight:800;">Cartão</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:4px 8px;border-radius:999px;font-weight:800;">Dinheiro</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;border:1px solid #fed7aa;color:#b45309;padding:4px 8px;border-radius:999px;font-weight:800;">Mensal</span>
+            </div>` : ``;
 
             // Group attendances by client and explode multiple services
             function groupAttsByClient(atts) {
@@ -3073,14 +3110,15 @@ if (qr.image && qr.image.src) return qr.image.src;
 
             // Compose HTML strings for tables
             const grouped = groupAttsByClient(s2.atts || []);
-            const attTableHTML = renderGroupedAttsTable(grouped, compact);
+            const attTableHTML = legible ? renderLegibleGroups(grouped, useCompact) : renderGroupedAttsTable(grouped, useCompact);
 
             const mensalHTML = (() => {
               const filtered = (s2.atts || [])
                 .map(a => ({ ...a, servicos: (a.servicos || []).filter(sv => (sv.pagamento || a.pagamento) === "mensal") }))
                 .filter(a => (a.servicos || []).length);
               const has = filtered.length > 0;
-              return has ? `<div class="sec"><h3>Débito Mensal (Não Pago)</h3>${renderGroupedAttsTable(groupAttsByClient(filtered))}</div>` : "";
+              const groupsHtml = legible ? renderLegibleGroups(groupAttsByClient(filtered), useCompact) : renderGroupedAttsTable(groupAttsByClient(filtered), useCompact);
+              return has ? `<div class="sec"><h3>Débito Mensal (Não Pago)</h3>${groupsHtml}</div>` : "";
             })();
 
             const payAgg = (() => {
@@ -3196,6 +3234,7 @@ if (qr.image && qr.image.src) return qr.image.src;
                 </div>
                 <div class="r-meta" style="color:#64748b; font-weight:700; text-align:right;">Gerado em: ${genStr}</div>
               </div>
+              ${legendHTML}
 
               <div class="r-grid">
                 <div class="r-card green"><div class="t">Total Entradas (PIX+Cartão+Dinheiro)</div><div class="v">${money(s2.entradas)}</div></div>
