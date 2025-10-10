@@ -421,120 +421,31 @@
         <label class="check"><input type="checkbox"> Mostrar concluídos</label>
       </section>
 
-      <section class="section">
-        <div class="title-row">
-          <h2 style="margin:0;">Agendamentos – 02/10/2025</h2>
-          <span class="badge">2 agendamentos</span>
+      <section class="section" id="agendaSection">
+        <div class="title-row" style="align-items:center; gap:8px;">
+          <h2 style="margin:0;">Agendamentos — <span id="agDayTitle"></span></h2>
+          <span class="badge" id="agCount">0 agendamentos</span>
         </div>
-
-        <!-- Appointment 1 - Em andamento com progresso -->
-        <article class="appt in-progress" id="appt1">
-          <div class="progress-fill" style="width:64%"></div>
-          <div class="inner">
-            <div>
-              <div class="header">
-                <div class="ava">A</div>
-                <div style="flex:1;">
-                  <div class="name">Adriane Lima</div>
-                </div>
-                <span class="status">Em Andamento</span>
-              </div>
-
-              <div class="row">
-                <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                02/10/2025, 09:00
-              </div>
-              <div class="row">
-                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                (81) 98886-1850
-              </div>
-
-              <div class="section-title">Serviços:</div>
-              <div class="chip-box">
-                <div class="chip-sub">
-                  <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 7l-8 8M14 7l-8 8" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
-                  Chapinha<br/><span class="muted">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>
-                    Kelly Monice
-                  </span>
-                </div>
-                <strong>R$ 50,00</strong>
-              </div>
-
-              <div class="section-title">Funcionários:</div>
-              <div class="worker-pill">
-                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#065f46" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#065f46"/></svg>
-                Kelly Monice
-              </div>
-
-              <div class="total">
-                <div class="label">Valor Total:</div>
-                <div class="value">R$ 50,00</div>
-              </div>
-            </div>
-
-            <div class="actions">
-              <button class="btn-outline" title="Visualizar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#a1125b" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="#a1125b"/></svg></button>
-              <button class="btn-outline" title="Editar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#a1125b" stroke-width="1.6"/></svg></button>
-              <button class="btn-outline" title="Cobrar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 6v12M17 10c0-1.657-2.239-3-5-3s-5 1.343-5 3 2.239 3 5 3 5 1.343 5 3-2.239 3-5 3-5-1.343-5-3" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-              <button class="btn-outline" title="Excluir"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-            </div>
+        <div class="row-info" style="margin:10px 0;">
+          <div class="chip">
+            Data:
+            <input type="date" id="agDateInput" style="border:1px solid #f3c6d9; border-radius:8px; padding:6px 8px; color:#a1125b; font-weight:800;">
           </div>
-        </article>
-
-        <!-- Appointment 2 - Agendado -->
-        <article class="appt scheduled">
-          <div class="inner">
-            <div>
-              <div class="header">
-                <div class="ava">A</div>
-                <div style="flex:1;">
-                  <div class="name">Adriane Lima</div>
-                </div>
-                <span class="status scheduled">Agendado</span>
-              </div>
-
-              <div class="row">
-                <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                02/10/2025, 11:25
-              </div>
-              <div class="row">
-                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                (81) 98886-1850
-              </div>
-
-              <div class="section-title">Serviços:</div>
-              <div class="chip-box" style="background:#d1fae5; border-color:#a7f3d0;">
-                <div class="chip-sub">
-                  <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 7l-8 8M14 7l-8 8" stroke="#065f46" stroke-width="1.8" stroke-linecap="round"/></svg>
-                  Chapinha<br/><span class="muted">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>
-                    Simone Barboza
-                  </span>
-                </div>
-                <strong>R$ 20,00</strong>
-              </div>
-
-              <div class="section-title">Funcionários:</div>
-              <div class="worker-pill">
-                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#065f46" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#065f46"/></svg>
-                Simone Barboza
-              </div>
-
-              <div class="total">
-                <div class="label">Valor Total:</div>
-                <div class="value">R$ 20,00</div>
-              </div>
-            </div>
-
-            <div class="actions">
-              <button class="btn-outline" title="Visualizar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#a1125b" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="#a1125b"/></svg></button>
-              <button class="btn-outline" title="Editar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#a1125b" stroke-width="1.6"/></svg></button>
-              <button class="btn-outline" title="Agendar"><svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.6"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              <button class="btn-outline" title="Excluir"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-            </div>
+          <div class="chip">
+            Status:
+            <select id="agStatus" style="border:1px solid #f3c6d9; border-radius:8px; padding:6px 8px; color:#a1125b; font-weight:800;">
+              <option value="all">Todos</option>
+              <option value="scheduled">Agendado</option>
+              <option value="in_progress">Em andamento</option>
+              <option value="done">Concluído</option>
+            </select>
           </div>
-        </article>
+          <div style="margin-left:auto; display:flex; gap:6px;">
+            <button class="btn-refresh" id="agPrev">← Dia anterior</button>
+            <button class="btn-refresh" id="agNext">Próximo dia →</button>
+          </div>
+        </div>
+        <div id="agList"></div>
       </section>
     `;
 
@@ -1440,14 +1351,14 @@
           return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
         }
 
-        function showAgendamentoModal(preselectIds = []) {
+        function showAgendamentoModal(preselectIds = [], existingAppt = null) {
           const modals = document.getElementById("modals");
           const modal = modals.querySelector(".modal");
           const svcStore = getSvcStore();
           const services = (svcStore.items || []);
           const cats = (svcStore.cats || []);
           const now = new Date();
-          const startDefault = dtLocalStr(now);
+          const startDefault = (existingAppt && parseDT(existingAppt.inicio)) ? dtLocalStr(parseDT(existingAppt.inicio)) : dtLocalStr(now);
 
           modal.innerHTML = `
             <style>
@@ -1515,7 +1426,7 @@
             const opts = services.map(svcOption).join("");
             return `<select class="s-sel">${opts}</select>`;
           }
-          function addRow(defaultId) {
+          function addRow(defaultId, rowData = null) {
             const row = document.createElement("div");
             row.className = "srow";
             row.innerHTML = `
@@ -1541,6 +1452,19 @@
             [$m("#agIni"), ipP, ipD].forEach(inp => inp.addEventListener("input", recalc));
             $m("#agRows").appendChild(row);
             fillBySvc();
+            // If editing existing row data, try to match by name and override values
+            if (rowData) {
+              try {
+                const match = services.find(s => (s.nome || "").toLowerCase() === String(rowData.nome || "").toLowerCase());
+                if (match) {
+                  sel.value = match.id;
+                  fillBySvc();
+                }
+                if (typeof rowData.preco !== "undefined") ipP.value = String(rowData.preco);
+                if (typeof rowData.duracao_min !== "undefined") ipD.value = String(rowData.duracao_min);
+                recalc();
+              } catch {}
+            }
           }
 
           function recalc() {
@@ -1555,11 +1479,19 @@
           }
 
           $m("#agAdd").addEventListener("click", () => addRow());
-          // Pré-seleção de serviços vindos de /servicos
-          if (Array.isArray(preselectIds) && preselectIds.length) {
+          // Preenchimento inicial das linhas
+          if (existingAppt && Array.isArray(existingAppt.servicos) && existingAppt.servicos.length) {
+            existingAppt.servicos.forEach(sv => addRow(null, sv));
+          } else if (Array.isArray(preselectIds) && preselectIds.length) {
             preselectIds.forEach(id => addRow(id));
           } else {
             addRow();
+          }
+          // Prefill campos principais se edição
+          if (existingAppt) {
+            $m("#agCli").value = existingAppt.cliente || "";
+            $m("#agTel").value = existingAppt.telefone || "";
+            $m("#agIni").value = startDefault;
           }
           recalc();
 
@@ -1580,16 +1512,14 @@
             const fim = addMinutes(ini, dur);
 
             const ag = getAgenda();
-            ag.items.push({
-              id: "ag-" + Date.now(),
-              cliente: nome,
-              telefone: ($m("#agTel").value || "").trim(),
-              inicio: ini.toISOString(),
-              fim: fim.toISOString(),
-              servicos: rows,
-              total,
-              duracao_min: dur,
-              created_at: new Date().toISOString(),
+            if (existingAppt) {
+              const idx = (ag.items || []).findIndex(x => x.id === existingAppt.id);
+              if (idx >= 0) {
+                const keep = ag.items[idx] || {};
+                ag.items[idx] = {
+                  ...keep,
+                  cliente: nome,
+                  telefone: ($m        created_at: new Date().toISOString(),
             });
             setAgenda(ag);
             modals.style.display = "none";
