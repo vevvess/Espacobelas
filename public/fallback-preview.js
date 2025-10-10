@@ -549,10 +549,23 @@
     `;
 
     const Usuarios = () => `
-      <div class="hero"><h1>Usuários</h1><p>Times, permissões e perfis</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Weslley Raphael</strong><div class="muted">Administrador</div></div><span class="pill">Ativo</span></div>
-        <div class="row"><div><strong>Claudia</strong><div class="muted">Staff</div></div><span class="pill">Ativa</span></div>
+      <style>
+        .usr-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+        .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+        .usr-list { display:grid; gap:10px; }
+        .usr-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #f1e6ee; background:#fff; border-radius:12px; padding:12px; }
+        .usr-left { display:flex; gap:10px; align-items:center; }
+        .usr-ava { width:40px; height:40px; border-radius:12px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
+        .badge { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; }
+      </style>
+      <div class="hero"><h1>Usuários</h1><p>Profissionais e administradores</p></div>
+      <div class="usr-actions">
+        <button class="btn primary" id="usrNovo">+ Novo Usuário</button>
+      </div>
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Lista</h2>
+        <div class="usr-list" id="usrList"></div>
       </section>
     `;
 
@@ -927,7 +940,21 @@
         localStorage.setItem(NOTION_CFG_KEY, JSON.stringify(cfg));
       }
 
-      // ==== Serviços: armazenamento local (catálogo usado nos agendamentos) ====
+      // ==== Usuários (profissionais) ====
+      const USERS_KEY = "bella_users_v1";
+      function getUsersStore() { try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{"users":[]}'); } catch { return { users: [] }; } }
+      function setUsersStore(s) { localStorage.setItem(USERS_KEY, JSON.stringify(s)); }
+      function uidUser(p) { return `${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
+      function ensureUsersDefaults() {
+        const s = getUsersStore();
+        if ((s.users || []).length) return;
+        s.users = [
+          { id: uidUser("usr"), nome: "Weslley Raphael", role: "admin" },
+          { id: uidUser("usr"), nome: "Kelly Monice", role: "prof" },
+        ];
+        setUsersStore(s);
+      }
+
       const SVC_KEY = "bella_services_v1";
       function svcUid(p) { return `${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
       function getSvcStore() {
@@ -1129,6 +1156,96 @@
         renderClientsList();
       }
 
+      // Usuários: CRUD local
+      if (hash === "/usuarios") {
+        ensureUsersDefaults();
+        const listEl = page.querySelector("#usrList");
+        const modals = document.getElementById("modals");
+        function renderUsers() {
+          const s = getUsersStore();
+          const arr = (s.users || []).slice().sort((a,b) => (a.nome||"").localeCompare(b.nome||""));
+          listEl.innerHTML = arr.length ? arr.map(u => `
+            <div class="usr-row" data-id="${u.id}">
+              <div class="usr-left">
+                <div class="usr-ava">${(u.nome||"?").slice(0,1).toUpperCase()}</div>
+                <div>
+                  <div style="font-weight:900;color:#7a0f3f;">${u.nome || "-"}</div>
+                  <div class="muted">${u.role === "admin" ? "Administrador" : "Profissional"}</div>
+                </div>
+              </div>
+              <div>
+                <button class="btn" data-act="edit">Editar</button>
+                <button class="btn" data-act="del">Excluir</button>
+              </div>
+            </div>
+          `).join("") : `<div class="muted" style="padding:12px;">Nenhum usuário. Clique em “+ Novo Usuário”.</div>`;
+          listEl.querySelectorAll(".usr-row .btn").forEach(btn => {
+            const id = btn.closest(".usr-row").getAttribute("data-id");
+            const act = btn.getAttribute("data-act");
+            if (act === "edit") {
+              btn.addEventListener("click", () => showUserModal(getUsersStore().users.find(x => x.id === id)));
+            } else if (act === "del") {
+              btn.addEventListener("click", () => {
+                if (!confirm("Excluir usuário?")) return;
+                const s2 = getUsersStore();
+                s2.users = (s2.users || []).filter(x => x.id !== id);
+                setUsersStore(s2);
+                renderUsers();
+              });
+            }
+          });
+        }
+        function showUserModal(existing) {
+          const modal = modals.querySelector(".modal");
+          const it = existing ? { ...existing } : { id: uidUser("usr"), nome: "", role: "prof" };
+          modal.innerHTML = `
+            <style>
+              .umodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .umodal .field { display:grid; gap:6px; }
+              .umodal input, .umodal select { border:2px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+              @media(max-width:520px){ .umodal .grid2 { grid-template-columns: 1fr; } }
+            </style>
+            <div class="umodal">
+              <h3>${existing ? "Editar Usuário" : "Novo Usuário"}</h3>
+              <div class="grid2">
+                <div class="field"><label>Nome *</label><input id="uNome" value="${it.nome}"></div>
+                <div class="field">
+                  <label>Papel</label>
+                  <select id="uRole">
+                    <option value="prof" ${it.role==="prof"?"selected":""}>Profissional</option>
+                    <option value="admin" ${it.role==="admin"?"selected":""}>Administrador</option>
+                  </select>
+                </div>
+              </div>
+              <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="uSave">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel) => modal.querySelector(sel);
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+          $m("#uSave").addEventListener("click", () => {
+            it.nome = ($m("#uNome").value || "").trim();
+            it.role = $m("#uRole").value || "prof";
+            if (!it.nome) { alert("Informe o nome."); return; }
+            const s2 = getUsersStore();
+            if (existing) {
+              const idx = (s2.users || []).findIndex(x => x.id === it.id);
+              if (idx >= 0) s2.users[idx] = it;
+            } else {
+              s2.users = (s2.users || []).concat(it);
+            }
+            setUsersStore(s2);
+            modals.style.display = "none";
+            renderUsers();
+          });
+        }
+        page.querySelector("#usrNovo")?.addEventListener("click", () => showUserModal());
+        renderUsers();
+      }
+
       // Serviços: catálogo com abas, busca, cards e integração com agendamento
       if (hash === "/servicos") {
         ensureSvcDefaults();
@@ -1319,7 +1436,7 @@
                   <input id="sDur" type="number" step="5" min="5" value="${it.duracao_min}">
                 </div>
               </div>
-              <div class="field">
+             <<div class="field">
                 <label>Descrição</label>
                 <textarea id="sDesc" placeholder="O que está incluso, benefícios e observações">${it.desc || ""}</textarea>
               </div>
@@ -1372,6 +1489,7 @@
             it.cat_id = $m("#sCat").value || it.cat_id;
             it.preco = parseFloat($m("#sPreco").value || "0") || 0;
             it.duracao_min = parseInt($m("#sDur").value || "0", 10) || 0;
+            it.comissao_func_pct = Math.max(0, Math.min(100, parseFloat($m("#sCom").value || "40") || 40));
             it.desc = ($m("#sDesc").value || "").trim();
             if (!it.nome || !it.cat_id || !it.duracao_min) { alert("Preencha Nome, Categoria e Duração."); return; }
             const s2 = getSvcStore();
@@ -1469,7 +1587,7 @@
               .amodal label { color:#a1125b; font-weight:900; }
               .amodal input, .amodal select { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
               .srows { display:grid; gap:8px; margin-top:6px; }
-              .srow { display:grid; grid-template-columns: 1fr 100px 110px 42px; gap:8px; align-items:center; background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:8px; }
+              .srow { display:grid; grid-template-columns: 1fr 1fr 100px 110px 42px; gap:8px; align-items:center; background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:8p_codex;new </}
               .srow .del { justify-self:end; border:1px solid #f3c6d9; border-radius:10px; background:#fff; padding:8px; color:#a1125b; }
               .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
               .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
@@ -1483,7 +1601,8 @@
               <div class="grid2">
                 <div class="field">
                   <label>Cliente *</label>
-                  <input id="agCli" placeholder="Nome do cliente">
+                  <input id="agCli" list="agClientsList" placeholder="Nome do cliente">
+                  <datalist id="agClientsList"></datalist>
                 </div>
                 <div class="field">
                   <label>Telefone</label>
@@ -1522,33 +1641,96 @@
           modals.style.display = "flex";
           const $m = (sel)=>modal.querySelector(sel);
 
+          // Preenche datalist de clientes e ações rápidas de criação
+          function refreshClientsDatalist() {
+            try {
+              const s = getClientsStore();
+              const dl = $m("#agClientsList");
+              if (!dl) return;
+              const opts = (s.clients || []).map(c => {
+                const name = String(c.name || "").replace(/"/g, "&quot;");
+                const phone = String(c.phone || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                return `<option value="${name}">${phone}</option>`;
+              }).join("");
+              dl.innerHTML = opts;
+            } catch {}
+          }
+          refreshClientsDatalist();
+          // Auto-preenche telefone ao selecionar cliente existente
+          const __cliInput = $m("#agCli");
+          const __telInput = $m("#agTel");
+          function __maybeFillPhone() {
+            try {
+              const name = String(__cliInput?.value || "").trim().toLowerCase();
+              if (!name) return;
+              const c = (getClientsStore().clients || []).find(x => String(x.name || "").toLowerCase() === name);
+              if (c && __telInput && !__telInput.value) __telInput.value = c.phone || "";
+            } catch {}
+          }
+          __cliInput && __cliInput.addEventListener("change", __maybeFillPhone);
+          __cliInput && __cliInput.addEventListener("blur", __maybeFillPhone);
+
+          $m("#agAddClient")?.addEventListener("click", () => {
+            const nome = prompt("Nome do cliente:");
+            if (!nome) return;
+            const tel = prompt("Telefone (opcional):") || "";
+            const store = getClientsStore();
+            (store.clients || (store.clients = [])).push({ id: "cli-" + Date.now(), name: nome.trim(), phone: tel.trim() });
+            setClientsStore(store);
+            refreshClientsDatalist();
+            const ip = $m("#agCli"); if (ip && !ip.value) ip.value = nome.trim();
+          });
+          $m("#agAddUser")?.addEventListener("click", () => {
+            const nome = prompt("Nome do funcionário:");
+            if (!nome) return;
+            const us = getUsersStore();
+            (us.users || (us.users = [])).push({ id: uidUser("usr"), nome: nome.trim(), role: "prof" });
+            setUsersStore(us);
+            // Atualiza selects de profissionais
+            const users = (getUsersStore().users || []);
+            const opts = users.map(u => `<option value="${u.id}">${u.nome}</option>`).join("");
+            $m("#agRows")?.querySelectorAll(".s-prof").forEach(sel => {
+              const curr = sel.value;
+              sel.innerHTML = opts;
+              if (curr) sel.value = curr; else sel.value = (users[0]?.id || "");
+            });
+          });
+
           function svcOption(s) { return `<option value="${s.id}">${s.nome}</option>`; }
           function svcSelectHtml(val) {
             const opts = services.map(svcOption).join("");
             return `<select class="s-sel">${opts}</select>`;
+          }
+          function userOption(u) { return `<option value="${u.id}">${u.nome}</option>`; }
+          function usersSelectHtml(selectedId) {
+            const u = (getUsersStore().users || []);
+            const opts = u.map(userOption).join("");
+            return `<select class="s-prof">${opts}</select>`;
           }
           function addRow(defaultId, rowData = null) {
             const row = document.createElement("div");
             row.className = "srow";
             row.innerHTML = `
               ${svcSelectHtml(defaultId)}
+              ${usersSelectHtml(rowData?.prof_id || "")}
               <input class="s-preco" type="number" step="0.01" min="0" placeholder="Preço">
               <input class="s-dur" type="number" step="5" min="5" placeholder="Min">
               <button class="del" title="Remover">✕</button>
             `;
-            const sel = row.querySelector(".s-sel");
+            const selSvc = row.querySelector(".s-sel");
+            const selProf = row.querySelector(".s-prof");
             const ipP = row.querySelector(".s-preco");
             const ipD = row.querySelector(".s-dur");
-            sel.value = defaultId || (services[0]?.id || "");
+            selSvc.value = defaultId || (services[0]?.id || "");
             function fillBySvc() {
-              const svc = services.find(s => s.id === sel.value);
+              const svc = services.find(s => s.id === selSvc.value);
               if (svc) {
                 ipP.value = String(svc.preco ?? 0);
                 ipD.value = String(svc.duracao_min ?? 60);
               }
               recalc();
             }
-            sel.addEventListener("change", fillBySvc);
+            selSvc.addEventListener("change", fillBySvc);
             row.querySelector(".del").addEventListener("click", () => { row.remove(); recalc(); });
             [$m("#agIni"), ipP, ipD].forEach(inp => inp.addEventListener("input", recalc));
             $m("#agRows").appendChild(row);
@@ -1556,11 +1738,18 @@
               try {
                 const match = services.find(s => (s.nome || "").toLowerCase() === String(rowData.nome || "").toLowerCase());
                 if (match) {
-                  sel.value = match.id;
+                  selSvc.value = match.id;
                 }
                 fillBySvc();
                 if (typeof rowData.preco !== "undefined") ipP.value = String(rowData.preco);
                 if (typeof rowData.duracao_min !== "undefined") ipD.value = String(rowData.duracao_min);
+                // Prefill professional
+                if (rowData.prof_id) {
+                  selProf.value = rowData.prof_id;
+                } else if (rowData.profissional) {
+                  const u = (getUsersStore().users || []).find(x => (x.nome || "").toLowerCase() === String(rowData.profissional || "").toLowerCase());
+                  if (u) selProf.value = u.id;
+                }
                 recalc();
               } catch {}
             } else {
@@ -1878,20 +2067,80 @@
             let list = (ag.items || []).filter(a => ymdFromISO(a.inicio) === ymd).sort((a,b)=> new Date(a.inicio) - new Date(b.inicio));
             if (!showDone) list = list.filter(a => (a.status || "scheduled") !== "done");
             if (filter !== "all") list = list.filter(a => (a.status || "scheduled") === filter);
-            const items = list.length ? list.map(a => `
-              <div class="row" style="justify-content:space-between; margin:6px 0;">
-                <div><strong>${fmtHM(a.inicio)}–${fmtHM(a.fim)}</strong> — ${a.cliente || "-"}</div>
-                <div class="muted-strong">${money(a.total || 0)}</div>
-              </div>
-            `).join("") : `<div class="muted">Sem agendamentos</div>`;
+            const cards = list.map(a => {
+              const st = a.status || "scheduled";
+              const cls = st === "in_progress" ? "in-progress" : (st === "done" ? "scheduled" : "scheduled");
+              let pct = 0;
+              try {
+                if (st === "in_progress") {
+                  const start = new Date(a.inicio).getTime();
+                  const end = new Date(a.fim).getTime();
+                  pct = Math.max(0, Math.min(100, Math.round(((Date.now() - start)/(end - start))*100)));
+                }
+              } catch {}
+              const services = (a.servicos||[]).map(s => `${s.nome} — ${s.duracao_min}min — ${money(s.preco)}`).join(" • ");
+              return `
+                <article class="appt ${cls}" data-id="${a.id}">
+                  ${st==="in_progress" ? `<div class="progress-fill" style="width:${pct}%"></div>` : ``}
+                  <div class="inner">
+                    <div>
+                      <div class="header">
+                        <div class="ava">${(a.cliente || "?").slice(0,1).toUpperCase()}</div>
+                        <div style="flex:1;">
+                          <div class="name">${a.cliente || "-"}</div>
+                        </div>
+                        <span class="status ${st==="in_progress" ? "" : (st==="scheduled" ? "scheduled" : "scheduled")}">${st==="scheduled"?"Agendado":(st==="in_progress"?"Em Andamento":"Concluído")}</span>
+                      </div>
+                      <div class="row">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        ${fmtHM(a.inicio)} – ${fmtHM(a.fim)}
+                      </div>
+                      ${a.telefone ? `<div class="row"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92V21a1 1 0 0 1-1.09 1c-9.4-.5-17-8.1-17.5-17.5A1 1 0 0 1 4 3h4.09A1 1 0 0 1 9 3.91l1.2 3a1 1 0 0 1-.27 1.11L8.9 9.3a16 16 0 0 0 6.8 6.8l1.28-1.05a1 1 0 0 1 1.11-.27l3 1.2a1 1 0 0 1 .91.99z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> ${a.telefone}</div>` : ``}
+                      <div class="section-title">Serviços:</div>
+                      <div class="chip-box">
+                        <div class="chip-sub">🧾 ${services || "-"}</div>
+                        <strong>${money(a.total || 0)}</strong>
+                      </div>
+                    </div>
+                    <div class="actions">
+                      <button class="btn-outline" data-act="view" title="Ver">👁️</button>
+                      <button class="btn-outline" data-act="edit" title="Editar">✏️</button>
+                      ${st==="scheduled" ? `<button class="btn-outline" data-act="start" title="Iniciar">▶️</button>` : ``}
+                      ${st!=="done" ? `<button class="btn-outline" data-act="done" title="Concluir">✔️</button>` : ``}
+                      <button class="btn-outline" data-act="del" title="Excluir">🗑️</button>
+                    </div>
+                  </div>
+                </article>
+              `;
+            }).join("");
             html += `
               <div class="card-sm" style="margin-bottom:8px;">
-                <div class="k-title" style="margin-bottom:6px;">${brFromYMD(ymd)}</div>
-                ${items}
+                <div class="k-title" style="margin-bottom:6px;">${brFromYMD(ymd)} <span class="badge" style="float:right;">${list.length} agend.</span></div>
+                ${cards || `<div class="muted">Sem agendamentos</div>`}
               </div>
             `;
           });
           wrap.innerHTML = html;
+
+          // Bind actions inside week view
+          wrap.querySelectorAll(".appt .btn-outline").forEach(btn => {
+            const card = btn.closest(".appt");
+            const id = card?.getAttribute("data-id");
+            const act = btn.getAttribute("data-act");
+            const agData = getAgenda();
+            const find = () => (agData.items || []).find(x => String(x.id) === String(id));
+            if (act === "view") {
+              btn.addEventListener("click", () => { const it = find(); it && showApptViewModal(it); });
+            } else if (act === "edit") {
+              btn.addEventListener("click", () => { const it = find(); it && showAgendamentoModal([], it); });
+            } else if (act === "start") {
+              btn.addEventListener("click", () => { const it = find(); if (!it) return; it.status = "in_progress"; it.started_at = new Date().toISOString(); setAgenda(agData); renderWeekView(); });
+            } else if (act === "done") {
+              btn.addEventListener("click", () => { const it = find(); if (!it) return; it.status = "done"; it.completed_at = new Date().toISOString(); setAgenda(agData); renderWeekView(); });
+            } else if (act === "del") {
+              btn.addEventListener("click", () => { if (!confirm("Excluir agendamento?")) return; const idx = (agData.items || []).findIndex(x => String(x.id) === String(id)); if (idx >= 0) { agData.items.splice(idx,1); setAgenda(agData); renderWeekView(); } });
+            }
+          });
         }
 
         function renderMonthView() {
@@ -2117,7 +2366,8 @@
 
         // Inicia na visão gravada ou Dia
         setView(localStorage.getItem(AG_VIEW_KEY) || "day");
-      }
+   _code  new </}
+  }
 
       // Interações específicas do Caixa (persistência local e cálculos)
       if (hash === "/caixa") {
