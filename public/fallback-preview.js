@@ -3096,13 +3096,89 @@
               return html;
             }
 
+            // Novo layout legível (cards por cliente com observação destacada)
+            function renderLegibleGroups(groups, isCompact) {
+              const entries = Object.entries(groups || {});
+              if (!entries.length) {
+                return `<div class="muted">Sem atendimentos para esta data</div>`;
+              }
+              const paySummary = (items) => {
+                const counts = { pix:0, cartao:0, dinheiro:0, mensal:0 };
+                items.forEach(it => { const p=(it.pagamento||"").toLowerCase(); if (p in counts) counts[p]++; });
+                const used = Object.entries(counts).filter(([,v])=>v>0);
+                const uniform = used.length<=1;
+                const label = used.map(([k,v])=>k.toUpperCase() + (v>1?` ${v}`:"")).join(" • ");
+                const unique = used.map(([k])=>k);
+                return { uniform, label, unique };
+              };
+
+              const padHead = isCompact ? "8px 10px" : "12px 14px";
+              const padBody = isCompact ? "8px" : "10px";
+              const padCell = isCompact ? "6px 8px" : "8px 10px";
+              const fsTitle = isCompact ? "15px" : "16px";
+              const rowGap = isCompact ? 4 : 6;
+
+              let html = "";
+              entries.forEach(([cliente, data]) => {
+                const items = (data?.items)||[];
+                if (!items.length) return;
+                const total = items.reduce((s,it)=>s+(Number(it.valor)||0),0);
+                const ps = paySummary(items);
+                const showPay = !ps.uniform;
+
+                const obsLine = (data?.obs?.length)
+                  ? `<div style="padding:${isCompact ? "6px 10px" : "8px 12px"}; background:#f8fafc; border-bottom:1px solid #e5e7eb; color:#334155; font-weight:700;">🧾 Observações: ${data.obs.map(String).join(" • ")}</div>`
+                  : "";
+
+                html += `
+                  <div style="border:2px solid #f1e6ee; border-radius:14px; overflow:hidden; background:#fff; margin:${isCompact ? "6px 0" : "8px 0"};">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#fff; padding:${padHead}; border-bottom:1px solid #f1e6ee;">
+                      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div style="width:4px; height:${isCompact ? "18px":"20px"}; background:#ec4899; border-radius:999px;"></div>
+                        <div style="font-weight:900; color:#9d174d; font-size:${fsTitle};">${cliente}</div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                          <span style="display:inline-flex;align-items:center;gap:6px;background:#fdf2f8;border:1px solid #f3c6d9;color:#9d174d;padding:${isCompact ? "3px 6px":"4px 8px"};border-radius:999px;font-weight:800;">Total ${money(total)}</span>
+                          <span style="display:inline-flex;align-items:center;gap:6px;background:#fdf2f8;border:1px solid #f3c6d9;color:#9d174d;padding:${isCompact ? "3px 6px":"4px 8px"};border-radius:999px;font-weight:800;">${items.length} serviços</span>
+                          <span style="display:inline-flex;align-items:center;gap:6px;background:#fdf2f8;border:1px solid #f3c6d9;color:#9d174d;padding:${isCompact ? "3px 6px":"4px 8px"};border-radius:999px;font-weight:800;">${ps.uniform ? (ps.unique[0]||"").toUpperCase() : ps.label}</span>
+                        </div>
+                      </div>
+                    </div>
+                    ${obsLine}
+                    <div style="padding:${padBody};">
+                      <table style="width:100%; border-collapse:separate; border-spacing:0 ${rowGap}px;">
+                        <thead>
+                          <tr>
+                            <th style="text-align:left; color:#9d174d; font-weight:800;">Serviço</th>
+                            <th style="text-align:left; color:#9d174d; font-weight:800;">Profissional</th>
+                            ${showPay ? `<th style="text-align:left; color:#9d174d; font-weight:800;">Pagamento</th>` : ``}
+                            <th style="text-align:right; color:#9d174d; font-weight:800;">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${items.map(it => `
+                            <tr>
+                              <td style="padding:${padCell}; border:1px solid #f1e6ee; background:#fff;">${it.servico || "-"}</td>
+                              <td style="padding:${padCell}; border:1px solid #f1e6ee; background:#fff;">${it.profissional || "-"}</td>
+                              ${showPay ? `<td style="padding:${padCell}; border:1px solid #f1e6ee; background:#fff;">${(it.pagamento||"").toUpperCase()}</td>` : ``}
+                              <td style="padding:${padCell}; border:1px solid #f1e6ee; background:#fff; text-align:right; font-weight:900;">${money(it.valor)}</td>
+                            </tr>
+                          `).join("")}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                `;
+              });
+              return html;
+            }
+
             // Build QR image for expense proof if qr_text exists
             function qrImgFor(text) {
               try {
                 if (!text) return "";
-                const qr = new window.QRious({ value: text, size: compact ? 105 : 120, level: "H", background: "white", foreground: "#111827" });
+                const qr = new window.QRious({ value: text, size: useCompact ? 105 : 120, level: "H", background: "white", foreground: "#111827" });
                 if (typeof qr.toDataURL === "function") return qr.toDataURL();
-if (qr.image && qr.image.src) return qr.image.src;
+                if (qr.image && qr.image.src) return qr.image.src;
                 if (qr.canvas && qr.canvas.toDataURL) return qr.canvas.toDataURL("image/png");
               } catch {}
               return "";
@@ -3184,7 +3260,7 @@ if (qr.image && qr.image.src) return qr.image.src;
                 `
                 : `<div class="muted">Sem despesas para esta data</div>`;
 
-            const gridClass = compact ? "client-grid grid2" : "client-grid";
+            const gridClass = useCompact ? "client-grid grid2" : "client-grid";
 
             const container = document.createElement("div");
             container.id = "report-capture";
