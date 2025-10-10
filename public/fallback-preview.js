@@ -659,6 +659,10 @@
               <option value="done">Concluído</option>
             </select>
           </span>
+          <span class="chip">
+            Buscar:
+            <input type="text" id="agQ" placeholder="Cliente ou telefone" style="border:1px solid #f3c6d9; border-radius:8px; padding:6px 8px; color:#a1125b; font-weight:800; min-width:180px;">
+          </span>
           <label class="chip"><input type="checkbox" id="agShowDone" style="margin-right:6px;"> Mostrar concluídos</label>
           <div style="margin-left:auto; display:flex; gap:6px;">
             <button class="btn-refresh" id="agPrev">← Dia anterior</button>
@@ -676,12 +680,12 @@
       </section>
 
       <section class="section" id="weekSection" style="display:none;">
-        <div class="title-row"><h2 style="margin:0;">Semana de <span id="agWeekTitle"></span></h2></div>
-        <div id="agWeek"></div>
-      </section>
-
+       <<div class="title-ro"><<h2 style="margin:0;">Semana d <<span id="agWeekTit"></</sp></</></</div>
+       <<div id="agWe"></</div>
+    </</sect_code
       <section class="section" id="monthSection" style="display:none;">
-        <div class="title-row"><h2 style="margin:0;">Mês de <span id="agMonthTitle"></span></h2></div>
+       <<div class="title-row">
+         <mh2 style="margin:0;">Mês d <gspan id="agMonthTitleh2></div>
         <div id="agMonth"></div>
       </section>
     `;
@@ -1897,7 +1901,9 @@
           modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; }, { once: true });
           document.addEventListener("keydown", (e) => { if (e.key === "Escape") modals.style.display = "none"; }, { once: true });
         }
-        function renderAgendaList() {
+        function syncToCaixa(appt) {
+          try {
+            const CAIXA_KEY = "bella
           const listEl = page.querySelector("#agList");
           if (!listEl) return;
 
@@ -2057,92 +2063,90 @@
           const days = [];
           for (let i = 0; i < 7; i++) { const di = new Date(start); di.setDate(start.getDate() + i); days.push(di); }
           titleEl && (titleEl.textContent = `${brFromYMD(toYMD_ag(days[0]))} a ${brFromYMD(toYMD_ag(days[6]))}`);
+
           const ag = getAgenda();
-          const money = (n) => (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
           const filter = (page.querySelector("#agStatus")?.value) || "all";
           const showDone = (page.querySelector("#agShowDone")?.checked) ?? true;
-          let html = "";
-          days.forEach(d => {
-            const ymd = toYMD_ag(d);
-            let list = (ag.items || []).filter(a => ymdFromISO(a.inicio) === ymd).sort((a,b)=> new Date(a.inicio) - new Date(b.inicio));
-            if (!showDone) list = list.filter(a => (a.status || "scheduled") !== "done");
-            if (filter !== "all") list = list.filter(a => (a.status || "scheduled") === filter);
-            const cards = list.map(a => {
-              const st = a.status || "scheduled";
-              const cls = st === "in_progress" ? "in-progress" : (st === "done" ? "scheduled" : "scheduled");
-              let pct = 0;
-              try {
-                if (st === "in_progress") {
-                  const start = new Date(a.inicio).getTime();
-                  const end = new Date(a.fim).getTime();
-                  pct = Math.max(0, Math.min(100, Math.round(((Date.now() - start)/(end - start))*100)));
-                }
-              } catch {}
-              const services = (a.servicos||[]).map(s => `${s.nome} — ${s.duracao_min}min — ${money(s.preco)}`).join(" • ");
-              return `
-                <article class="appt ${cls}" data-id="${a.id}">
-                  ${st==="in_progress" ? `<div class="progress-fill" style="width:${pct}%"></div>` : ``}
-                  <div class="inner">
-                    <div>
-                      <div class="header">
-                        <div class="ava">${(a.cliente || "?").slice(0,1).toUpperCase()}</div>
-                        <div style="flex:1;">
-                          <div class="name">${a.cliente || "-"}</div>
-                        </div>
-                        <span class="status ${st==="in_progress" ? "" : (st==="scheduled" ? "scheduled" : "scheduled")}">${st==="scheduled"?"Agendado":(st==="in_progress"?"Em Andamento":"Concluído")}</span>
-                      </div>
-                      <div class="row">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        ${fmtHM(a.inicio)} – ${fmtHM(a.fim)}
-                      </div>
-                      ${a.telefone ? `<div class="row"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92V21a1 1 0 0 1-1.09 1c-9.4-.5-17-8.1-17.5-17.5A1 1 0 0 1 4 3h4.09A1 1 0 0 1 9 3.91l1.2 3a1 1 0 0 1-.27 1.11L8.9 9.3a16 16 0 0 0 6.8 6.8l1.28-1.05a1 1 0 0 1 1.11-.27l3 1.2a1 1 0 0 1 .91.99z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> ${a.telefone}</div>` : ``}
-                      <div class="section-title">Serviços:</div>
-                      <div class="chip-box">
-                        <div class="chip-sub">🧾 ${services || "-"}</div>
-                        <strong>${money(a.total || 0)}</strong>
-                      </div>
-                    </div>
-                    <div class="actions">
-                      <button class="btn-outline" data-act="view" title="Ver">👁️</button>
-                      <button class="btn-outline" data-act="edit" title="Editar">✏️</button>
-                      ${st==="scheduled" ? `<button class="btn-outline" data-act="start" title="Iniciar">▶️</button>` : ``}
-                      ${st!=="done" ? `<button class="btn-outline" data-act="done" title="Concluir">✔️</button>` : ``}
-                      <button class="btn-outline" data-act="del" title="Excluir">🗑️</button>
-                    </div>
-                  </div>
-                </article>
-              `;
-            }).join("");
-            html += `
-              <div class="card-sm" style="margin-bottom:8px;">
-                <div class="k-title" style="margin-bottom:6px;">${brFromYMD(ymd)} <span class="badge" style="float:right;">${list.length} agend.</span></div>
-                ${cards || `<div class="muted">Sem agendamentos</div>`}
+          const qv = (page.querySelector("#agQ")?.value || localStorage.getItem("bella_agenda_q") || "").trim().toLowerCase();
+          const qd = qv.replace(/\D+/g,"");
+
+          const startHour = 8, endHour = 20;
+          const pxPerMin = 1; // 1px por minuto
+          const totalMin = (endHour - startHour) * 60;
+          const colHeight = totalMin * pxPerMin;
+
+          function filt(list) {
+            let arr = list.slice();
+            if (!showDone) arr = arr.filter(a => (a.status || "scheduled") !== "done");
+            if (filter !== "all") arr = arr.filter(a => (a.status || "scheduled") === filter);
+            if (qv) {
+              arr = arr.filter(a => {
+                const name = String(a.cliente || "").toLowerCase();
+                const tel = String(a.telefone || "");
+                return name.includes(qv) || (qd && tel.replace(/\D+/g,"").includes(qd));
+              });
+            }
+            return arr;
+          }
+          function durMin(a) {
+            if (a.duracao_min) return Number(a.duracao_min) || 0;
+            try { return Math.max(15, Math.floor((new Date(a.fim) - new Date(a.inicio)) / 60000)); } catch { return 60; }
+          }
+          function money(n){ return (Number(n)||0).toLocaleString("pt-BR",{style:"currency", currency:"BRL"}); }
+
+          let html = `
+            <div style="display:grid;grid-template-columns:60px repeat(7,1fr);gap:6px;">
+              <div></div>
+              ${days.map(d=>`<div style="text-align:center;font-weight:900;color:#7a0f3f;">${brFromYMD(toYMD_ag(d))}</div>`).join("")}
+              <div style="border-right:1px solid #f1e6ee;">
+                <div style="position:relative;height:${colHeight}px;">
+                  ${Array.from({length: endHour-startHour+1}).map((_,i)=> {
+                    const h = startHour + i;
+                    return `<div style="position:absolute;top:${(h-startHour)*60*pxPerMin-8}px;left:0;right:6px;color:#64748b;font-weight:700;font-size:12px;">${String(h).padStart(2,"0")}:00</div>`;
+                  }).join("")}
+                </div>
               </div>
-            `;
-          });
+              ${days.map(d=>{
+                const ymd = toYMD_ag(d);
+                const list = filt((ag.items || []).filter(a=> ymdFromISO(a.inicio) === ymd).sort((a,b)=> new Date(a.inicio) - new Date(b.inicio)));
+                const blocks = list.map(a=>{
+                  const start = new Date(a.inicio);
+                  const mFromStart = start.getHours()*60 + start.getMinutes() - startHour*60;
+                  const top = Math.max(0, mFromStart * pxPerMin);
+                  const height = Math.max(24, durMin(a) * pxPerMin);
+                  const st = a.status || "scheduled";
+                  const color = st==="in_progress" ? "#f59e0b" : (st==="done" ? "#10b981" : "#2563eb");
+                  return `
+                    <div class="w-appt" data-id="${a.id}"
+                         style="position:absolute;left:6px;right:6px;top:${top}px;height:${height}px;border:2px solid ${color};border-radius:10px;background:#fff;box-shadow:0 4px 14px rgba(16,24,40,.06);padding:6px;overflow:hidden;">
+                      <div style="display:flex;justify-content:space-between;gap:6px;">
+                        <div style="font-weight:900;color:#7a0f3f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.cliente || "-"}</div>
+                        <div style="color:#334155;font-weight:800;">${money(a.total || 0)}</div>
+                      </div>
+                      <div style="color:#64748b;font-weight:700;font-size:12px;">${fmtHM(a.inicio)}–${fmtHM(a.fim)}</div>
+                    </div>`;
+                }).join("");
+                return `
+                  <div style="position:relative;height:${colHeight}px;border:1px solid #f1e6ee;border-radius:12px;background:linear-gradient(180deg,#fff,#fff);">
+                    ${Array.from({length: endHour-startHour+1}).map((_,i)=> {
+                      const y = (i*60*pxPerMin);
+                      return `<div style="position:absolute;left:0;right:0;top:${y}px;height:1px;background:#f1e6ee;"></div>`;
+                    }).join("")}
+                    ${blocks || `<div style="position:absolute;left:0;right:0;top:10px;color:#9ca3af;font-weight:700;font-size:12px;text-align:center;">Sem agendamentos</div>`}
+                  </div>`;
+              }).join("")}
+            </div>
+          `;
           wrap.innerHTML = html;
 
-          // Bind actions inside week view
-          wrap.querySelectorAll(".appt .btn-outline").forEach(btn => {
-            const card = btn.closest(".appt");
-            const id = card?.getAttribute("data-id");
-            const act = btn.getAttribute("data-act");
-            const agData = getAgenda();
-            const find = () => (agData.items || []).find(x => String(x.id) === String(id));
-            if (act === "view") {
-              btn.addEventListener("click", () => { const it = find(); it && showApptViewModal(it); });
-            } else if (act === "edit") {
-              btn.addEventListener("click", () => { const it = find(); it && showAgendamentoModal([], it); });
-            } else if (act === "start") {
-              btn.addEventListener("click", () => { const it = find(); if (!it) return; it.status = "in_progress"; it.started_at = new Date().toISOString(); setAgenda(agData); renderWeekView(); });
-            } else if (act === "done") {
-              btn.addEventListener("click", () => { const it = find(); if (!it) return; it.status = "done"; it.completed_at = new Date().toISOString(); setAgenda(agData); renderWeekView(); });
-            } else if (act === "del") {
-              btn.addEventListener("click", () => { if (!confirm("Excluir agendamento?")) return; const idx = (agData.items || []).findIndex(x => String(x.id) === String(id)); if (idx >= 0) { agData.items.splice(idx,1); setAgenda(agData); renderWeekView(); } });
-            }
+          wrap.querySelectorAll(".w-appt").forEach(el => {
+            const id = el.getAttribute("data-id");
+            el.addEventListener("click", () => {
+              const agData = getAgenda();
+              const it = (agData.items || []).find(x => String(x.id) === String(id));
+              if (it) showApptViewModal(it);
+            });
           });
-        }
-
         function renderMonthView() {
           const wrap = page.querySelector("#agMonth");
           const titleEl = page.querySelector("#agMonthTitle");
@@ -2154,8 +2158,8 @@
           const offset = startDay === 0 ? 6 : (startDay - 1); // segunda
           const gridStart = new Date(startMonth); gridStart.setDate(startMonth.getDate() - offset);
           const ag = getAgenda();
-          const todayYMD = toYMD_ag(new Date());
-          let html = `<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">`;
+          const filter = (page.querySelector("#agStatus")?.value) || "all";
+          const showDone = (page.query          let html = `<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">`;
           for (let i = 0; i < 42; i++) {
             const d = new Date(gridStart); d.setDate(gridStart.getDate() + i);
             const ymd = toYMD_ag(d);
@@ -2209,7 +2213,9 @@
           const ag = getAgenda();
           let all = (ag.items || []).filter(it => ymdFromISO(it.inicio) === agSelected);
           if (!showDone) all = all.filter(it => (it.status || "scheduled") !== "done");
-
+          const qv = (page.querySelector("#agQ")?.value || localStorage.getItem("bella_agenda_q") || "").trim().toLowerCase();
+          if (qv) {
+            const qd = qv.replace
           // Atualiza KPIs com base no filtro atual
           updateKpisForDay(all);
 
@@ -2315,8 +2321,11 @@
         // Bind dos controles principais (uma vez)
         const dateInput_ag = page.querySelector("#agDateInput");
         const statusSel_ag = page.querySelector("#agStatus");
+        const qInput_ag = page.querySelector("#agQ");
         const prevBtn_ag = page.querySelector("#agPrev");
         const nextBtn_ag = page.querySelector("#agNext");
+        const prevMonthBtn = page.querySelector("#agPrevMonth");
+        const nextMonthBtn = page.querySelector("#agNextMonth");
 
         if (dateInput_ag && !dateInput_ag.__bound) {
           dateInput_ag.__bound = true;
@@ -2333,6 +2342,19 @@
         if (statusSel_ag && !statusSel_ag.__bound) {
           statusSel_ag.__bound = true;
           statusSel_ag.addEventListener("change", () => {
+            const vm = localStorage.getItem(AG_VIEW_KEY) || "day";
+            if (vm === "day") renderAgendaList();
+            else if (vm === "week") renderWeekView();
+            else renderMonthView();
+          });
+        }
+        if (qInput_ag && !qInput_ag.__bound) {
+          qInput_ag.__bound = true;
+          const savedQ = localStorage.getItem("bella_agenda_q") || "";
+          if (!qInput_ag.value) qInput_ag.value = savedQ;
+          qInput_ag.addEventListener("input", (e) => {
+            const v = (e.target.value || "").trim();
+            localStorage.setItem("bella_agenda_q", v);
             const vm = localStorage.getItem(AG_VIEW_KEY) || "day";
             if (vm === "day") renderAgendaList();
             else if (vm === "week") renderWeekView();
@@ -2361,6 +2383,28 @@
             const di = page.querySelector("#agDateInput"); if (di) di.value = agSelected;
             const vm = localStorage.getItem(AG_VIEW_KEY) || "day";
             if (vm === "day") renderAgendaList(); else renderWeekView();
+          });
+        }
+        if (prevMonthBtn && !prevMonthBtn.__bound) {
+          prevMonthBtn.__bound = true;
+          prevMonthBtn.addEventListener("click", () => {
+            const d = new Date(agSelected + "T00:00:00");
+            d.setMonth(d.getMonth() - 1);
+            d.setDate(1);
+            agSelected = toYMD_ag(d);
+            localStorage.setItem(AG_SEL_KEY, agSelected);
+            renderMonthView();
+          });
+        }
+        if (nextMonthBtn && !nextMonthBtn.__bound) {
+          nextMonthBtn.__bound = true;
+          nextMonthBtn.addEventListener("click", () => {
+            const d = new Date(agSelected + "T00:00:00");
+            d.setMonth(d.getMonth() + 1);
+            d.setDate(1);
+            agSelected = toYMD_ag(d);
+            localStorage.setItem(AG_SEL_KEY, agSelected);
+            renderMonthView();
           });
         }
 
