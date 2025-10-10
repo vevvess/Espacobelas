@@ -1451,22 +1451,21 @@
             row.querySelector(".del").addEventListener("click", () => { row.remove(); recalc(); });
             [$m("#agIni"), ipP, ipD].forEach(inp => inp.addEventListener("input", recalc));
             $m("#agRows").appendChild(row);
-            fillBySvc();
-            // If editing existing row data, try to match by name and override values
             if (rowData) {
               try {
                 const match = services.find(s => (s.nome || "").toLowerCase() === String(rowData.nome || "").toLowerCase());
                 if (match) {
                   sel.value = match.id;
-                  fillBySvc();
                 }
+                fillBySvc();
                 if (typeof rowData.preco !== "undefined") ipP.value = String(rowData.preco);
                 if (typeof rowData.duracao_min !== "undefined") ipD.value = String(rowData.duracao_min);
                 recalc();
               } catch {}
+            } else {
+              fillBySvc();
             }
           }
-
           function recalc() {
             const start = parseDT($m("#agIni").value);
             const rows = Array.from($m("#agRows").children);
@@ -1512,18 +1511,38 @@
             const fim = addMinutes(ini, dur);
 
             const ag = getAgenda();
-            if (existingAppt) {
-              const idx = (ag.items || []).findIndex(x => x.id === existingAppt.id);
-              if (idx >= 0) {
-                const keep = ag.items[idx] || {};
-                ag.items[idx] = {
-                  ...keep,
-                  cliente: nome,
-                  telefone: ($m        created_at: new Date().toISOString(),
-            });
+            if (existingAppt && existingAppt.id) {
+              const idx = (ag.items || []).findIndex(x => String(x.id) === String(existingAppt.id));
+              const upd = {
+                ...existingAppt,
+                cliente: nome,
+                telefone: ($m("#agTel").value || "").trim(),
+                inicio: ini.toISOString(),
+                fim: fim.toISOString(),
+                servicos: rows,
+                total,
+                duracao_min: dur,
+                updated_at: new Date().toISOString(),
+              };
+              if (idx >= 0) ag.items[idx] = upd;
+              else ag.items.push(upd);
+            } else {
+              ag.items.push({
+                id: "ag-" + Date.now(),
+                cliente: nome,
+                telefone: ($m("#agTel").value || "").trim(),
+                inicio: ini.toISOString(),
+                fim: fim.toISOString(),
+                servicos: rows,
+                total,
+                duracao_min: dur,
+                status: "scheduled",
+                created_at: new Date().toISOString(),
+              });
+            }
             setAgenda(ag);
             modals.style.display = "none";
-            alert("Agendamento salvo (preview local).");
+            if (typeof renderAgendaList === "function") renderAgendaList();
           });
 
           modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
@@ -1543,6 +1562,192 @@
           const id = p.get("addservice");
           if (id) showAgendamentoModal([id]);
         } catch {}
+
+        // ========= Agenda funcional =========
+        const AG_SEL_KEY = "bella_agenda_selected_date";
+        const todayYMD_ag = (() => { const t = new Date(); const y=t.getFullYear(); const m=String(t.getMonth()+1).padStart(2,"0"); const d=String(t.getDate()).padStart(2,"0"); return `${y}-${m}-${d}`; })();
+        let agSelected = localStorage.getItem(AG_SEL_KEY) || todayYMD_ag;
+
+        function ymdFromISO(iso) { try { const d = new Date(iso); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const dd=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${dd}`; } catch { return ""; } }
+        function brFromYMD(ymd) { const [y,m,d] = String(ymd||"").split("-"); return `${d}/${m}/${y}`; }
+        function fmtHM(iso) { try { const d = new Date(iso); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; } catch { return ""; } }
+
+        function updateKpisForDay(list) {
+          const items = page.querySelectorAll(".kpi-mini .item");
+          if (!items || !items.length) return;
+          const total = list.length;
+          const scheduled = list.filter(it => (it.status || "scheduled") === "scheduled").length;
+          const inProg = list.filter(it => (it.status || "scheduled") === "in_progress").length;
+          const done = list.filter(it => (it.status || "scheduled") === "done").length;
+          try {
+            items[0].querySelector(".title").textContent = `Hoje (${brFromYMD(agSelected)})`;
+            items[0].querySelector(".val").textContent = String(total);
+            items[1].querySelector(".val").textContent = String(scheduled);
+            items[2].querySelector(".val").textContent = String(inProg);
+            items[3].querySelector(".val").textContent = String(done);
+          } catch {}
+        }
+
+        function showApptViewModal(appt) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const money = (n) => (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+          const svs = (appt.servicos||[]).map(s=>`• ${s.nome} — ${s.duracao_min}min — ${money(s.preco)}`).join("<br>");
+          modal.innerHTML = `
+            <h3>Agendamento</h3>
+            <div class="field"><label>Cliente</label><input value="${appt.cliente || "-"}" readonly></div>
+            <div class="field"><label>Telefone</label><input value="${appt.telefone || ""}" readonly></div>
+            <div class="field"><label>Início</label><input value="${new Date(appt.inicio).toLocaleString("pt-BR")}" readonly></div>
+            <div class="field"><label>Fim</label><input value="${new Date(appt.fim).toLocaleString("pt-BR")}" readonly></div>
+            <div class="field"><label>Serviços</label><div class="muted">${svs || "-"}</div></div>
+            <div class="field"><label>Total</label><input value="${money(appt.total)}" readonly></div>
+            <div style="display:flex; justify-content:flex-end;"><button class="btn" data-close>Fechar</button></div>
+          `;
+          modals.style.display = "flex";
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; }, { once: true });
+          document.addEventListener("keydown", (e) => { if (e.key === "Escape") modals.style.display = "none"; }, { once: true });
+        }
+        function renderAgendaList() {
+          const listEl = page.querySelector("#agList");
+          if (!listEl) return;
+
+          // bind controls once
+          const dayTitle = page.querySelector("#agDayTitle");
+          if (dayTitle) dayTitle.textContent = brFromYMD(agSelected);
+
+          const dateInput = page.querySelector("#agDateInput");
+          if (dateInput && !dateInput.__agBound) {
+            dateInput.__agBound = true;
+            dateInput.value = agSelected;
+            dateInput.addEventListener("change", (e) => {
+              agSelected = e.target.value || agSelected;
+              localStorage.setItem(AG_SEL_KEY, agSelected);
+              renderAgendaList();
+            });
+          }
+          const prevBtn = page.querySelector("#agPrev");
+          if (prevBtn && !prevBtn.__agBound) {
+            prevBtn.__agBound = true;
+            prevBtn.addEventListener("click", () => {
+              const d = new Date(agSelected + "T00:00:00");
+              d.setDate(d.getDate() - 1);
+              const ymd = d.toISOString().slice(0,10);
+              agSelected = ymd;
+              localStorage.setItem(AG_SEL_KEY, ymd);
+              const di = page.querySelector("#agDateInput"); if (di) di.value = ymd;
+              renderAgendaList();
+            });
+          }
+          const nextBtn = page.querySelector("#agNext");
+          if (nextBtn && !nextBtn.__agBound) {
+            nextBtn.__agBound = true;
+            nextBtn.addEventListener("click", () => {
+              const d = new Date(agSelected + "T00:00:00");
+              d.setDate(d.getDate() + 1);
+              const ymd = d.toISOString().slice(0,10);
+              agSelected = ymd;
+              localStorage.setItem(AG_SEL_KEY, ymd);
+              const di = page.querySelector("#agDateInput"); if (di) di.value = ymd;
+              renderAgendaList();
+            });
+          }
+          const statusSel = page.querySelector("#agStatus");
+          if (statusSel && !statusSel.__agBound) {
+            statusSel.__agBound = true;
+            statusSel.addEventListener("change", () => renderAgendaList());
+          }
+
+          const ag = getAgenda();
+          const all = (ag.items || []).filter(it => ymdFromISO(it.inicio) === agSelected);
+          updateKpisForDay(all);
+
+          let list = all.slice().sort((a,b) => new Date(a.inicio) - new Date(b.inicio));
+          const stFilter = (statusSel && statusSel.value) || "all";
+          if (stFilter !== "all") list = list.filter(it => (it.status || "scheduled") === stFilter);
+
+          const money = (n) => (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+
+          listEl.innerHTML = list.map(a => {
+            const st = a.status || "scheduled";
+            const cls = st === "in_progress" ? "in-progress" : (st === "done" ? "scheduled" : "scheduled");
+            let pct = 0;
+            try {
+              if (st === "in_progress") {
+                const start = new Date(a.inicio).getTime();
+                const end = new Date(a.fim).getTime();
+                pct = Math.max(0, Math.min(100, Math.round(((Date.now() - start)/(end - start))*100)));
+              }
+            } catch {}
+            const services = (a.servicos||[]).map(s => `${s.nome} — ${s.duracao_min}min — ${money(s.preco)}`).join(" • ");
+            return `
+              <article class="appt ${cls}" data-id="${a.id}">
+                ${st==="in_progress" ? `<div class="progress-fill" style="width:${pct}%"></div>` : ``}
+                <div class="inner">
+                  <div>
+                    <div class="header">
+                      <div class="ava">${(a.cliente || "?").slice(0,1).toUpperCase()}</div>
+                      <div style="flex:1;">
+                        <div class="name">${a.cliente || "-"}</div>
+                      </div>
+                      <span class="status ${st==="in_progress" ? "" : (st==="scheduled" ? "scheduled" : "scheduled")}">${st==="scheduled"?"Agendado":(st==="in_progress"?"Em Andamento":"Concluído")}</span>
+                    </div>
+                    <div class="row">
+                      <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      ${fmtHM(a.inicio)} – ${fmtHM(a.fim)}
+                    </div>
+                    ${a.telefone ? `<div class="row"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92V21a1 1 0 0 1-1.09 1c-9.4-.5-17-8.1-17.5-17.5A1 1 0 0 1 4 3h4.09A1 1 0 0 1 9 3.91l1.2 3a1 1 0 0 1-.27 1.11L8.9 9.3a16 16 0 0 0 6.8 6.8l1.28-1.05a1 1 0 0 1 1.11-.27l3 1.2a1 1 0 0 1 .91.99z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> ${a.telefone}</div>` : ``}
+                    <div class="section-title">Serviços:</div>
+                    <div class="chip-box">
+                      <div class="chip-sub">🧾 ${services || "-"}</div>
+                      <strong>${money(a.total || 0)}</strong>
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <button class="btn-outline" data-act="view" title="Ver">👁️</button>
+                    <button class="btn-outline" data-act="edit" title="Editar">✏️</button>
+                    ${st==="scheduled" ? `<button class="btn-outline" data-act="start" title="Iniciar">▶️</button>` : ``}
+                    ${st!=="done" ? `<button class="btn-outline" data-act="done" title="Concluir">✔️</button>` : ``}
+                    <button class="btn-outline" data-act="del" title="Excluir">🗑️</button>
+                  </div>
+                </div>
+              </article>
+            `;
+          }).join("") || `<div class="empty">Nenhum agendamento para este dia</div>`;
+
+          listEl.querySelectorAll(".appt .btn-outline").forEach(btn => {
+            const card = btn.closest(".appt");
+            const id = card?.getAttribute("data-id");
+            const act = btn.getAttribute("data-act");
+            const agData = getAgenda();
+            const find = () => (agData.items || []).find(x => String(x.id) === String(id));
+            if (act === "view") {
+              btn.addEventListener("click", () => { const it = find(); it && showApptViewModal(it); });
+            } else if (act === "edit") {
+              btn.addEventListener("click", () => { const it = find(); it && showAgendamentoModal([], it); });
+            } else if (act === "start") {
+              btn.addEventListener("click", () => {
+                const it = find(); if (!it) return;
+                it.status = "in_progress"; it.started_at = new Date().toISOString();
+                setAgenda(agData); renderAgendaList();
+              });
+            } else if (act === "done") {
+              btn.addEventListener("click", () => {
+                const it = find(); if (!it) return;
+                it.status = "done"; it.completed_at = new Date().toISOString();
+                setAgenda(agData); renderAgendaList();
+              });
+            } else if (act === "del") {
+              btn.addEventListener("click", () => {
+                if (!confirm("Excluir agendamento?")) return;
+                const idx = (agData.items || []).findIndex(x => String(x.id) === String(id));
+                if (idx >= 0) { agData.items.splice(idx,1); setAgenda(agData); renderAgendaList(); }
+              });
+            }
+          });
+        }
+
+        // Primeira renderização da lista do dia selecionado
+        renderAgendaList();
       }
 
       // Interações específicas do Caixa (persistência local e cálculos)
