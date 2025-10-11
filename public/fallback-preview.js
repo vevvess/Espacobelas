@@ -639,10 +639,21 @@
     `;
 
     const Usuarios = () => `
-      <div class="hero"><h1>Usuários</h1><p>Times, permissões e perfis</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Weslley Raphael</strong><div class="muted">Administrador</div></div><span class="pill">Ativo</span></div>
-        <div class="row"><div><strong>Claudia</strong><div class="muted">Staff</div></div><span class="pill">Ativa</span></div>
+      <div class="hero"><h1>Usuários</h1><p>Funcionários (usados na Agenda e preferências dos Clientes)</p></div>
+      <section class="section">
+        <div class="list">
+          <div class="row" style="justify-content:space-between;gap:8px;">
+            <div>
+              <strong>Funcionários</strong>
+              <div class="muted">Cadastre e edite usuários. Cada usuário tem uma cor usada nos cartões da Agenda.</div>
+            </div>
+            <button class="btn-outline" id="btnNewUser">+ Novo Usuário</button>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Lista de usuários</h2>
+        <div class="list" id="usersList"></div>
       </section>
     `;
 
