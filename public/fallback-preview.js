@@ -3768,9 +3768,9 @@
             const brDate = fmtBR(selectedDate);
             const genStr = new Date().toLocaleString("pt-BR");
             const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-            const compact = localStorage.getItem("bella_export_compact") === "1";
-            const legible = localStorage.getItem("bella_export_legible") === "1";
-            const legibleCompact = localStorage.getItem("bella_export_legible_compact") === "1";
+            const compact = (document.getElementById("cxExportCompact")?.checked ?? (localStorage.getItem("bella_export_compact") === "1"));
+            const legible = (document.getElementById("cxExportLegible")?.checked ?? (localStorage.getItem("bella_export_legible") === "1"));
+            const legibleCompact = (document.getElementById("cxExportLegibleCompact")?.checked ?? (localStorage.getItem("bella_export_legible_compact") === "1"));
             const useCompact = legible ? legibleCompact : compact;
             const legendHTML = legible ? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 8px;">
               <span style="display:inline-flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;padding:4px 8px;border-radius:999px;font-weight:800;">PIX</span>
@@ -4094,7 +4094,7 @@
                 td.num { text-align:right; font-weight:900; }
                 .muted { color:#64748b; }
                 .sm { font-size:12px; }
-                .foot { margin-top: 8px; color:#64748b; font-size:12px; }
+                .mode-badge { displaypx; color:#64748b; font-size:12px; }
                 .r-client-cell { background:#fff7fb; border-width:2px; border-color:#f1e6ee; min-width:180px; vertical-align:top; }
                 .r-client-cell .nm { font-weight:900; color:#9d174d; }
                 .qrimg { width:${compact ? 105 : 120}px; height:${compact ? 105 : 120}px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
