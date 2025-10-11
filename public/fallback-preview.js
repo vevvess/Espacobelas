@@ -1444,7 +1444,7 @@
         const AG_SEL_KEY = "bella_agenda_selected_date";
         const AG_VIEW_KEY = "bella_agenda_view";
         let agView = localStorage.getItem(AG_VIEW_KEY) || "list";
-        function ymdFromDate(_codeDate(d) {
+        function ymdFromDate(d) {
           const y = d.getFullYear();
           const m = String(d.getMonth()+1).padStart(2,"0");
           const day = String(d.getDate()).padStart(2,"0");
@@ -1855,6 +1855,9 @@
 
           modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
         }
+
+        // Renderiza UI dinâmica da Agenda (substitui o mock)
+        renderAgendaUI();
 
         // Intercepta o botão padrão e abre o modal integrado
         page.querySelectorAll("[data-open='agendamento']").forEach((btn) => {
