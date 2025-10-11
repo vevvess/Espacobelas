@@ -1638,41 +1638,54 @@
             const st = statusFor(it);
             const start = new Date(it.inicio);
             const end = new Date(it.fim);
-            const time = `${fmtHourMin(start)}–${fmtHourMin(end)}`;
-            const svcs = (it.servicos||[]).map(s => `${s.nome}${s.profissional ? ' • ' + s.profissional : ''} (${moneyBR2(s.preco)})`).join(" • ");
+            const dateStr = `${start.toLocaleDateString("pt-BR")}, ${fmtHourMin(start)}`;
             const workers = Array.from(new Set((it.servicos||[]).map(s => s.profissional).filter(Boolean)));
             const total = moneyBR2(it.total || 0);
             const tel = onlyDigitsAg(it.telefone || "");
-            const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : ""));
-            const stLabel = st === "done" ? "Concluído" : st === "canceled" ? "Cancelado" : st === "in-progress" ? "Em andamento" : "Agendado";
+            const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : "scheduled"));
+            const stLabel = st === "done" ? "Concluído" : st === "canceled" ? "Cancelado" : st === "in-progress" ? "Em Andamento" : "Agendado";
+            const svcLines = (it.servicos||[]).map((s) => {
+              const price = moneyBR2(s.preco);
+              const pro = s.profissional ? `<span class="svc-pro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>${s.profissional}</span>` : "";
+              return `<div class="svc-line"><div><span class="svc-name">${s.nome || "-"}</span>${pro}</div><div>${price}</div></div>`;
+            }).join("");
             return `
               <article class="appt ${cls}" data-id="${it.id}">
-                ${st === "in-progress" ? `<div class="progress-fill" style="width:100%"></div>` : ``}
                 <div class="inner">
                   <div>
                     <div class="header">
-                      <div class="ava">${(it.cliente||"?").slice(0,1).toUpperCase()}</div>
-                      <div style="flex:1;">
+                      <div class="left-head">
+                        <div class="ava">${(it.cliente||"?").slice(0,1).toUpperCase()}</div>
                         <div class="name">${it.cliente || "-"}</div>
                       </div>
                       <span class="status ${st === "scheduled" ? "scheduled" : ""}">${stLabel}</span>
                     </div>
-                    <div class="row">⏰ ${time}</div>
-                    ${tel ? `<div class="row">📞 (${tel.slice(0,2)}) ${tel.slice(2)}</div>` : ``}
-                    <div class="section-title">Serviços</div>
-                    <div class="chip-box">
-                      <div class="chip-sub">${svcs || "-"}</div>
-                      <strong>${total}</strong>
+                    <div class="pill">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.5"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      ${dateStr}
                     </div>
-                    <div class="section-title">Funcionários</div>
+                    ${tel ? `<div class="pill"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> (${tel.slice(0,2)}) ${tel.slice(2)}</div>` : ``}
+                    <div class="label">Serviços:</div>
+                    <div class="svc-pane">
+                      ${svcLines || `<div class="muted">—</div>`}
+                    </div>
+                    <div class="label">Funcionários:</div>
                     <div>${workers.length ? workers.map(w => `<span class="worker-pill">${w}</span>`).join(" ") : `<span class="muted">—</span>`}</div>
+                    <div class="total-row"><div class="t">Valor Total:</div><div class="v">${total}</div></div>
                   </div>
-                  <div class="actions">
-                    <button class="btn-outline" data-act="edit" title="Editar">✎</button>
-                    ${st !== "done" ? `<button class="btn-outline" data-act="done" title="Concluir">✓</button>` : ``}
-                    ${st !== "canceled" && st !== "done" ? `<button class="btn-outline" data-act="cancel" title="Cancelar">×</button>` : ``}
-                    <button class="btn-outline" data-act="del" title="Excluir">🗑</button>
-                    ${tel ? `<button class="btn-outline" data-act="wa" title="WhatsApp">WA</button>` : ``}
+                  <div class="action-rail">
+                    <button class="abtn" data-act="view" title="Visualizar">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+                    </button>
+                    <button class="abtn" data-act="edit" title="Editar">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="currentColor" stroke-width="1.6"/></svg>
+                    </button>
+                    ${st !== "done" ? `<button class="abtn success" data-act="done" title="Concluir">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>` : ``}
+                    <button class="abtn danger" data-act="del" title="Excluir">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    </button>
                   </div>
                 </div>
               </article>
@@ -1694,21 +1707,33 @@
               .kpi-mini .title { color:#a1125b; font-weight:900; }
               .kpi-mini .val { font-size:22px; font-weight:900; color:#a1125b; }
               .list { margin-top:10px; }
-              .appt { position:relative; border-radius:20px; padding:14px; background:#fff; box-shadow: var(--shadow); border:2px solid #f3c6d9; margin-bottom:16px; overflow:hidden; }
-              .appt.in-progress { border-color:#f59e0b; background:#fff7ed; }
-              .appt.scheduled { border-color:#10b981; background:#ecfdf5; }
-              .appt.canceled { border-color:#fecaca; background:#fee2e2; }
-              .appt .inner { position:relative; display:grid; grid-template-columns: 1fr auto; gap: 10px; }
-              .appt .header { display:flex; align-items:center; gap:12px; }
-              .appt .ava { width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
-              .appt .name { font-weight:900; color:#7a0f3f; font-size:20px; }
-              .appt .status { background:#fef3c7; color:#a16207; padding:6px 10px; border-radius:999px; font-weight:900; border:1px solid #fde68a; }
-              .appt .status.scheduled { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
-              .appt .row { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
-              .appt .section-title { color:#a1125b; font-weight:900; margin: 8px 0 6px; }
+              .appt { position:relative; border-radius:24px; padding:14px; box-shadow: var(--shadow); border:3px solid #f3c6d9; margin-bottom:16px; overflow:hidden; background: linear-gradient(180deg,#f7fee7,#ffffff); }
+              .appt.in-progress { border-color:#f59e0b; background: linear-gradient(180deg,#fef9c3,#fff7ed); }
+              .appt.scheduled { border-color:#059669; background:#ecfdf5; }
+              .appt.canceled { border-color:#b91c1c; background:#fee2e2; }
+              .appt .inner { position:relative; display:grid; grid-template-columns: 1fr 84px; gap: 12px; }
+              .appt .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+              .appt .left-head { display:flex; align-items:center; gap:12px; }
+              .appt .ava { width:56px; height:56px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; font-size:20px; }
+              .appt .name { font-weight:900; color:#7a0f3f; font-size:22px; line-height:1.05; }
+              .appt .status { background:#fde68a; color:#7c2d12; padding:10px 14px; border-radius:18px; font-weight:900; border:1px solid #f59e0b; }
+              .appt.scheduled .status { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+              .appt .pill { display:flex; align-items:center; justify-content:center; gap:8px; background:#fff; border:1px solid #e5e7eb; color:#a1125b; font-weight:800; padding:12px; border-radius:16px; margin-top:10px; }
+              .appt .label { color:#7a0f3f; font-weight:900; margin: 10px 0 6px; }
+              .appt .svc-pane { background:#eef2ff; border:1px solid #c7d2fe; border-radius:16px; padding:10px; }
+              .appt.scheduled .svc-pane { background:#d1fae5; border-color:#a7f3d0; }
+              .appt.in-progress .svc-pane { background:#dbeafe; border-color:#93c5fd; }
+              .appt .svc-line { display:flex; align-items:center; justify-content:space-between; gap:10px; font-weight:900; color:#7a0f3f; }
+              .appt .svc-line .svc-name { color:#7a0f3f; font-weight:900; }
+              .appt .svc-line .svc-pro { color:#475569; font-weight:800; display:inline-flex; align-items:center; gap:6px; margin-left:10px; }
+              .appt .total-row { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:12px; display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
+              .appt .total-row .v { color:#16a34a; font-weight:900; }
+              .appt .action-rail { display:grid; gap:10px; background:#fff7fb; border-left:1px solid #f3c6d9; padding:10px; border-radius:16px; }
+              .appt .action-rail .abtn { width:48px; height:48px; display:grid; place-items:center; border-radius:14px; background:#fff; border:1px solid #f1e6ee; color:#a1125b; box-shadow: 0 1px 4px rgba(173,24,94,.08); }
+              .appt .action-rail .abtn.danger { color:#b91c1c; border-color:#fecaca; }
+              .appt .action-rail .abtn.success { color:#065f46; border-color:#a7f3d0; }
               .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
               .worker-pill { display:inline-flex; align-items:center; gap:8px; background:#def7ec; border:1px solid #a7f3d0; color:#065f46; padding:8px 10px; border-radius:14px; font-weight:800; margin-right:6px; }
-              .actions { display:grid; gap:10px; color:#a1125b; }
             </style>
 
             <div class="ag-hero">
