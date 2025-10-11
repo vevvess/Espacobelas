@@ -890,10 +890,11 @@ export default function Caixa() {
                       </span>
                     )}
                     {movimento.tipo === "saida" && (movimento.qrCodeText || movimento.qrImage) && (
-                     < span className="bg-green-100 text-green-700 px-2 py-1 rounded">
+                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded">
                         QR anexado
-                    </  span>
-                  _code                  </div>
+                      </span>
+                    )}
+                  </div>
                   {movimento.observacoes && (
                     <p className="text-xs text-bella-500 mt-1">
                       {limparDebug(movimento.observacoes)}
