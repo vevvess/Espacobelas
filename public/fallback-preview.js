@@ -549,6 +549,7 @@
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button class="btn-primary" id="btnNotionImport">Importar do Notion</button>
+              <button class="btn-outline" id="btnNewClient">+ Novo Cliente</button>
             </div>
           </div>
         </div>
@@ -1035,18 +1036,106 @@
           const s = getClientsStore();
           const arr = (s.clients || []).slice().sort((a,b) => (a.name || "").localeCompare(b.name || ""));
           if (!arr.length) {
-            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum cliente cadastrado. Importe do Notion.</div>`;
+            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum cliente cadastrado. Clique em “Novo Cliente” para adicionar ou importe do Notion.</div>`;
             return;
           }
           listEl.innerHTML = arr.map(c => `
-            <div class="row">
+            <div class="row" data-id="${c.id}">
               <div>
                 <strong>${c.name || "-"}</strong>
-                <div class="muted">${c.phone || ""}</div>
+                <div class="muted">
+                  ${[
+                    c.phone || "",
+                    c.prefUserName ? ("Prefere: " + c.prefUserName) : ""
+                  ].filter(Boolean).join(" • ")}
+                </div>
               </div>
-              <span class="pill">${fmtDDMMLocal(c.birthdate) || "—"}</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <span class="pill">${fmtDDMMLocal(c.birthdate) || "—"}</span>
+                <button class="btn-outline" data-act="edit">Editar</button>
+                <button class="btn-outline" data-act="del">Excluir</button>
+              </div>
             </div>
           `).join("");
+        }
+
+        function showClientModal(existing = null) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const users = (getUsersStore().users || []);
+          const it = existing ? { ...existing } : {
+            id: "cl-" + Date.now(),
+            name: "",
+            phone: "",
+            birthdate: "",
+            prefUserId: "",
+            prefUserName: ""
+          };
+          modal.innerHTML = `
+            <style>
+              .cmodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .cmodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .cmodal .field { display:grid; gap:6px; }
+              .cmodal label { color:#a1125b; font-weight:900; font-size:13px; }
+              .cmodal input, .cmodal select {
+                border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
+              }
+              .cmodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              @media(max-width:640px){ .cmodal .grid2 { grid-template-columns: 1fr; } }
+            </style>
+            <div class="cmodal">
+              <h3>${existing ? "Editar Cliente" : "Novo Cliente"}</h3>
+              <div class="grid2">
+                <div class="field">
+                  <label>Nome *</label>
+                  <input id="cNome" value="${(it.name || "").replace(/"/g,"&quot;")}" placeholder="Nome completo">
+                </div>
+                <div class="field">
+                  <label>Telefone</label>
+                  <input id="cTel" value="${(it.phone || "").replace(/"/g,"&quot;")}" placeholder="(DDD) 9xxxx-xxxx">
+                </div>
+                <div class="field">
+                  <label>Aniversário</label>
+                  <input id="cBirth" type="date" value="${it.birthdate || ""}">
+                </div>
+                <div class="field">
+                  <label>Profissional preferido</label>
+                  <select id="cPref">
+                    <option value="">Selecionar</option>
+                    ${users.map(u => `<option value="${u.id}" ${it.prefUserId===u.id?"selected":""}>${u.nome || ""}</option>`).join("")}
+                  </select>
+                </div>
+              </div>
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="cSalvar">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          $m("#cSalvar").addEventListener("click", () => {
+            const name = ($m("#cNome").value || "").trim();
+            if (!name) { alert("Informe o nome"); return; }
+            const phone = ($m("#cTel").value || "").trim();
+            const birthdate = $m("#cBirth").value || "";
+            const prefUserId = $m("#cPref").value || "";
+            const users = (getUsersStore().users || []);
+            const prefUserName = prefUserId ? (users.find(u=>String(u.id)===String(prefUserId))?.nome || "") : "";
+
+            const s = getClientsStore();
+            const payload = { ...it, name, phone, birthdate, prefUserId, prefUserName };
+            const idx = (s.clients || []).findIndex(c => String(c.id) === String(it.id));
+            if (idx >= 0) s.clients[idx] = payload; else s.clients = (s.clients || []).concat(payload);
+            setClientsStore(s);
+            modals.style.display = "none";
+            renderClientsList();
+          });
+
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
         }
 
         function showNotionImportModal() {
@@ -1138,6 +1227,32 @@
         }
 
         page.querySelector("#btnNotionImport")?.addEventListener("click", showNotionImportModal);
+        ensureUsersDefaults();
+        page.querySelector("#btnNewClient")?.addEventListener("click", () => showClientModal());
+        if (listEl) {
+          listEl.addEventListener("click", (e) => {
+            const actBtn = e.target.closest("[data-act]");
+            if (!actBtn) return;
+            const rowEl = e.target.closest(".row[data-id]");
+            if (!rowEl) return;
+            const id = rowEl.getAttribute("data-id");
+            const act = actBtn.getAttribute("data-act");
+            const s = getClientsStore();
+            const idx = (s.clients || []).findIndex((c) => String(c.id) === String(id));
+            if (act === "edit") {
+              const existing = idx >= 0 ? s.clients[idx] : null;
+              if (existing) showClientModal(existing);
+            } else if (act === "del") {
+              if (confirm("Excluir este cliente? Isso não remove agendamentos existentes.")) {
+                if (idx >= 0) {
+                  s.clients.splice(idx, 1);
+                  setClientsStore(s);
+                  renderClientsList();
+                }
+              }
+            }
+          });
+        }
         renderClientsList();
       }
 
@@ -1712,7 +1827,7 @@
                   <label>Cliente (existente)</label>
                   <select id="agCliSel">
                     <option value="">Selecionar</option>
-                    ${clients.map(c => `<option value="${(c.name || "").replace(/"/g,"&quot;")}" data-phone="${(c.phone || "").replace(/"/g,"&quot;")}">${c.name || ""}</option>`).join("")}
+                    ${clients.map(c => `<option value="${(c.name || "").replace(/"/g,"&quot;")}" data-phone="${(c.phone || "").replace(/"/g,"&quot;")}" data-prefname="${(c.prefUserName || "").replace(/"/g,"&quot;")}" data-pid="${(c.prefUserId || "").replace(/"/g,"&quot;")}">${c.name || ""}</option>`).join("")}
                   </select>
                 </div>
                 <div class="field">
