@@ -1442,7 +1442,9 @@
 
         // ====== Agenda dinâmica (lista funcional por dia) ======
         const AG_SEL_KEY = "bella_agenda_selected_date";
-        function ymdFromDate(d) {
+        const AG_VIEW_KEY = "bella_agenda_view";
+        let agView = localStorage.getItem(AG_VIEW_KEY) || "list";
+        function ymdFromDate(_codeDate(d) {
           const y = d.getFullYear();
           const m = String(d.getMonth()+1).padStart(2,"0");
           const day = String(d.getDate()).padStart(2,"0");
@@ -1648,8 +1650,13 @@
           const modal = modals.querySelector(".modal");
           const svcStore = getSvcStore();
           const services = (svcStore.items || []);
+          const clStore = getClientsStore();
+          const clients = (clStore.clients || []).slice().sort((a,b) => (a.name || "").localeCompare((b.name || "")));
           const isEditing = !!existingItem;
           const startDefault = isEditing ? dtLocalStr(new Date(existingItem.inicio)) : dtLocalStr(new Date());
+
+          // Build client datalist for suggestions
+          const clientOptions = clients.map(c => `<option value="${(c.name || "").replace(/"/g, "&quot;")}"></option>`).join("");
 
           modal.innerHTML = `
             <style>
@@ -1670,10 +1677,12 @@
             </style>
             <div class="amodal">
               <h3>${isEditing ? "Editar Agendamento" : "Novo Agendamento"}</h3>
+
               <div class="grid2">
                 <div class="field">
                   <label>Cliente *</label>
-                  <input id="agCli" placeholder="Nome do cliente" value="${isEditing ? (existingItem.cliente || "") : ""}">
+                  <input id="agCli" list="agCliList" placeholder="Nome do cliente" value="${isEditing ? (existingItem.cliente || "") : ""}">
+                  <datalist id="agCliList">${clientOptions}</datalist>
                 </div>
                 <div class="field">
                   <label>Telefone</label>
@@ -1712,11 +1721,11 @@
           modals.style.display = "flex";
           const $m = (sel)=>modal.querySelector(sel);
 
-          function svcOption(s) { return `<option value="${s.id}">${s.nome}</option>`; }
           function svcSelectHtml() {
-            const opts = services.map(svcOption).join("");
+            const opts = services.map(s => `<option value="${s.id}" data-preco="${s.preco}" data-dur="${s.duracao_min}">${s.nome}</option>`).join("");
             return `<select class="s-sel">${opts}</select>`;
           }
+
           function addRow(defaultId, preset = null) {
             const row = document.createElement("div");
             row.className = "srow";
@@ -1735,6 +1744,9 @@
               if (svc) {
                 ipP.value = String(svc.preco ?? 0);
                 ipD.value = String(svc.duracao_min ?? 60);
+              } else {
+                ipP.value = "";
+                ipD.value = "";
               }
               recalc();
             }
@@ -1743,7 +1755,6 @@
             [$m("#agIni"), ipP, ipD].forEach(inp => inp.addEventListener("input", recalc));
             $m("#agRows").appendChild(row);
             if (preset) {
-              // Use preset values without overriding by catalog defaults
               if (preset.servico_id) sel.value = preset.servico_id;
               ipP.value = String(preset.preco ?? 0);
               ipD.value = String(preset.duracao_min ?? 60);
@@ -1801,7 +1812,6 @@
             const dur = rows.reduce((a,b)=>a+b.duracao_min,0);
             const fim = addMinutes(ini, dur);
 
-            // conflito
             if (hasConflict(ini, fim, isEditing ? existingItem.id : null)) {
               if (!confirm("Existe outro agendamento que conflita com este horário. Deseja salvar mesmo assim?")) {
                 return;
