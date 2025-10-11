@@ -1440,14 +1440,216 @@
           return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
         }
 
-        function showAgendamentoModal(preselectIds = []) {
+        // ====== Agenda dinâmica (lista funcional por dia) ======
+        const AG_SEL_KEY = "bella_agenda_selected_date";
+        function ymdFromDate(d) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth()+1).padStart(2,"0");
+          const day = String(d.getDate()).padStart(2,"0");
+          return `${y}-${m}-${day}`;
+        }
+        function ymdLocalFromISO(iso) {
+          try {
+            const d = new Date(iso);
+            return ymdFromDate(d);
+          } catch { return ""; }
+        }
+        function shiftYmd(ymd, deltaDays) {
+          const [y,m,d] = ymd.split("-").map(Number);
+          const date = new Date(y, m-1, d);
+          date.setDate(date.getDate() + deltaDays);
+          return ymdFromDate(date);
+        }
+        let agSelectedDate = localStorage.getItem(AG_SEL_KEY) || ymdFromDate(new Date());
+        function setSelectedDate(ymd) {
+          agSelectedDate = ymd;
+          localStorage.setItem(AG_SEL_KEY, ymd);
+        }
+        function itemsForDate(ymd) {
+          const ag = getAgenda();
+          return (ag.items||[]).filter(it => ymdLocalFromISO(it.inicio) === ymd);
+        }
+        function statusFor(it) {
+          const base = it.status || "scheduled";
+          if (base === "done" || base === "canceled") return base;
+          const now = new Date();
+          const start = new Date(it.inicio);
+          const end = new Date(it.fim);
+          if (now >= start && now <= end) return "in-progress";
+          return "scheduled";
+        }
+        function moneyBR2(n) { return (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" }); }
+        function onlyDigitsAg(s) { return String(s||"").replace(/\D+/g, ""); }
+
+        function renderAgendaUI() {
+          const items = itemsForDate(agSelectedDate).slice().sort((a,b) => new Date(a.inicio) - new Date(b.inicio));
+          const counts = items.reduce((acc,it) => {
+            const st = statusFor(it);
+            acc.total++;
+            if (st === "done") acc.done++;
+            else if (st === "canceled") acc.canceled++;
+            else if (st === "in-progress") acc.inprog++;
+            else acc.scheduled++;
+            return acc;
+          }, { total:0, scheduled:0, inprog:0, done:0, canceled:0 });
+
+          function card(it) {
+            const st = statusFor(it);
+            const start = new Date(it.inicio);
+            const end = new Date(it.fim);
+            const time = `${fmtHourMin(start)}–${fmtHourMin(end)}`;
+            const svcs = (it.servicos||[]).map(s => `${s.nome} (${moneyBR2(s.preco)})`).join(" • ");
+            const total = moneyBR2(it.total || 0);
+            const tel = onlyDigitsAg(it.telefone || "");
+            const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : ""));
+            const stLabel = st === "done" ? "Concluído" : st === "canceled" ? "Cancelado" : st === "in-progress" ? "Em andamento" : "Agendado";
+            return `
+              <article class="appt ${cls}" data-id="${it.id}">
+                ${st === "in-progress" ? `<div class="progress-fill" style="width:100%"></div>` : ``}
+                <div class="inner">
+                  <div>
+                    <div class="header">
+                      <div class="ava">${(it.cliente||"?").slice(0,1).toUpperCase()}</div>
+                      <div style="flex:1;">
+                        <div class="name">${it.cliente || "-"}</div>
+                      </div>
+                      <span class="status ${st === "scheduled" ? "scheduled" : ""}">${stLabel}</span>
+                    </div>
+                    <div class="row">⏰ ${time}</div>
+                    ${tel ? `<div class="row">📞 (${tel.slice(0,2)}) ${tel.slice(2)}</div>` : ``}
+                    <div class="section-title">Serviços</div>
+                    <div class="chip-box">
+                      <div class="chip-sub">${svcs || "-"}</div>
+                      <strong>${total}</strong>
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <button class="btn-outline" data-act="edit" title="Editar">✎</button>
+                    ${st !== "done" ? `<button class="btn-outline" data-act="done" title="Concluir">✓</button>` : ``}
+                    ${st !== "canceled" && st !== "done" ? `<button class="btn-outline" data-act="cancel" title="Cancelar">×</button>` : ``}
+                    <button class="btn-outline" data-act="del" title="Excluir">🗑</button>
+                    ${tel ? `<button class="btn-outline" data-act="wa" title="WhatsApp">WA</button>` : ``}
+                  </div>
+                </div>
+              </article>
+            `;
+          }
+
+          page.innerHTML = `
+            <style>
+              .ag-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; }
+              .ag-hero p { margin: 0; color:#9d3a69; font-weight: 600; }
+              .ag-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:10px 0; }
+              .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              .date-nav { display:flex; align-items:center; gap:8px; }
+              .date-nav .arrow { width:40px; height:40px; display:grid; place-items:center; border-radius:12px; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
+              .date-nav input { border:1px solid #f3c6d9; padding:10px; border-radius:12px; font-weight:700; color:#a1125b; }
+              .kpi-mini { display:grid; gap:12px; margin:14px 0; }
+              .kpi-mini .item { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; display:flex; align-items:center; justify-content:space-between; box-shadow: var(--shadow); }
+              .kpi-mini .title { color:#a1125b; font-weight:900; }
+              .kpi-mini .val { font-size:22px; font-weight:900; color:#a1125b; }
+              .list { margin-top:10px; }
+              .appt { position:relative; border-radius:20px; padding:14px; background:#fff; box-shadow: var(--shadow); border:2px solid #f3c6d9; margin-bottom:16px; overflow:hidden; }
+              .appt.in-progress { border-color:#f59e0b; background:#fff7ed; }
+              .appt.scheduled { border-color:#10b981; background:#ecfdf5; }
+              .appt.canceled { border-color:#fecaca; background:#fee2e2; }
+              .appt .inner { position:relative; display:grid; grid-template-columns: 1fr auto; gap: 10px; }
+              .appt .header { display:flex; align-items:center; gap:12px; }
+              .appt .ava { width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
+              .appt .name { font-weight:900; color:#7a0f3f; font-size:20px; }
+              .appt .status { background:#fef3c7; color:#a16207; padding:6px 10px; border-radius:999px; font-weight:900; border:1px solid #fde68a; }
+              .appt .status.scheduled { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
+              .appt .row { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
+              .appt .section-title { color:#a1125b; font-weight:900; margin: 8px 0 6px; }
+              .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
+              .actions { display:grid; gap:10px; color:#a1125b; }
+            </style>
+
+            <div class="ag-hero">
+              <h1>Agenda</h1>
+              <p>Agendamentos reais (salvos no navegador)</p>
+            </div>
+
+            <div class="ag-toolbar">
+              <div class="date-nav">
+                <button class="arrow" id="agPrev" aria-label="Anterior">‹</button>
+                <input type="date" id="agDate" value="${agSelectedDate}">
+                <button class="arrow" id="agNext" aria-label="Próximo">›</button>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn primary" id="agNovo">+ Novo Agendamento</button>
+                <button class="btn" id="agAtualizar">Atualizar</button>
+              </div>
+            </div>
+
+            <div class="kpi-mini">
+              <div class="item"><div><div class="title">Total do dia</div><div class="val">${counts.total}</div></div></div>
+              <div class="item"><div><div class="title">Agendados</div><div class="val">${counts.scheduled}</div></div></div>
+              <div class="item"><div><div class="title">Em andamento</div><div class="val">${counts.inprog}</div></div></div>
+              <div class="item"><div><div class="title">Concluídos</div><div class="val">${counts.done}</div></div></div>
+              <div class="item"><div><div class="title">Cancelados</div><div class="val">${counts.canceled}</div></div></div>
+            </div>
+
+            <section class="list" id="agList">
+              ${items.length ? items.map(card).join("") : `<div class="empty">Nenhum agendamento para ${agSelectedDate}. Clique em “Novo Agendamento”.</div>`}
+            </section>
+          `;
+
+          // Wire events
+          const by = (id) => page.querySelector("#"+id);
+          by("agPrev").addEventListener("click", () => { setSelectedDate(shiftYmd(agSelectedDate, -1)); renderAgendaUI(); });
+          by("agNext").addEventListener("click", () => { setSelectedDate(shiftYmd(agSelectedDate, +1)); renderAgendaUI(); });
+          by("agDate").addEventListener("change", (e) => { setSelectedDate(e.target.value || agSelectedDate); renderAgendaUI(); });
+          by("agNovo").addEventListener("click", () => showAgendamentoModal());
+          by("agAtualizar").addEventListener("click", () => renderAgendaUI());
+
+          // delegate actions
+          const list = by("agList");
+          list.addEventListener("click", (e) => {
+            const btn = e.target.closest("[data-act]");
+            if (!btn) return;
+            const act = btn.getAttribute("data-act");
+            const id = btn.closest(".appt")?.getAttribute("data-id");
+            if (!id) return;
+            const ag = getAgenda();
+            const idx = (ag.items||[]).findIndex(x=>String(x.id)===String(id));
+            const it = idx>=0 ? ag.items[idx] : null;
+            if (!it) return;
+            if (act === "edit") {
+              showAgendamentoModal([], it);
+            } else if (act === "done") {
+              it.status = "done";
+              setAgenda(ag);
+              renderAgendaUI();
+            } else if (act === "cancel") {
+              it.status = "canceled";
+              setAgenda(ag);
+              renderAgendaUI();
+            } else if (act === "del") {
+              if (confirm("Excluir este agendamento?")) {
+                ag.items.splice(idx,1);
+                setAgenda(ag);
+                renderAgendaUI();
+              }
+            } else if (act === "wa") {
+              const nome = it.cliente || "";
+              const start = new Date(it.inicio);
+              const text = encodeURIComponent(`Olá ${nome}! Seu agendamento está para ${start.toLocaleDateString("pt-BR")} às ${fmtHourMin(start)} no Espaço Bella's.`);
+              const raw = onlyDigitsAg(it.telefone);
+              const url = raw ? `https://wa.me/55${raw}?text=${text}` : `https://wa.me/?text=${text}`;
+              window.open(url, "_blank");
+            }
+          });
+        }
+
+        function showAgendamentoModal(preselectIds = [], existingItem = null) {
           const modals = document.getElementById("modals");
           const modal = modals.querySelector(".modal");
           const svcStore = getSvcStore();
           const services = (svcStore.items || []);
-          const cats = (svcStore.cats || []);
-          const now = new Date();
-          const startDefault = dtLocalStr(now);
+          const isEditing = !!existingItem;
+          const startDefault = isEditing ? dtLocalStr(new Date(existingItem.inicio)) : dtLocalStr(new Date());
 
           modal.innerHTML = `
             <style>
@@ -1467,15 +1669,15 @@
               .sum { display:flex; align-items:center; justify-content:space-between; background:#fff7fb; border:1px solid #f3c6d9; padding:10px; border-radius:12px; font-weight:900; color:#a1125b; }
             </style>
             <div class="amodal">
-              <h3>Novo Agendamento</h3>
+              <h3>${isEditing ? "Editar Agendamento" : "Novo Agendamento"}</h3>
               <div class="grid2">
                 <div class="field">
                   <label>Cliente *</label>
-                  <input id="agCli" placeholder="Nome do cliente">
+                  <input id="agCli" placeholder="Nome do cliente" value="${isEditing ? (existingItem.cliente || "") : ""}">
                 </div>
                 <div class="field">
                   <label>Telefone</label>
-                  <input id="agTel" placeholder="(DDD) 9xxxx-xxxx">
+                  <input id="agTel" placeholder="(DDD) 9xxxx-xxxx" value="${isEditing ? (existingItem.telefone || "") : ""}">
                 </div>
               </div>
 
@@ -1503,7 +1705,7 @@
 
               <div class="footer">
                 <button class="btn" data-close>Cancelar</button>
-                <button class="btn primary" id="agSalvar">Salvar</button>
+                <button class="btn primary" id="agSalvar">${isEditing ? "Salvar alterações" : "Salvar"}</button>
               </div>
             </div>
           `;
@@ -1511,15 +1713,15 @@
           const $m = (sel)=>modal.querySelector(sel);
 
           function svcOption(s) { return `<option value="${s.id}">${s.nome}</option>`; }
-          function svcSelectHtml(val) {
+          function svcSelectHtml() {
             const opts = services.map(svcOption).join("");
             return `<select class="s-sel">${opts}</select>`;
           }
-          function addRow(defaultId) {
+          function addRow(defaultId, preset = null) {
             const row = document.createElement("div");
             row.className = "srow";
             row.innerHTML = `
-              ${svcSelectHtml(defaultId)}
+              ${svcSelectHtml()}
               <input class="s-preco" type="number" step="0.01" min="0" placeholder="Preço">
               <input class="s-dur" type="number" step="5" min="5" placeholder="Min">
               <button class="del" title="Remover">✕</button>
@@ -1540,7 +1742,15 @@
             row.querySelector(".del").addEventListener("click", () => { row.remove(); recalc(); });
             [$m("#agIni"), ipP, ipD].forEach(inp => inp.addEventListener("input", recalc));
             $m("#agRows").appendChild(row);
-            fillBySvc();
+            if (preset) {
+              // Use preset values without overriding by catalog defaults
+              if (preset.servico_id) sel.value = preset.servico_id;
+              ipP.value = String(preset.preco ?? 0);
+              ipD.value = String(preset.duracao_min ?? 60);
+              recalc();
+            } else {
+              fillBySvc();
+            }
           }
 
           function recalc() {
@@ -1554,46 +1764,83 @@
             $m("#agFim").value = end ? fmtHourMin(end) : "";
           }
 
-          $m("#agAdd").addEventListener("click", () => addRow());
-          // Pré-seleção de serviços vindos de /servicos
-          if (Array.isArray(preselectIds) && preselectIds.length) {
+          // Inicializa linhas
+          if (isEditing && Array.isArray(existingItem.servicos) && existingItem.servicos.length) {
+            existingItem.servicos.forEach(sv => addRow(sv.servico_id || (services[0]?.id || ""), sv));
+          } else if (Array.isArray(preselectIds) && preselectIds.length) {
             preselectIds.forEach(id => addRow(id));
           } else {
             addRow();
           }
           recalc();
 
+          function hasConflict(start, end, ignoreId) {
+            try {
+              const dayItems = itemsForDate(agSelectedDate);
+              return dayItems.some(it => String(it.id) !== String(ignoreId || "") && (start < new Date(it.fim)) && (end > new Date(it.inicio)));
+            } catch { return false; }
+          }
+
           $m("#agSalvar").addEventListener("click", () => {
             const nome = ($m("#agCli").value || "").trim();
             if (!nome) { alert("Informe o cliente"); return; }
             const ini = parseDT($m("#agIni").value);
             if (!ini) { alert("Informe o início"); return; }
-            const rows = Array.from($m("#agRows").children).map(r => ({
-              servico_id: r.querySelector(".s-sel").value,
-              nome: (services.find(s=>s.id===r.querySelector(".s-sel").value)||{}).nome || "",
-              preco: parseFloat(r.querySelector(".s-preco").value || "0") || 0,
-              duracao_min: parseInt(r.querySelector(".s-dur").value || "0", 10) || 0,
-            }));
+            const rows = Array.from($m("#agRows").children).map(r => {
+              const sel = r.querySelector(".s-sel").value;
+              const svc = services.find(s=>s.id===sel) || {};
+              return {
+                servico_id: sel,
+                nome: svc.nome || "",
+                preco: parseFloat(r.querySelector(".s-preco").value || "0") || 0,
+                duracao_min: parseInt(r.querySelector(".s-dur").value || "0", 10) || 0,
+              };
+            });
             if (!rows.length) { alert("Adicione pelo menos um serviço"); return; }
             const total = rows.reduce((a,b)=>a+b.preco,0);
             const dur = rows.reduce((a,b)=>a+b.duracao_min,0);
             const fim = addMinutes(ini, dur);
 
+            // conflito
+            if (hasConflict(ini, fim, isEditing ? existingItem.id : null)) {
+              if (!confirm("Existe outro agendamento que conflita com este horário. Deseja salvar mesmo assim?")) {
+                return;
+              }
+            }
+
             const ag = getAgenda();
-            ag.items.push({
-              id: "ag-" + Date.now(),
-              cliente: nome,
-              telefone: ($m("#agTel").value || "").trim(),
-              inicio: ini.toISOString(),
-              fim: fim.toISOString(),
-              servicos: rows,
-              total,
-              duracao_min: dur,
-              created_at: new Date().toISOString(),
-            });
+            if (isEditing) {
+              const idx = (ag.items||[]).findIndex(x => String(x.id) === String(existingItem.id));
+              if (idx >= 0) {
+                const prev = ag.items[idx];
+                ag.items[idx] = {
+                  ...prev,
+                  cliente: nome,
+                  telefone: ($m("#agTel").value || "").trim(),
+                  inicio: ini.toISOString(),
+                  fim: fim.toISOString(),
+                  servicos: rows,
+                  total,
+                  duracao_min: dur,
+                };
+              }
+            } else {
+              ag.items.push({
+                id: "ag-" + Date.now(),
+                cliente: nome,
+                telefone: ($m("#agTel").value || "").trim(),
+                inicio: ini.toISOString(),
+                fim: fim.toISOString(),
+                servicos: rows,
+                total,
+                duracao_min: dur,
+                status: "scheduled",
+                created_at: new Date().toISOString(),
+              });
+            }
             setAgenda(ag);
             modals.style.display = "none";
-            alert("Agendamento salvo (preview local).");
+            renderAgendaUI();
           });
 
           modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
