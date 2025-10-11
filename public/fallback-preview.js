@@ -915,6 +915,30 @@
         localStorage.setItem(NOTION_CFG_KEY, JSON.stringify(cfg));
       }
 
+      // ==== Usuários (Funcionários) ====
+      const USERS_KEY = "bella_users_v1";
+      function getUsersStore() {
+        try {
+          return JSON.parse(localStorage.getItem(USERS_KEY) || '{"users":[]}');
+        } catch {
+          return { users: [] };
+        }
+      }
+      function setUsersStore(s) {
+        localStorage.setItem(USERS_KEY, JSON.stringify(s));
+      }
+      function ensureUsersDefaults() {
+        const s = getUsersStore();
+        if (!Array.isArray(s.users)) s.users = [];
+        if ((s.users || []).length === 0) {
+          s.users = [
+            { id: "u-kelly", nome: "Kelly Monice", handle: "@Kelly", telefone: "" },
+            { id: "u-simone", nome: "Simone Barboza", handle: "@Simone", telefone: "" },
+          ];
+          setUsersStore(s);
+        }
+      }
+
       // ==== Serviços: armazenamento local (catálogo usado nos agendamentos) ====
       const SVC_KEY = "bella_services_v1";
       function svcUid(p) { return `${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
@@ -1500,7 +1524,8 @@
             const start = new Date(it.inicio);
             const end = new Date(it.fim);
             const time = `${fmtHourMin(start)}–${fmtHourMin(end)}`;
-            const svcs = (it.servicos||[]).map(s => `${s.nome} (${moneyBR2(s.preco)})`).join(" • ");
+            const svcs = (it.servicos||[]).map(s => `${s.nome}${s.profissional ? ' • ' + s.profissional : ''} (${moneyBR2(s.preco)})`).join(" • ");
+            const workers = Array.from(new Set((it.servicos||[]).map(s => s.profissional).filter(Boolean)));
             const total = moneyBR2(it.total || 0);
             const tel = onlyDigitsAg(it.telefone || "");
             const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : ""));
@@ -1524,6 +1549,8 @@
                       <div class="chip-sub">${svcs || "-"}</div>
                       <strong>${total}</strong>
                     </div>
+                    <div class="section-title">Funcionários</div>
+                    <div>${workers.length ? workers.map(w => `<span class="worker-pill">${w}</span>`).join(" ") : `<span class="muted">—</span>`}</div>
                   </div>
                   <div class="actions">
                     <button class="btn-outline" data-act="edit" title="Editar">✎</button>
@@ -1565,6 +1592,7 @@
               .appt .row { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
               .appt .section-title { color:#a1125b; font-weight:900; margin: 8px 0 6px; }
               .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
+              .worker-pill { display:inline-flex; align-items:center; gap:8px; background:#def7ec; border:1px solid #a7f3d0; color:#065f46; padding:8px 10px; border-radius:14px; font-weight:800; margin-right:6px; }
               .actions { display:grid; gap:10px; color:#a1125b; }
             </style>
 
@@ -1652,6 +1680,7 @@
           const services = (svcStore.items || []);
           const clStore = getClientsStore();
           const clients = (clStore.clients || []).slice().sort((a,b) => (a.name || "").localeCompare((b.name || "")));
+          const users = (getUsersStore().users || []);
           const isEditing = !!existingItem;
           const startDefault = isEditing ? dtLocalStr(new Date(existingItem.inicio)) : dtLocalStr(new Date());
 
@@ -1666,7 +1695,7 @@
               .amodal label { color:#a1125b; font-weight:900; }
               .amodal input, .amodal select { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
               .srows { display:grid; gap:8px; margin-top:6px; }
-              .srow { display:grid; grid-template-columns: 1fr 100px 110px 42px; gap:8px; align-items:center; background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:8px; }
+              .srow { display:grid; grid-template-columns: 1fr 100px 110px 160px 42px; gap:8px; align-items:center; background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:8px; }
               .srow .del { justify-self:end; border:1px solid #f3c6d9; border-radius:10px; background:#fff; padding:8px; color:#a1125b; }
               .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
               .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
@@ -1680,13 +1709,15 @@
 
               <div class="grid2">
                 <div class="field">
-                  <label>Cliente *</label>
-                  <input id="agCli" list="agCliList" placeholder="Nome do cliente" value="${isEditing ? (existingItem.cliente || "") : ""}">
-                  <datalist id="agCliList">${clientOptions}</datalist>
+                  <label>Cliente (existente)</label>
+                  <select id="agCliSel">
+                    <option value="">Selecionar</option>
+                    ${clients.map(c => `<option value="${(c.name || "").replace(/"/g,"&quot;")}" data-phone="${(c.phone || "").replace(/"/g,"&quot;")}">${c.name || ""}</option>`).join("")}
+                  </select>
                 </div>
                 <div class="field">
-                  <label>Telefone</label>
-                  <input id="agTel" placeholder="(DDD) 9xxxx-xxxx" value="${isEditing ? (existingItem.telefone || "") : ""}">
+                  <label>Nome do Cliente *</label>
+                  <input id="agCli" placeholder="Nome do cliente" value="${isEditing ? (existingItem.cliente || "") : ""}">
                 </div>
               </div>
 
@@ -1720,6 +1751,16 @@
           `;
           modals.style.display = "flex";
           const $m = (sel)=>modal.querySelector(sel);
+          let selectedClientPhone = isEditing ? (existingItem.telefone || "") : "";
+          const cliSel = $m("#agCliSel");
+          if (cliSel) cliSel.addEventListener("change", (ev) => {
+            const opt = ev.target.selectedOptions && ev.target.selectedOptions[0];
+            const name = ev.target.value || "";
+            const phone = opt ? (opt.getAttribute("data-phone") || "") : "";
+            const ip = $m("#agCli");
+            if (ip) ip.value = name;
+            selectedClientPhone = phone;
+          });
 
           function svcSelectHtml() {
             const opts = services.map(s => `<option value="${s.id}" data-preco="${s.preco}" data-dur="${s.duracao_min}">${s.nome}</option>`).join("");
@@ -1733,11 +1774,16 @@
               ${svcSelectHtml()}
               <input class="s-preco" type="number" step="0.01" min="0" placeholder="Preço">
               <input class="s-dur" type="number" step="5" min="5" placeholder="Min">
+              <select class="s-prof">
+                <option value="">Profissional</option>
+                ${users.map(u => `<option value="${(u.nome || "").replace(/"/g,"&quot;")}">${u.nome || ""}</option>`).join("")}
+              </select>
               <button class="del" title="Remover">✕</button>
             `;
             const sel = row.querySelector(".s-sel");
             const ipP = row.querySelector(".s-preco");
             const ipD = row.querySelector(".s-dur");
+            const ipPro = row.querySelector(".s-prof");
             sel.value = defaultId || (services[0]?.id || "");
             function fillBySvc() {
               const svc = services.find(s => s.id === sel.value);
@@ -1758,6 +1804,7 @@
               if (preset.servico_id) sel.value = preset.servico_id;
               ipP.value = String(preset.preco ?? 0);
               ipD.value = String(preset.duracao_min ?? 60);
+              if (preset.profissional) ipPro.value = preset.profissional;
               recalc();
             } else {
               fillBySvc();
@@ -1805,6 +1852,7 @@
                 nome: svc.nome || "",
                 preco: parseFloat(r.querySelector(".s-preco").value || "0") || 0,
                 duracao_min: parseInt(r.querySelector(".s-dur").value || "0", 10) || 0,
+                profissional: (r.querySelector(".s-prof")?.value || "").trim(),
               };
             });
             if (!rows.length) { alert("Adicione pelo menos um serviço"); return; }
@@ -1826,7 +1874,7 @@
                 ag.items[idx] = {
                   ...prev,
                   cliente: nome,
-                  telefone: ($m("#agTel").value || "").trim(),
+                  telefone: selectedClientPhone,
                   inicio: ini.toISOString(),
                   fim: fim.toISOString(),
                   servicos: rows,
@@ -1838,7 +1886,7 @@
               ag.items.push({
                 id: "ag-" + Date.now(),
                 cliente: nome,
-                telefone: ($m("#agTel").value || "").trim(),
+                telefone: selectedClientPhone,
                 inicio: ini.toISOString(),
                 fim: fim.toISOString(),
                 servicos: rows,
