@@ -312,9 +312,10 @@ export function AgendamentoCard({
                                 )}
                               </div>
                               {servico?.funcionario && (
-                               <<div className="text-xs text-bella-600 mt-1 flex items-center gap-1">
-                                 <nFiUser className="w-3 h-3" /> {servico.funcionario.nome}
-                              </                   )}
+                                <div className="text-xs text-bella-600 mt-1 flex items-center gap-1">
+                                  <FiUser className="w-3 h-3" /> {servico.funcionario.nome}
+                                </div>
+                              )}
                             </div>
                           );
                         })

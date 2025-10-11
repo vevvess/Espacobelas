@@ -22,6 +22,8 @@ interface MovimentoCaixa {
   agendamentoId?: string;
   clienteNome?: string;
   profissional?: string;
+  qrCodeText?: string;
+  qrImage?: string;
 }
 
 interface AtendimentoDia {
@@ -256,6 +258,8 @@ export function useCaixa(selectedDate?: Date) {
               categoria: "Despesas",
               data: new Date(d.created_at || base),
               observacoes: d.origem === "caixa" ? "Retirada do caixa" : "Outro",
+              qrCodeText: (d as any).qr_text || undefined,
+              qrImage: (d as any).qr_image || undefined,
             }));
 
             manualMovs = [...attsMovs, ...depMovs];

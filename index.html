@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="cosine-app-id" content="bella-app-v1" />
     <title>Bella App</title>
     <style>
       .embed-container {
@@ -63,8 +64,8 @@
       }
 
       if (isCosine) {
+        // Em cosine.page: por padrão carregar o preview estático; use ?vercel=1 para embutir Vercel
         if (wantsVercel) {
-          // Modo: embutir Vercel explicitamente (?vercel=1)
           const container = document.createElement("div");
           container.className = "embed-container";
           const iframe = document.createElement("iframe");
@@ -74,7 +75,6 @@
           container.appendChild(iframe);
           root.replaceWith(container);
         } else {
-          // Padrão em cosine.page: mostrar o preview estático (WIP)
           await loadFallback();
         }
       } else {

@@ -1,5 +1,17 @@
 # App - Guia Rápido de Desenvolvimento
 
+## Como reabrir este app no Cosine
+
+- Meta flag no HTML: `cosine-app-id=bella-app-v1`
+- Manifesto público: `/cosine-manifest.json`
+- Sentinela no código: `// COSINE_APP_SENTINEL: BELLA-APP-V1 (Estoque + Caixa + UI nova)`
+- Preview de referência (Vercel): https://espaco-five.vercel.app
+
+Como usar em um chat novo:
+- “Procure por cosine-app-id=bella-app-v1. Abra o preview do app e continue a estruturar Estoque/Caixa.”
+- Ou: “Carregue o app cujo manifest está em /cosine-manifest.json.”
+- Ou: “Localize ‘COSINE_APP_SENTINEL: BELLA-APP-V1’ no repositório e abra o preview.”
+
 Este repositório é um app React + Vite + TypeScript com Tailwind, React Router e React Query. Já está configurado para rodar em ambiente local e em produção (Vercel). Abaixo estão os passos para “abrir o app” e começar a editar.
 
 ## Requisitos
