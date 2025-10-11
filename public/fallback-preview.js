@@ -1273,6 +1273,148 @@
         renderClientsList();
       }
 
+      // Usuários: CRUD simples (funcionários) com cor utilizada na Agenda
+      if (hash === "/usuarios") {
+        ensureUsersDefaults();
+        const listEl = page.querySelector("#usersList");
+        const newBtn = page.querySelector("#btnNewUser");
+
+        function userUid() { return "u-" + Date.now() + "-" + Math.random().toString(36).slice(2,8); }
+        const palette = ["#10b981","#ec4899","#6366f1","#f59e0b","#06b6d4","#84cc16","#ef4444","#14b8a6"];
+
+        function renderUsersList() {
+          const s = getUsersStore();
+          const arr = (s.users || []).slice().sort((a,b) => (a.nome || "").localeCompare(b.nome || ""));
+          if (!listEl) return;
+          if (!arr.length) {
+            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum usuário cadastrado. Clique em “+ Novo Usuário”.</div>`;
+            return;
+          }
+          listEl.innerHTML = arr.map(u => `
+            <div class="row" data-id="${u.id}">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span title="${u.color || ''}" style="width:18px;height:18px;border-radius:6px;border:1px solid #e5e7eb;background:${u.color || '#f472b6'};"></span>
+                <div>
+                  <strong>${u.nome || "-"}</strong>
+                  <div class="muted">${[u.handle || "", u.telefone || ""].filter(Boolean).join(" • ")}</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-outline" data-act="edit">Editar</button>
+                <button class="btn-outline" data-act="del">Excluir</button>
+              </div>
+            </div>
+          `).join("");
+        }
+
+        function showUserModal(existing = null) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const it = existing ? { ...existing } : {
+            id: userUid(),
+            nome: "",
+            handle: "",
+            telefone: "",
+            color: palette[Math.floor(Math.random()*palette.length)]
+          };
+          modal.innerHTML = `
+            <style>
+              .umodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .umodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .umodal .field { display:grid; gap:6px; }
+              .umodal label { color:#a1125b; font-weight:900; font-size:13px; }
+              .umodal input { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0; }
+              .umodal .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+              .umodal .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .umodal .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              @media(max-width:640px){ .umodal .grid2 { grid-template-columns: 1fr; } }
+            </style>
+            <div class="umodal">
+              <h3>${existing ? "Editar Usuário" : "Novo Usuário"}</h3>
+              <div class="grid2">
+                <div class="field">
+                  <label>Nome *</label>
+                  <input id="uNome" placeholder="Nome completo" value="${(it.nome || "").replace(/"/g,"&quot;")}">
+                </div>
+                <div class="field">
+                  <label>Handle</label>
+                  <input id="uHandle" placeholder="@apelido" value="${(it.handle || "").replace(/"/g,"&quot;")}">
+                </div>
+                <div class="field">
+                  <label>Telefone</label>
+                  <input id="uTel" placeholder="(DDD) 9xxxx-xxxx" value="${(it.telefone || "").replace(/"/g,"&quot;")}">
+                </div>
+                <div class="field">
+                  <label>Cor</label>
+                  <div class="row">
+                    <input id="uColor" type="color" value="${it.color || "#f472b6"}" style="width:64px; padding:0; border-radius:12px; height:42px;">
+                    <input id="uColorHex" value="${it.color || "#f472b6"}" style="max-width:160px;">
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex; justify-content:space-between; gap:8px; margin-top:10px;">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="uSalvar">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+          const col = $m("#uColor");
+          const hex = $m("#uColorHex");
+          col.addEventListener("input", () => { hex.value = col.value; });
+          hex.addEventListener("input", () => {
+            const v = hex.value.trim();
+            if (/^#?[0-9a-fA-F]{6}$/.test(v.replace("#",""))) col.value = v.startsWith("#") ? v : ("#"+v);
+          });
+
+          $m("#uSalvar").addEventListener("click", () => {
+            const nome = ($m("#uNome").value || "").trim();
+            if (!nome) { alert("Informe o nome"); return; }
+            const handle = ($m("#uHandle").value || "").trim();
+            const telefone = ($m("#uTel").value || "").trim();
+            const color = ($m("#uColorHex").value || $m("#uColor").value || "").trim() || "#f472b6";
+            const s = getUsersStore();
+            const payload = { ...it, nome, handle, telefone, color: color.startsWith("#") ? color : ("#"+color) };
+            const idx = (s.users || []).findIndex(u => String(u.id) === String(it.id));
+            if (idx >= 0) s.users[idx] = payload; else s.users = (s.users || []).concat(payload);
+            setUsersStore(s);
+            modals.style.display = "none";
+            renderUsersList();
+          });
+
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        newBtn && newBtn.addEventListener("click", () => showUserModal());
+
+        if (listEl) {
+          listEl.addEventListener("click", (e) => {
+            const actBtn = e.target.closest("[data-act]");
+            if (!actBtn) return;
+            const rowEl = e.target.closest(".row[data-id]");
+            if (!rowEl) return;
+            const id = rowEl.getAttribute("data-id");
+            const s = getUsersStore();
+            const idx = (s.users || []).findIndex(u => String(u.id) === String(id));
+            const act = actBtn.getAttribute("data-act");
+            if (act === "edit") {
+              const existing = idx >= 0 ? s.users[idx] : null;
+              if (existing) showUserModal(existing);
+            } else if (act === "del") {
+              if (!confirm("Excluir este usuário? Esta ação não remove referências em agendamentos antigos.")) return;
+              if (idx >= 0) {
+                s.users.splice(idx, 1);
+                setUsersStore(s);
+                renderUsersList();
+              }
+            }
+          });
+        }
+
+        renderUsersList();
+      }
+
       // Serviços: catálogo com abas, busca, cards e integração com agendamento
       if (hash === "/servicos") {
         ensureSvcDefaults();
