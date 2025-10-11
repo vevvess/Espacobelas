@@ -17,6 +17,7 @@
           --surface:#ffffff; --line:#f3e6ee; --shadow: 0 10px 30px rgba(173,24,94,.08);
         }
         html, body, #root { height: 100%; margin: 0; }
+        *, *::before, *::after { box-sizing: border-box; }
         body {
           background:
             radial-gradient(1200px 400px at -10% -5%, rgba(236,72,153,.08), transparent 60%),
@@ -157,7 +158,7 @@
 
         /* Modals */
         .modals { position: fixed; inset: 0; display:none; align-items:center; justify-content:center; background: rgba(15,23,42,.45); padding: 16px; z-index:40; }
-        .modal { width: 100%; max-width: 520px; background: #fff; border-radius: 16px; border:1px solid #e5e7eb; padding: 16px; }
+        .modal { width: min(92vw, 520px); max-width: 520px; background: #fff; border-radius: 16px; border:1px solid #e5e7eb; padding: 16px; max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; }
         .modal h3 { margin: 0 0 12px; }
         .field { display:grid; gap:6px; margin-bottom: 10px; }
         .field label { font-size: 13px; color: #334155; font-weight: 600; }
@@ -199,38 +200,10 @@
           <div class="empty">Nenhum agendamento próximo</div>
         </section>
       </div>
-      <section class="section">
+      <section class="section" id="birthSection">
         <div class="birth-head"><span>🎂</span><span>ANIVERSARIANTES</span><span>🎉</span></div>
-        <div class="month-box">
-          <h3 style="margin:0 0 10px; display:flex; align-items:center; gap:8px;"><span>📅</span><span>📅 TODOS DESTE MÊS (7)</span></h3>
-          ${[
-            ["R", "Rafael", "02/10", "(81) 9556-3242"],
-            ["C", "Claudia Maria da Silva", "03/10", "(81) 99635-8025"],
-            ["E", "Emanuel Ferreira", "05/10", "(81) 99671-8111"],
-            ["D", "Dona Fátima", "20/10", ""],
-            ["M", "Magnalva Madalena (Nalva)", "20/10", ""],
-            ["M", "Mari", "20/10", "(81) 98376-0490"],
-            ["G", "Gabriela Cavalcanti", "30/10", "(81) 99811-9739"],
-          ]
-            .map(
-              ([ch, name, date, tel]) => `
-              <div class="month-item">
-                <div style="display:flex; gap:10px; align-items:center;">
-                  <div class="circle">${ch}</div>
-                  <div>
-                    <div style="font-weight:900;">${name}</div>
-                    <div class="muted"><span>📅</span> ${date}</div>
-                  </div>
-                </div>
-                ${
-                  tel
-                    ? `<a class="tel" href="tel:${tel}" title="Ligar para o cliente">Ligar para o cliente</a>`
-                    : `<span></span>`
-                }
-              </div>
-            `
-            )
-            .join("")}
+        <div class="month-box" id="birthBox">
+          <div class="empty">Sem dados de aniversariantes. Importe clientes do Notion em “Clientes › Importar do Notion”.</div>
         </div>
       </section>
       <section class="section">
@@ -566,16 +539,24 @@
     `;
 
     const Clientes = () => `
-      <div class="hero"><h1>Clientes</h1><p>Cadastro, consulta e ficha</p></div>
+      <div class="hero"><h1>Clientes</h1><p>Integração e cadastro</p></div>
       <section class="section">
         <div class="list">
-          <div class="row"><div><strong>Claudia Maria</strong><div class="muted">+55 81 99635-8025</div></div><span class="pill">Ativa</span></div>
-          <div class="row"><div><strong>Rafael</strong><div class="muted">+55 81 9556-3242</div></div><span class="pill">Ativo</span></div>
-          <div class="row"><div><strong>Mari</strong><div class="muted">+55 81 98376-0490</div></div><span class="pill">Ativa</span></div>
+          <div class="row" style="justify-content:space-between; gap:8px;">
+            <div>
+              <strong>Integração com Notion</strong>
+              <div class="muted">Importe clientes e datas de aniversário a partir de uma base do Notion</div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn-primary" id="btnNotionImport">Importar do Notion</button>
+              <button class="btn-outline" id="btnNewClient">+ Novo Cliente</button>
+            </div>
+          </div>
         </div>
       </section>
       <section class="section">
-        <button class="btn-primary" data-open="cliente">Novo Cliente</button>
+        <h2 style="margin:0 0 8px;">Lista de clientes</h2>
+        <div class="list" id="clientsList"></div>
       </section>
     `;
 
@@ -597,11 +578,55 @@
     `;
 
     const Servicos = () => `
-      <div class="hero"><h1>Serviços</h1><p>Catálogo, preços e duração</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Corte</strong><div class="muted">30 min</div></div><strong>R$ 35,00</strong></div>
-        <div class="row"><div><strong>Coloração</strong><div class="muted">90 min</div></div><strong>R$ 120,00</strong></div>
-        <div class="row"><div><strong>Manicure</strong><div class="muted">45 min</div></div><strong>R$ 40,00</strong></div>
+      <style>
+        .svc-hero h1 { margin:0 0 6px; font-size:28px; color:var(--bella-800); font-weight:900; letter-spacing:.2px; }
+        .svc-hero p { margin:0; color:#9d3a69; font-weight:600; }
+        .svc-actions { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+        .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+        .svc-filters { display:grid; gap:10px; margin:12px 0; }
+        .svc-filters .field { display:grid; gap:6px; }
+        .svc-filters input, .svc-filters select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+        .tabs { display:flex; gap:8px; overflow:auto; padding-bottom:2px; }
+        .tab { white-space:nowrap; padding:8px 12px; border-radius:999px; border:1px solid #f3c6d9; color:#a1125b; font-weight:800; background:#fff; }
+        .tab.active { background:#fff4f9; border:2px solid #f3a1c8; }
+        .svc-list { display:grid; gap:12px; }
+        .svc-card { display:grid; grid-template-columns: 108px 1fr; gap:12px; background:#fff; border:1px solid #f1e6ee; border-radius:18px; padding:12px; box-shadow: var(--shadow); }
+        .svc-photo { width:100%; height:100%; max-height:92px; border-radius:14px; object-fit:cover; border:1px solid #f1e6ee; background:#fff7fb; }
+        .svc-title { font-weight:900; color:#9d174d; text-transform:uppercase; letter-spacing:.2px; }
+        .svc-desc { color:#6b7280; font-weight:600; font-size:13px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .svc-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; }
+        .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-weight:900; }
+        .chip.time { background:#eef2ff; border:1px solid #c7d2fe; color:#4338ca; }
+        .chip.price { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; }
+        .svc-actions-inline { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+        @media(max-width:520px){ .svc-card { grid-template-columns: 1fr; } .svc-photo { max-height:160px; } }
+      </style>
+
+      <div class="svc-hero">
+        <h1>Serviços</h1>
+        <p>Catálogo, preços e duração (usado nos agendamentos)</p>
+      </div>
+
+      <div class="svc-actions">
+        <button class="btn primary" id="svcNovo">+ Novo Serviço</button>
+        <button class="btn" id="svcCat">Gerenciar Categorias</button>
+      </div>
+
+      <section class="section svc-filters">
+        <div class="field">
+          <label class="muted">Pesquisar</label>
+          <input id="svcQ" placeholder="Nome ou descrição">
+        </div>
+        <div class="field">
+          <label class="muted">Categorias</label>
+          <div class="tabs" id="svcTabs"></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Lista</h2>
+        <div class="svc-list" id="svcList"></div>
       </section>
     `;
 
@@ -614,10 +639,26 @@
     `;
 
     const Usuarios = () => `
-      <div class="hero"><h1>Usuários</h1><p>Times, permissões e perfis</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Weslley Raphael</strong><div class="muted">Administrador</div></div><span class="pill">Ativo</span></div>
-        <div class="row"><div><strong>Claudia</strong><div class="muted">Staff</div></div><span class="pill">Ativa</span></div>
+      <style>
+        .u-actions{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+        .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+        .u-ava { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; color:#fff; font-weight:900; }
+        .skill { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; padding:6px 8px; border-radius:999px; font-weight:800; color:#334155; }
+        .role { display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border-radius:999px; font-weight:900; }
+        .role.admin { background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; }
+        .role.staff { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+      </style>
+      <div class="hero"><h1>Usuários</h1><p>Times, permissões, cores e funções</p></div>
+      <section class="section">
+        <div class="u-actions">
+          <button class="btn primary" id="usrNovo">+ Novo Usuário</button>
+          <button class="btn" id="usrDefaults">Aplicar padrões (cores/roles)</button>
+        </div>
+      </section>
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Equipe</h2>
+        <div class="list" id="usrList"></div>
       </section>
     `;
 
@@ -859,7 +900,675 @@
         btn && btn.addEventListener("click", generateDistZip);
       }
 
-      // Interações específicas da Agenda (progresso e atualizar)
+      // ==== Clientes: armazenamento e integração com Notion ====
+      const CLIENTS_KEY = "bella_clients_v1";
+      function getClientsStore() {
+        try {
+          return JSON.parse(localStorage.getItem(CLIENTS_KEY) || '{"clients":[]}');
+        } catch {
+          return { clients: [] };
+        }
+      }
+      function setClientsStore(s) {
+        localStorage.setItem(CLIENTS_KEY, JSON.stringify(s));
+      }
+      function onlyDigitsLocal(s) { return String(s || "").replace(/\D+/g, ""); }
+      function fmtDDMMLocal(iso) {
+        if (!iso) return "";
+        try { const [y,m,d] = iso.slice(0,10).split("-"); return `${d}/${m}`; } catch { return ""; }
+      }
+      function monthDayLocal(iso) {
+        try { const [y,m,d] = iso.slice(0,10).split("-").map(Number); return { m, d }; } catch { return { m:null, d:null }; }
+      }
+      const NOTION_CFG_KEY = "bella_notion_cfg";
+      function getNotionCfg() {
+        try {
+          return JSON.parse(localStorage.getItem(NOTION_CFG_KEY) || '{"secret":"","dbid":"","map":{"name":"Name","phone":"Phone","birth":"Birthday"}}');
+        } catch {
+          return { secret:"", dbid:"", map:{ name:"Name", phone:"Phone", birth:"Birthday" } };
+        }
+      }
+      function setNotionCfg(cfg) {
+        localStorage.setItem(NOTION_CFG_KEY, JSON.stringify(cfg));
+      }
+
+      // ==== Usuários (Funcionários) ====
+      const USERS_KEY = "bella_users_v1";
+      function getUsersStore() {
+        try {
+          return JSON.parse(localStorage.getItem(USERS_KEY) || '{"users":[]}');
+        } catch {
+          return { users: [] };
+        }
+      }
+      function setUsersStore(s) {
+        localStorage.setItem(USERS_KEY, JSON.stringify(s));
+      }
+      function ensureUsersDefaults() {
+        const s = getUsersStore();
+        if (!Array.isArray(s.users)) s.users = [];
+        if ((s.users || []).length === 0) {
+          // Defaults solicitados: cores e perfis
+          s.users = [
+            { id: "u-simone", nome: "Simone Barboza", handle: "@Simone", telefone: "", cor: "#10b981", role: "admin", skills: [] }, // verde claro
+            { id: "u-kelly", nome: "Kelly Monice", handle: "@Kelly", telefone: "", cor: "#f59e0b", role: "staff", skills: [] }, // laranja
+            { id: "u-helena", nome: "Helena", handle: "@Helena", telefone: "", cor: "#facc15", role: "staff", skills: [] }, // amarelo (prefere Helena)
+            { id: "u-veronica", nome: "Verônica Marques", handle: "@Veronica", telefone: "", cor: "#7c3aed", role: "staff", skills: [] }, // roxo
+            { id: "u-weslley", nome: "Weslley Raphael", handle: "@Weslley", telefone: "", cor: "#06b6d4", role: "admin", skills: [] }, // azul ciano
+            { id: "u-anaclecia", nome: "Ana Clécia", handle: "@Ana", telefone: "", cor: "#ec4899", role: "staff", skills: [] }, // rosa
+          ];
+          setUsersStore(s);
+        } else {
+          // Garante propriedades novas sem sobrescrever nomes/existentes
+          s.users = (s.users || []).map(u => ({
+            ...u,
+            cor: u.cor || (
+              /simone/i.test(u.nome||"") ? "#10b981" :
+              /kelly/i.test(u.nome||"") ? "#f59e0b" :
+              /helena|maria helena/i.test(u.nome||"") ? "#facc15" :
+              /ver[oô]nica/i.test(u.nome||"") ? "#7c3aed" :
+              /weslley/i.test(u.nome||"") ? "#06b6d4" :
+              /ana/i.test(u.nome||"") ? "#ec4899" : "#f472b6"
+            ),
+            role: u.role || ((/weslley|simone/i.test(u.nome||"")) ? "admin" : "staff"),
+            skills: Array.isArray(u.skills) ? u.skills : []
+          }));
+          setUsersStore(s);
+        }
+      }
+
+      // ==== Serviços: armazenamento local (catálogo usado nos agendamentos) ====
+      const SVC_KEY = "bella_services_v1";
+      function svcUid(p) { return `${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
+      function getSvcStore() {
+        try { return JSON.parse(localStorage.getItem(SVC_KEY) || '{"cats":[],"items":[]}'); } catch { return { cats:[], items:[] }; }
+      }
+      function setSvcStore(s) { localStorage.setItem(SVC_KEY, JSON.stringify(s)); }
+      function moneyBR(n) { return (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" }); }
+      function minsTxt(min) {
+        min = Number(min)||0;
+        if (min < 60) return `${min}min`;
+        const h = Math.floor(min/60); const m = min%60;
+        return m ? `${h}h ${m}min` : `${h}h`;
+      }
+      function ensureSvcDefaults() {
+        const s = getSvcStore();
+        if ((s.items||[]).length) return;
+        s.cats = [
+          { id: svcUid("cat"), nome: "Unhas" },
+          { id: svcUid("cat"), nome: "Cabelos" },
+          { id: svcUid("cat"), nome: "Sobrancelha" },
+          { id: svcUid("cat"), nome: "Depilação" },
+        ];
+        const cat = (name) => s.cats.find(c=>c.nome===name)?.id || s.cats[0].id;
+        s.items = [
+          { id: svcUid("svc"), nome: "Alongamento em Acrigel", cat_id: cat("Unhas"), preco: 150, duracao_min: 150, desc:"O que está incluso no serviço e principais benefícios. Tempo médio e objetivos.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Alongamento em Gel", cat_id: cat("Unhas"), preco: 150, duracao_min: 150, desc:"Descrição breve e objetiva do procedimento.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Alongamento Fibra de Vidro", cat_id: cat("Unhas"), preco: 180, duracao_min: 165, desc:"Durável e leve. Inclui manutenção básica.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Corte Feminino", cat_id: cat("Cabelos"), preco: 40, duracao_min: 40, desc:"Corte com acabamento escova simples.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Coloração", cat_id: cat("Cabelos"), preco: 120, duracao_min: 90, desc:"Coloração completa com tonalização.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Design de Sobrancelhas", cat_id: cat("Sobrancelha"), preco: 35, duracao_min: 30, desc:"Medição, marcação e alinhamento.", foto: "/public/placeholder.svg" },
+        ];
+        setSvcStore(s);
+      }
+      if (hash === "/dashboard") {
+        const box = page.querySelector("#birthBox");
+        if (box) {
+          const s = getClientsStore();
+          const list = (s.clients || []).filter(c => !!c.birthdate);
+          const now = new Date();
+          const cm = now.getMonth() + 1;
+          const cd = now.getDate();
+          const curr = list.filter(c => monthDayLocal(c.birthdate).m === cm)
+                           .sort((a,b) => monthDayLocal(a.birthdate).d - monthDayLocal(b.birthdate).d);
+          const today = curr.filter(c => monthDayLocal(c.birthdate).d === cd);
+          const past = curr.filter(c => monthDayLocal(c.birthdate).d < cd);
+          const upcoming = curr.filter(c => monthDayLocal(c.birthdate).d > cd);
+
+          function item(c, tag) {
+            const ch = (c.name || "?").slice(0,1).toUpperCase();
+            const tel = onlyDigitsLocal(c.phone || "");
+            const badge = tag ? `<span class="pill" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca;">${tag}</span>` : "";
+            return `
+              <div class="month-item">
+                <div style="display:flex; gap:10px; align-items:center;">
+                  <div class="circle">${ch}</div>
+                  <div>
+                    <div style="font-weight:900;">${c.name || "-"}</div>
+                    <div class="muted"><span>📅</span> ${fmtDDMMLocal(c.birthdate)} ${badge}</div>
+                  </div>
+                </div>
+                ${tel ? `<a class="tel" href="tel:+55${tel}" title="Ligar para o cliente">Ligar</a>` : `<span></span>`}
+              </div>
+            `;
+          }
+
+          if (!curr.length) {
+            box.innerHTML = `<div class="empty">Nenhum aniversariante deste mês. Importe clientes do Notion em “Clientes › Importar do Notion”.</div>`;
+          } else {
+            const parts = [];
+            parts.push(`<h3 style="margin:0 0 10px; display:flex; align-items:center; gap:8px;"><span>📅</span><span>Todos deste mês (${curr.length})</span></h3>`);
+            if (today.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Hoje</div>`);
+              parts.push(today.map(c => item(c, "hoje")).join(""));
+            }
+            if (upcoming.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Próximos</div>`);
+              parts.push(upcoming.map(c => item(c, "")).join(""));
+            }
+            if (past.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Já passaram</div>`);
+              parts.push(past.map(c => item(c, "passou")).join(""));
+            }
+            box.innerHTML = parts.join("");
+          }
+        }
+      }
+
+      // Clientes: listar e importar do Notion
+      if (hash === "/clientes") {
+        const listEl = page.querySelector("#clientsList");
+        function renderClientsList() {
+          if (!listEl) return;
+          const s = getClientsStore();
+          const arr = (s.clients || []).slice().sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+          if (!arr.length) {
+            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum cliente cadastrado. Clique em “Novo Cliente” para adicionar ou importe do Notion.</div>`;
+            return;
+          }
+          listEl.innerHTML = arr.map(c => `
+            <div class="row" data-id="${c.id}">
+              <div>
+                <strong>${c.name || "-"}</strong>
+                <div class="muted">
+                  ${[
+                    c.phone || "",
+                    c.prefUserName ? ("Prefere: " + c.prefUserName) : ""
+                  ].filter(Boolean).join(" • ")}
+                </div>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <span class="pill">${fmtDDMMLocal(c.birthdate) || "—"}</span>
+                <button class="btn-outline" data-act="edit">Editar</button>
+                <button class="btn-outline" data-act="del">Excluir</button>
+              </div>
+            </div>
+          `).join("");
+        }
+
+        function showClientModal(existing = null) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const users = (getUsersStore().users || []);
+          const it = existing ? { ...existing } : {
+            id: "cl-" + Date.now(),
+            name: "",
+            phone: "",
+            birthdate: "",
+            prefUserId: "",
+            prefUserName: ""
+          };
+          modal.innerHTML = `
+            <style>
+              .cmodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .cmodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .cmodal .field { display:grid; gap:6px; }
+              .cmodal label { color:#a1125b; font-weight:900; font-size:13px; }
+              .cmodal input, .cmodal select {
+                border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
+              }
+              .cmodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              @media(max-width:640px){ .cmodal .grid2 { grid-template-columns: 1fr; } }
+            </style>
+            <div class="cmodal">
+              <h3>${existing ? "Editar Cliente" : "Novo Cliente"}</h3>
+              <div class="grid2">
+                <div class="field">
+                  <label>Nome *</label>
+                  <input id="cNome" value="${(it.name || "").replace(/"/g,"&quot;")}" placeholder="Nome completo">
+                </div>
+                <div class="field">
+                  <label>Telefone</label>
+                  <input id="cTel" value="${(it.phone || "").replace(/"/g,"&quot;")}" placeholder="(DDD) 9xxxx-xxxx">
+                </div>
+                <div class="field">
+                  <label>Aniversário</label>
+                  <input id="cBirth" type="date" value="${it.birthdate || ""}">
+                </div>
+                <div class="field">
+                  <label>Profissional preferido</label>
+                  <select id="cPref">
+                    <option value="">Selecionar</option>
+                    ${users.map(u => `<option value="${u.id}" ${it.prefUserId===u.id?"selected":""}>${u.nome || ""}</option>`).join("")}
+                  </select>
+                </div>
+              </div>
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="cSalvar">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          $m("#cSalvar").addEventListener("click", () => {
+            const name = ($m("#cNome").value || "").trim();
+            if (!name) { alert("Informe o nome"); return; }
+            const phone = ($m("#cTel").value || "").trim();
+            const birthdate = $m("#cBirth").value || "";
+            const prefUserId = $m("#cPref").value || "";
+            const users = (getUsersStore().users || []);
+            const prefUserName = prefUserId ? (users.find(u=>String(u.id)===String(prefUserId))?.nome || "") : "";
+
+            const s = getClientsStore();
+            const payload = { ...it, name, phone, birthdate, prefUserId, prefUserName };
+            const idx = (s.clients || []).findIndex(c => String(c.id) === String(it.id));
+            if (idx >= 0) s.clients[idx] = payload; else s.clients = (s.clients || []).concat(payload);
+            setClientsStore(s);
+            modals.style.display = "none";
+            renderClientsList();
+          });
+
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        function showNotionImportModal() {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const cfg = getNotionCfg();
+          modal.innerHTML = `
+            <h3>Importar do Notion</h3>
+            <div class="field"><label>Integration Secret *</label><input id="ntSecret" placeholder="secret_..." value="${cfg.secret || ""}"></div>
+            <div class="field"><label>Database ID *</label><input id="ntDb" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="${cfg.dbid || ""}"></div>
+            <div class="field"><label>Campo — Nome (Title)</label><input id="ntMapName" value="${(cfg.map && cfg.map.name) || "Name"}"></div>
+            <div class="field"><label>Campo — Telefone (Phone ou Rich text)</label><input id="ntMapPhone" value="${(cfg.map && cfg.map.phone) || "Phone"}"></div>
+            <div class="field"><label>Campo — Aniversário (Date)</label><input id="ntMapBirth" value="${(cfg.map && cfg.map.birth) || "Birthday"}"></div>
+            <div class="muted" style="font-size:12px;">Dica: no Notion, compartilhe sua base com a integração e use um campo do tipo "Date" para o aniversário.</div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+              <button class="btn-outline" data-close>Cancelar</button>
+              <button class="btn-primary" id="ntImport">Importar</button>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel) => modal.querySelector(sel);
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+
+          async function notionQueryAll(secret, dbid) {
+            let cursor = undefined;
+            let all = [];
+            for (let i = 0; i < 20; i++) {
+              const body = cursor ? { start_cursor: cursor, page_size: 100 } : { page_size: 100 };
+              const r = await fetch(`https://api.notion.com/v1/databases/${dbid}/query`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${secret}`,
+                  "Content-Type": "application/json",
+                  "Notion-Version": "2022-06-28",
+                },
+                body: JSON.stringify(body),
+              });
+              if (!r.ok) throw new Error("Falha ao consultar a base do Notion. Verifique o Secret, o Database ID e o compartilhamento.");
+              const j = await r.json();
+              all = all.concat(j.results || []);
+              if (j.has_more && j.next_cursor) cursor = j.next_cursor; else break;
+            }
+            return all;
+          }
+          function getTitle(prop){ try { return (prop?.title || []).map(t=>t.plain_text).join("").trim(); } catch { return ""; } }
+          function getText(prop){
+            try {
+              if (!prop) return "";
+              if (prop.type === "phone_number") return prop.phone_number || "";
+              if (prop.type === "rich_text") return (prop.rich_text || []).map(t=>t.plain_text).join(" ").trim();
+              if (prop.type === "title") return getTitle(prop);
+              return "";
+            } catch { return ""; }
+          }
+          function getDate(prop){ try { return (prop?.date?.start || "").slice(0,10); } catch { return ""; } }
+
+          $m("#ntImport").addEventListener("click", async () => {
+            try {
+              const secret = ($m("#ntSecret").value || "").trim();
+              const dbid = ($m("#ntDb").value || "").trim();
+              const map = {
+                name: ($m("#ntMapName").value || "Name").trim(),
+                phone: ($m("#ntMapPhone").value || "Phone").trim(),
+                birth: ($m("#ntMapBirth").value || "Birthday").trim(),
+              };
+              if (!secret || !dbid) { alert("Informe o Secret e o Database ID."); return; }
+              setNotionCfg({ secret, dbid, map });
+              const pages = await notionQueryAll(secret, dbid);
+              const clients = [];
+              pages.forEach(p => {
+                const props = p.properties || {};
+                const nameProp = props[map.name];
+                const phoneProp = props[map.phone];
+                const birthProp = props[map.birth];
+                const name = nameProp ? (getTitle(nameProp) || getText(nameProp)) : "";
+                if (!name) return;
+                const phone = phoneProp ? getText(phoneProp) : "";
+                const birthdate = birthProp ? getDate(birthProp) : "";
+                clients.push({ id: p.id, name, phone, birthdate });
+              });
+              setClientsStore({ clients });
+              modals.style.display = "none";
+              renderClientsList();
+              alert(`Importados ${clients.length} clientes do Notion.`);
+            } catch (e) {
+              alert(e.message || "Erro ao importar do Notion.");
+            }
+          });
+        }
+
+        page.querySelector("#btnNotionImport")?.addEventListener("click", showNotionImportModal);
+        ensureUsersDefaults();
+        page.querySelector("#btnNewClient")?.addEventListener("click", () => showClientModal());
+        if (listEl) {
+          listEl.addEventListener("click", (e) => {
+            const actBtn = e.target.closest("[data-act]");
+            if (!actBtn) return;
+            const rowEl = e.target.closest(".row[data-id]");
+            if (!rowEl) return;
+            const id = rowEl.getAttribute("data-id");
+            const act = actBtn.getAttribute("data-act");
+            const s = getClientsStore();
+            const idx = (s.clients || []).findIndex((c) => String(c.id) === String(id));
+            if (act === "edit") {
+              const existing = idx >= 0 ? s.clients[idx] : null;
+              if (existing) showClientModal(existing);
+            } else if (act === "del") {
+              if (confirm("Excluir este cliente? Isso não remove agendamentos existentes.")) {
+                if (idx >= 0) {
+                  s.clients.splice(idx, 1);
+                  setClientsStore(s);
+                  renderClientsList();
+                }
+              }
+            }
+          });
+        }
+        renderClientsList();
+      }
+
+      // Serviços: catálogo com abas, busca, cards e integração com agendamento
+      if (hash === "/servicos") {
+        ensureSvcDefaults();
+        const st = getSvcStore();
+
+        // estado via querystring
+        const params = new URLSearchParams(location.hash.split("?")[1] || "");
+        let q = params.get("q") || "";
+        let cat = params.get("cat") || "all";
+
+        function setParams(newQ, newCat) {
+          const p = new URLSearchParams();
+          if (newQ) p.set("q", newQ);
+          if (newCat && newCat !== "all") p.set("cat", newCat);
+          location.hash = "/servicos" + (p.toString() ? "?" + p.toString() : "");
+        }
+
+        function catName(id) {
+          if (id === "all") return "Todas";
+          return (st.cats || []).find(c => c.id === id)?.nome || "";
+        }
+
+        function filtered() {
+          const items = (getSvcStore().items || []);
+          return items
+            .filter(s => (cat === "all" ? true : s.cat_id === cat))
+            .filter(s => {
+              if (!q) return true;
+              const v = `${s.nome} ${s.desc || ""}`.toLowerCase();
+              return v.includes(q.toLowerCase());
+            })
+            .sort((a,b) => a.nome.localeCompare(b.nome));
+        }
+
+        function renderTabs() {
+          const tabs = page.querySelector("#svcTabs");
+          const s = getSvcStore();
+          const catList = [{ id: "all", nome: "Todas" }, ...s.cats];
+          tabs.innerHTML = catList.map(c => `
+            <button class="tab ${cat === c.id ? "active": ""}" data-cat="${c.id}">${c.nome}</button>
+          `).join("");
+          tabs.querySelectorAll(".tab").forEach(b => {
+            b.addEventListener("click", () => {
+              cat = b.getAttribute("data-cat");
+              setParams(q, cat);
+            });
+          });
+        }
+
+        function cardHtml(svc) {
+          const foto = svc.foto || "/public/placeholder.svg";
+          return `
+            <article class="svc-card" data-id="${svc.id}">
+              <img class="svc-photo" src="${foto}" alt="${svc.nome}">
+              <div>
+                <div class="svc-title">${svc.nome}</div>
+                <div class="svc-desc">${svc.desc || ""}</div>
+                <div class="svc-meta">
+                  <span class="chip time">⏱️ ${minsTxt(svc.duracao_min)} </span>
+                  <span class="chip price"> ${moneyBR(svc.preco)} </span>
+                </div>
+                <div class="svc-actions-inline">
+                  <button class="btn" data-act="agendar">Agendar</button>
+                  <button class="btn" data-act="editar">Editar</button>
+                  <button class="btn" data-act="remover">Excluir</button>
+                </div>
+              </div>
+            </article>
+          `;
+        }
+
+        function renderList() {
+          const list = page.querySelector("#svcList");
+          const arr = filtered();
+          list.innerHTML = arr.length ? arr.map(cardHtml).join("") : `<div class="muted" style="padding:12px;">Nenhum serviço encontrado.</div>`;
+          list.querySelectorAll(".svc-card .btn").forEach(btn => {
+            const act = btn.getAttribute("data-act");
+            const id = btn.closest(".svc-card").getAttribute("data-id");
+            if (act === "agendar") {
+              btn.addEventListener("click", () => {
+                location.hash = "/agenda?addservice=" + encodeURIComponent(id);
+              });
+            } else if (act === "editar") {
+              btn.addEventListener("click", () => showServiceModal((getSvcStore().items||[]).find(i=>i.id===id)));
+            } else if (act === "remover") {
+              btn.addEventListener("click", () => {
+                const s2 = getSvcStore();
+                s2.items = (s2.items||[]).filter(i => i.id !== id);
+                setSvcStore(s2);
+                renderList();
+              });
+            }
+          });
+        }
+
+        function showCatsModal() {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const s = getSvcStore();
+          modal.innerHTML = `
+            <style>
+              .mgrid { display:grid; gap:10px; }
+              .row { display:flex; gap:8px; align-items:center; }
+              .row input { flex:1; border:1px solid #f1e6ee; border-radius:10px; padding:8px; }
+              .btn { border:1px solid #f1e6ee; border-radius:10px; padding:8px 10px; font-weight:800; color:#a1125b; background:#fff; }
+            </style>
+            <h3>Categorias de Serviços</h3>
+            <div id="catList" class="mgrid">
+              ${(s.cats||[]).map(c => `
+                <div class="row" data-id="${c.id}">
+                  <input value="${c.nome}">
+                  <button class="btn" data-del>Excluir</button>
+                </div>
+              `).join("")}
+            </div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn" id="addCat">+ Adicionar</button>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+              <button class="btn" data-close>Fechar</button>
+              <button class="btn primary" id="saveCats">Salvar</button>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+          $m("#addCat").addEventListener("click", () => {
+            const row = document.createElement("div");
+            row.className="row";
+            row.setAttribute("data-id", svcUid("cat"));
+            row.innerHTML = `<input value=""><button class="btn" data-del>Excluir</button>`;
+            $m("#catList").appendChild(row);
+            row.querySelector("[data-del]").addEventListener("click", ()=> row.remove());
+          });
+          modal.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", ()=> b.closest(".row").remove()));
+          $m("#saveCats").addEventListener("click", () => {
+            const cats = Array.from($m("#catList").children).map(r => ({
+              id: r.getAttribute("data-id"),
+              nome: r.querySelector("input").value.trim() || "Sem nome",
+            })).filter(c=>c.nome);
+            const s2 = getSvcStore();
+            s2.cats = cats;
+            setSvcStore(s2);
+            modals.style.display = "none";
+            renderTabs();
+            renderList();
+          });
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        function showServiceModal(existing) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const s = getSvcStore();
+          const it = existing ? { ...existing } : { id: svcUid("svc"), nome:"", cat_id: (s.cats[0]||{}).id || "", preco: 0, duracao_min: 60, desc:"", foto:"/public/placeholder.svg" };
+          modal.innerHTML = `
+            <style>
+              .amodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .amodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .amodal .field { display:grid; gap:8px; }
+              .amodal label { color:#a1125b; font-weight:900; }
+              .amodal input, .amodal select, .amodal textarea { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+              .amodal textarea { min-height: 80px; resize: vertical; }
+              .row { display:flex; gap:8px; align-items:center; }
+              .photo { width:92px; height:92px; border:1px solid #f1e6ee; border-radius:12px; overflow:hidden; display:grid; place-items:center; background:#fff7fb; }
+              .btn { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
+              .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              @media(max-width:520px){ .amodal .grid2 { grid-template-columns: 1fr; } }
+            </style>
+            <div class="amodal">
+              <h3>${existing ? "Editar Serviço" : "Novo Serviço"}</h3>
+              <div class="grid2">
+                <div class="field">
+                  <label>Nome *</label>
+                  <input id="sNome" value="${it.nome}">
+                </div>
+                <div class="field">
+                  <label>Categoria *</label>
+                  <select id="sCat">
+                    ${(s.cats||[]).map(c => `<option value="${c.id}" ${it.cat_id===c.id?"selected":""}>${c.nome}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Preço (R$) *</label>
+                  <input id="sPreco" type="number" step="0.01" min="0" value="${it.preco}">
+                </div>
+                <div class="field">
+                  <label>Duração (min) *</label>
+                  <input id="sDur" type="number" step="5" min="5" value="${it.duracao_min}">
+                </div>
+              </div>
+              <div class="field">
+                <label>Descrição</label>
+                <textarea id="sDesc" placeholder="O que está incluso, benefícios e observações">${it.desc || ""}</textarea>
+              </div>
+              <div class="field">
+                <label>Imagem</label>
+                <div class="row">
+                  <div class="photo" id="sThumb">${it.foto ? `<img src="${it.foto}" style="width:100%;height:100%;object-fit:cover;">` : "📷"}</div>
+                  <input type="file" id="sFoto" accept="image/*;capture=camera" style="display:none;">
+                  <button class="btn" id="btnFoto">Tirar/Escolher foto</button>
+                </div>
+              </div>
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="saveSvc">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          function compressImageToDataUrl(file, maxW = 900, quality = 0.85) {
+            return new Promise((resolve, reject) => {
+              const img = new Image(); const fr = new FileReader();
+              fr.onload = () => { img.onload = () => {
+                  const canvas = document.createElement("canvas");
+                  const scale = Math.min(1, maxW / img.width);
+                  canvas.width = Math.round(img.width * scale);
+                  canvas.height = Math.round(img.height * scale);
+                  const ctx = canvas.getContext("2d");
+                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  resolve(canvas.toDataURL("image/jpeg", quality));
+                }; img.onerror = reject; img.src = fr.result; };
+              fr.onerror = reject; fr.readAsDataURL(file);
+            });
+          }
+
+          $m("#btnFoto").addEventListener("click", () => $m("#sFoto").click());
+          $m("#sFoto").addEventListener("change", async (ev) => {
+            const f = ev.target.files && ev.target.files[0]; if (!f) return;
+            try {
+              const dataUrl = await compressImageToDataUrl(f);
+              $m("#sThumb").innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+              it.foto = dataUrl;
+            } catch {}
+            ev.target.value = "";
+          });
+
+          $m("#saveSvc").addEventListener("click", () => {
+            it.nome = $m("#sNome").value.trim();
+            it.cat_id = $m("#sCat").value || it.cat_id;
+            it.preco = parseFloat($m("#sPreco").value || "0") || 0;
+            it.duracao_min = parseInt($m("#sDur").value || "0", 10) || 0;
+            it.desc = ($m("#sDesc").value || "").trim();
+            if (!it.nome || !it.cat_id || !it.duracao_min) { alert("Preencha Nome, Categoria e Duração."); return; }
+            const s2 = getSvcStore();
+            if (existing) {
+              const idx = (s2.items||[]).findIndex(x => x.id === it.id);
+              if (idx >= 0) s2.items[idx] = it;
+            } else {
+              s2.items = (s2.items||[]).concat(it);
+            }
+            setSvcStore(s2);
+            modals.style.display = "none";
+            renderList();
+          });
+
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        // Inicializa UI
+        const qInput = page.querySelector("#svcQ");
+        qInput.value = q;
+        qInput.addEventListener("input", (e) => {
+          q = e.target.value || "";
+          setParams(q, cat);
+        });
+
+        renderTabs();
+        renderList();
+
+        page.querySelector("#svcNovo").addEventListener("click", () => showServiceModal());
+        page.querySelector("#svcCat").addEventListener("click", () => showCatsModal());
+      }
+
+      // Interações específicas da Agenda (progresso, atualizar e novo agendamento integrado a Serviços)
       if (hash === "/agenda") {
         const btnUpd = document.getElementById("btnAtualizar");
         const last = document.getElementById("lastUpdate");
@@ -876,6 +1585,606 @@
           }
           requestAnimationFrame(step);
         }
+
+        // ---- Novo Agendamento (ligado ao catálogo de serviços)
+        const AGENDA_KEY = "bella_agenda_v1";
+        const getAgenda = () => { try { return JSON.parse(localStorage.getItem(AGENDA_KEY) || '{"items":[]}'); } catch { return { items: [] }; } };
+        const setAgenda = (s) => localStorage.setItem(AGENDA_KEY, JSON.stringify(s));
+
+        ensureSvcDefaults();
+        ensureUsersDefaults();
+
+        function parseDT(val) {
+          // returns Date or null
+          try { return val ? new Date(val) : null; } catch { return null; }
+        }
+        function addMinutes(date, mins) {
+          const d = new Date(date.getTime());
+          d.setMinutes(d.getMinutes() + (Number(mins)||0));
+          return d;
+        }
+        function dtLocalStr(d) {
+          if (!d) return "";
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth()+1).padStart(2,"0");
+          const dd = String(d.getDate()).padStart(2,"0");
+          const HH = String(d.getHours()).padStart(2,"0");
+          const MM = String(d.getMinutes()).padStart(2,"0");
+          return `${yyyy}-${mm}-${dd}T${HH}:${MM}`;
+        }
+        function fmtHourMin(d) {
+          if (!d) return "";
+          return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+        }
+
+        // ====== Agenda dinâmica (lista funcional por dia) ======
+        const AG_SEL_KEY = "bella_agenda_selected_date";
+        const AG_VIEW_KEY = "bella_agenda_view";
+        let agView = localStorage.getItem(AG_VIEW_KEY) || "list";
+        function ymdFromDate(d) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth()+1).padStart(2,"0");
+          const day = String(d.getDate()).padStart(2,"0");
+          return `${y}-${m}-${day}`;
+        }
+        function ymdLocalFromISO(iso) {
+          try {
+            const d = new Date(iso);
+            return ymdFromDate(d);
+          } catch { return ""; }
+        }
+        function shiftYmd(ymd, deltaDays) {
+          const [y,m,d] = ymd.split("-").map(Number);
+          const date = new Date(y, m-1, d);
+          date.setDate(date.getDate() + deltaDays);
+          return ymdFromDate(date);
+        }
+        let agSelectedDate = localStorage.getItem(AG_SEL_KEY) || ymdFromDate(new Date());
+        function setSelectedDate(ymd) {
+          agSelectedDate = ymd;
+          localStorage.setItem(AG_SEL_KEY, ymd);
+        }
+        function itemsForDate(ymd) {
+          const ag = getAgenda();
+          return (ag.items||[]).filter(it => ymdLocalFromISO(it.inicio) === ymd);
+        }
+        function statusFor(it) {
+          const base = it.status || "scheduled";
+          if (base === "done" || base === "canceled") return base;
+          const now = new Date();
+          const start = new Date(it.inicio);
+          const end = new Date(it.fim);
+          if (now < start) return "scheduled";
+          if (now >= start && now <= end) return "in-progress";
+          if (now > end) return "ready";
+          return "scheduled";
+        }
+        function progressFor(it) {
+          try {
+            const now = new Date().getTime();
+            const start = new Date(it.inicio).getTime();
+            const end = new Date(it.fim).getTime();
+            if (!isFinite(start) || !isFinite(end) || end <= start) return 0;
+            if (now <= start) return 0;
+            if (now >= end) return 1;
+            return (now - start) / (end - start);
+          } catch { return 0; }
+        }
+        function userColorByName(name) {
+          const u = (getUsersStore().users || []).find(x => (x.nome||"") === (name||""));
+          return u?.cor || "#f472b6";
+        }
+        function gradientForWorkers(workers) {
+          const colors = (workers || []).map(userColorByName).filter(Boolean);
+          if (!colors.length) return "#f3c6d9";
+          if (colors.length === 1) return colors[0];
+          const n = colors.length;
+          const stops = colors.map((c, i) => {
+            const p0 = Math.round((i / n) * 100);
+            const p1 = Math.round(((i + 1) / n) * 100);
+            return `${c} ${p0}% ${p1}%`;
+          }).join(", ");
+          return `linear-gradient(90deg, ${stops})`;
+        }
+        function onlyDigitsAg(s) { return String(s||"").replace(/\D+/g, ""); }
+
+        function renderAgendaUI() {
+          const items = itemsForDate(agSelectedDate).slice().sort((a,b) => new Date(a.inicio) - new Date(b.inicio));
+          const counts = items.reduce((acc,it) => {
+            const st = statusFor(it);
+            acc.total++;
+            if (st === "done") acc.done++;
+            else if (st === "canceled") acc.canceled++;
+            else if (st === "in-progress") acc.inprog++;
+            else acc.scheduled++;
+            return acc;
+          }, { total:0, scheduled:0, inprog:0, done:0, canceled:0 });
+
+          function card(it) {
+            const st = statusFor(it);
+            const start = new Date(it.inicio);
+            const end = new Date(it.fim);
+            const dateStr = `${start.toLocaleDateString("pt-BR")}, ${fmtHourMin(start)}`;
+            const workers = Array.from(new Set((it.servicos||[]).map(s => s.profissional).filter(Boolean)));
+            const total = moneyBR(it.total || 0);
+            const tel = onlyDigitsAg(it.telefone || "");
+            const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : "scheduled"));
+            const stLabel = st === "done" ? "Concluído" : st === "canceled" ? "Cancelado" : st === "in-progress" ? "Em Andamento" : "Agendado";
+            const svcLines = (it.servicos||[]).map((s) => {
+              const price = moneyBR(s.preco);
+              const pro = s.profissional ? `<span class="svc-pro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>${s.profissional}</span>` : "";
+              return `<div class="svc-line"><div><span class="svc-name">${s.nome || "-"}</span>${pro}</div><div>${price}</div></div>`;
+            }).join("");
+            return `
+              <article class="appt ${cls}" data-id="${it.id}">
+                <div class="inner">
+                  <div>
+                    <div class="header">
+                      <div class="left-head">
+                        <div class="ava">${(it.cliente||"?").slice(0,1).toUpperCase()}</div>
+                        <div class="name">${it.cliente || "-"}</div>
+                      </div>
+                      <span class="status ${st === "scheduled" ? "scheduled" : ""}">${stLabel}</span>
+                    </div>
+                    <div class="pill">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.5"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      ${dateStr}
+                    </div>
+                    ${tel ? `<div class="pill"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> (${tel.slice(0,2)}) ${tel.slice(2)}</div>` : ``}
+                    <div class="label">Serviços:</div>
+                    <div class="svc-pane">
+                      ${svcLines || `<div class="muted">—</div>`}
+                    </div>
+                    <div class="label">Funcionários:</div>
+                    <div>${workers.length ? workers.map(w => `<span class="worker-pill">${w}</span>`).join(" ") : `<span class="muted">—</span>`}</div>
+                    <div class="total-row"><div class="t">Valor Total:</div><div class="v">${total}</div></div>
+                  </div>
+                  <div class="action-rail">
+                    <button class="abtn" data-act="view" title="Visualizar">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+                    </button>
+                    <button class="abtn" data-act="edit" title="Editar">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="currentColor" stroke-width="1.6"/></svg>
+                    </button>
+                    ${st !== "done" ? `<button class="abtn success" data-act="done" title="Concluir">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>` : ``}
+                    <button class="abtn danger" data-act="del" title="Excluir">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </article>
+            `;
+          }
+
+          page.innerHTML = `
+            <style>
+              .ag-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; }
+              .ag-hero p { margin: 0; color:#9d3a69; font-weight: 600; }
+              .ag-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:10px 0; }
+              .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              .date-nav { display:flex; align-items:center; gap:8px; }
+              .date-nav .arrow { width:40px; height:40px; display:grid; place-items:center; border-radius:12px; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
+              .date-nav input { border:1px solid #f3c6d9; padding:10px; border-radius:12px; font-weight:700; color:#a1125b; }
+              .kpi-mini { display:grid; gap:12px; margin:14px 0; }
+              .kpi-mini .item { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; display:flex; align-items:center; justify-content:space-between; box-shadow: var(--shadow); }
+              .kpi-mini .title { color:#a1125b; font-weight:900; }
+              .kpi-mini .val { font-size:22px; font-weight:900; color:#a1125b; }
+              .list { margin-top:10px; }
+              .appt { position:relative; border-radius:24px; padding:14px; box-shadow: var(--shadow); border:3px solid #f3c6d9; margin-bottom:16px; overflow:hidden; background: linear-gradient(180deg,#f7fee7,#ffffff); }
+              .appt.in-progress { border-color:#f59e0b; background: linear-gradient(180deg,#fef9c3,#fff7ed); }
+              .appt.scheduled { border-color:#059669; background:#ecfdf5; }
+              .appt.canceled { border-color:#b91c1c; background:#fee2e2; }
+              .appt .inner { position:relative; display:grid; grid-template-columns: 1fr 84px; gap: 12px; }
+              .appt .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+              .appt .left-head { display:flex; align-items:center; gap:12px; }
+              .appt .ava { width:56px; height:56px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; font-size:20px; }
+              .appt .name { font-weight:900; color:#7a0f3f; font-size:22px; line-height:1.05; }
+              .appt .status { background:#fde68a; color:#7c2d12; padding:10px 14px; border-radius:18px; font-weight:900; border:1px solid #f59e0b; }
+              .appt.scheduled .status { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+              .appt .pill { display:flex; align-items:center; justify-content:center; gap:8px; background:#fff; border:1px solid #e5e7eb; color:#a1125b; font-weight:800; padding:12px; border-radius:16px; margin-top:10px; }
+              .appt .label { color:#7a0f3f; font-weight:900; margin: 10px 0 6px; }
+              .appt .svc-pane { background:#eef2ff; border:1px solid #c7d2fe; border-radius:16px; padding:10px; }
+              .appt.scheduled .svc-pane { background:#d1fae5; border-color:#a7f3d0; }
+              .appt.in-progress .svc-pane { background:#dbeafe; border-color:#93c5fd; }
+              .appt .svc-line { display:flex; align-items:center; justify-content:space-between; gap:10px; font-weight:900; color:#7a0f3f; }
+              .appt .svc-line .svc-name { color:#7a0f3f; font-weight:900; }
+              .appt .svc-line .svc-pro { color:#475569; font-weight:800; display:inline-flex; align-items:center; gap:6px; margin-left:10px; }
+              .appt .total-row { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:12px; display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
+              .appt .total-row .v { color:#16a34a; font-weight:900; }
+              .appt .action-rail { display:grid; gap:10px; background:#fff7fb; border-left:1px solid #f3c6d9; padding:10px; border-radius:16px; }
+              .appt .action-rail .abtn { width:48px; height:48px; display:grid; place-items:center; border-radius:14px; background:#fff; border:1px solid #f1e6ee; color:#a1125b; box-shadow: 0 1px 4px rgba(173,24,94,.08); }
+              .appt .action-rail .abtn.danger { color:#b91c1c; border-color:#fecaca; }
+              .appt .action-rail .abtn.success { color:#065f46; border-color:#a7f3d0; }
+              .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
+              .worker-pill { display:inline-flex; align-items:center; gap:8px; background:#def7ec; border:1px solid #a7f3d0; color:#065f46; padding:8px 10px; border-radius:14px; font-weight:800; margin-right:6px; }
+            </style>
+
+            <div class="ag-hero">
+              <h1>Agenda</h1>
+              <p>Agendamentos reais (salvos no navegador)</p>
+            </div>
+
+            <div class="ag-toolbar">
+              <div class="date-nav">
+                <button class="arrow" id="agPrev" aria-label="Anterior">‹</button>
+                <input type="date" id="agDate" value="${agSelectedDate}">
+                <button class="arrow" id="agNext" aria-label="Próximo">›</button>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn primary" id="agNovo">+ Novo Agendamento</button>
+                <button class="btn" id="agAtualizar">Atualizar</button>
+              </div>
+            </div>
+
+            <div class="kpi-mini">
+              <div class="item"><div><div class="title">Total do dia</div><div class="val">${counts.total}</div></div></div>
+              <div class="item"><div><div class="title">Agendados</div><div class="val">${counts.scheduled}</div></div></div>
+              <div class="item"><div><div class="title">Em andamento</div><div class="val">${counts.inprog}</div></div></div>
+              <div class="item"><div><div class="title">Concluídos</div><div class="val">${counts.done}</div></div></div>
+              <div class="item"><div><div class="title">Cancelados</div><div class="val">${counts.canceled}</div></div></div>
+            </div>
+
+            <section class="list" id="agList">
+              ${items.length ? items.map(card).join("") : `<div class="empty">Nenhum agendamento para ${agSelectedDate}. Clique em “Novo Agendamento”.</div>`}
+            </section>
+          `;
+
+          // Wire events
+          const by = (id) => page.querySelector("#"+id);
+          by("agPrev").addEventListener("click", () => { setSelectedDate(shiftYmd(agSelectedDate, -1)); renderAgendaUI(); });
+          by("agNext").addEventListener("click", () => { setSelectedDate(shiftYmd(agSelectedDate, +1)); renderAgendaUI(); });
+          by("agDate").addEventListener("change", (e) => { setSelectedDate(e.target.value || agSelectedDate); renderAgendaUI(); });
+          by("agNovo").addEventListener("click", () => showAgendamentoModal());
+          by("agAtualizar").addEventListener("click", () => renderAgendaUI());
+
+          // delegate actions
+          const list = by("agList");
+          list.addEventListener("click", (e) => {
+            const btn = e.target.closest("[data-act]");
+            if (!btn) return;
+            const act = btn.getAttribute("data-act");
+            const id = btn.closest(".appt")?.getAttribute("data-id");
+            if (!id) return;
+            const ag = getAgenda();
+            const idx = (ag.items||[]).findIndex(x=>String(x.id)===String(id));
+            const it = idx>=0 ? ag.items[idx] : null;
+            if (!it) return;
+            if (act === "edit" || act === "view") {
+              showAgendamentoModal([], it);
+            } else if (act === "done") {
+              it.status = "done";
+              setAgenda(ag);
+              renderAgendaUI();
+            } else if (act === "cancel") {
+              it.status = "canceled";
+              setAgenda(ag);
+              renderAgendaUI();
+            } else if (act === "del") {
+              if (confirm("Excluir este agendamento?")) {
+                ag.items.splice(idx,1);
+                setAgenda(ag);
+                renderAgendaUI();
+              }
+            } else if (act === "wa") {
+              const nome = it.cliente || "";
+              const start = new Date(it.inicio);
+              const text = encodeURIComponent(`Olá ${nome}! Seu agendamento está para ${start.toLocaleDateString("pt-BR")} às ${fmtHourMin(start)} no Espaço Bella's.`);
+              const raw = onlyDigitsAg(it.telefone);
+              const url = raw ? `https://wa.me/55${raw}?text=${text}` : `https://wa.me/?text=${text}`;
+              window.open(url, "_blank");
+            }
+          });
+          // Enhance cards: color stripe per profissional, live progress and auto-minimize on end time
+          (function setupAgendaEnhancements(){
+            if (!document.getElementById('agenda-extra-css')) {
+              const st = document.createElement('style');
+              st.id = 'agenda-extra-css';
+              st.textContent = `
+              .appt .colorbar{position:absolute;left:0;right:0;top:0;height:6px;}
+              .appt .progress-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,rgba(16,185,129,.18),rgba(16,185,129,.06));pointer-events:none;transition:width .6s linear;}
+              .appt.ready{border-color:#10b981;background:#ecfdf5;}
+              .appt.mini .pill,.appt.mini .label,.appt.mini .svc-pane,.appt.mini .total-row{display:none;}
+              .appt.mini .name{font-size:18px;}
+              `;
+              document.head.appendChild(st);
+            }
+            function enhanceAgendaCards(){
+              const list = page.querySelector('#agList');
+              if (!list) return;
+              const items = itemsForDate(agSelectedDate).slice();
+              items.forEach((it)=>{
+                const el = list.querySelector(`.appt[data-id="${it.id}"]`);
+                if (!el) return;
+                // color stripe based on envolvidos
+                let bar = el.querySelector('.colorbar');
+                const workers = Array.from(new Set((it.servicos||[]).map(s=>s.profissional).filter(Boolean)));
+                const bg = gradientForWorkers(workers);
+                if (!bar){ bar = document.createElement('div'); bar.className='colorbar'; el.appendChild(bar); }
+                if (bg) bar.style.background = bg;
+                // progress fill
+                let pf = el.querySelector('.progress-fill');
+                if (!pf){ pf = document.createElement('div'); pf.className='progress-fill'; el.insertBefore(pf, el.firstChild); }
+                const st = statusFor(it);
+                const p = st==='ready' ? 1 : st==='in-progress' ? progressFor(it) : 0;
+                pf.style.width = Math.round(p*100)+'%';
+                el.classList.toggle('in-progress', st==='in-progress');
+                el.classList.toggle('ready', st==='ready');
+                el.classList.toggle('mini', st==='ready');
+                const lab = el.querySelector('.status');
+                if (lab) lab.textContent = (st==='done'?'Concluído':st==='canceled'?'Cancelado':st==='in-progress'?'Em Andamento':st==='ready'?'Pronto':'Agendado');
+                // previsao pill
+                const end = new Date(it.fim);
+                let prev = el.querySelector('.pill[data-prev]');
+                if (!prev){
+                  prev = document.createElement('div');
+                  prev.className = 'pill';
+                  prev.setAttribute('data-prev','1');
+                  const after = el.querySelector('.pill');
+                  if (after && after.parentNode) after.parentNode.insertBefore(prev, after.nextSibling);
+                  else el.appendChild(prev);
+                }
+                prev.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 7H5M16 3v4M8 3v4M5 11h14v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-8z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round"/></svg> Previsto: '+fmtHourMin(end);
+              });
+              const last = document.getElementById('lastUpdate');
+              if (last) last.textContent = new Date().toLocaleTimeString('pt-BR');
+            }
+            enhanceAgendaCards();
+            if (window.__agendaTicker) clearInterval(window.__agendaTicker);
+            window.__agendaTicker = setInterval(enhanceAgendaCards, 60000);
+          })();
+        }
+
+        function showAgendamentoModal(preselectIds = [], existingItem = null) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const svcStore = getSvcStore();
+          const services = (svcStore.items || []);
+          const clStore = getClientsStore();
+          const clients = (clStore.clients || []).slice().sort((a,b) => (a.name || "").localeCompare((b.name || "")));
+          const users = (getUsersStore().users || []);
+          const isEditing = !!existingItem;
+          const startDefault = isEditing ? dtLocalStr(new Date(existingItem.inicio)) : dtLocalStr(new Date());
+
+          // Build client datalist for suggestions
+          const clientOptions = clients.map(c => `<option value="${(c.name || "").replace(/"/g, "&quot;")}"></option>`).join("");
+
+          modal.innerHTML = `
+            <style>
+              .amodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .amodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .amodal .field { display:grid; gap:8px; }
+              .amodal label { color:#a1125b; font-weight:900; }
+              .amodal input, .amodal select { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+              .srows { display:grid; gap:8px; margin-top:6px; }
+              .srow { display:grid; grid-template-columns: 1fr 100px 110px 160px 42px; gap:8px; align-items:center; background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:8px; }
+              .srow .del { justify-self:end; border:1px solid #f3c6d9; border-radius:10px; background:#fff; padding:8px; color:#a1125b; }
+              .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              @media(max-width:640px){ .amodal .grid2 { grid-template-columns: 1fr; } .srow { grid-template-columns: 1fr 100px 110px 42px; } }
+              .muted { color:#6b7280; font-weight:700; }
+              .sum { display:flex; align-items:center; justify-content:space-between; background:#fff7fb; border:1px solid #f3c6d9; padding:10px; border-radius:12px; font-weight:900; color:#a1125b; }
+            </style>
+            <div class="amodal">
+              <h3>${isEditing ? "Editar Agendamento" : "Novo Agendamento"}</h3>
+
+              <div class="grid2">
+                <div class="field">
+                  <label>Cliente (existente)</label>
+                  <select id="agCliSel">
+                    <option value="">Selecionar</option>
+                    ${clients.map(c => `<option value="${(c.name || "").replace(/"/g,"&quot;")}" data-phone="${(c.phone || "").replace(/"/g,"&quot;")}" data-prefname="${(c.prefUserName || "").replace(/"/g,"&quot;")}" data-pid="${(c.prefUserId || "").replace(/"/g,"&quot;")}">${c.name || ""}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Nome do Cliente *</label>
+                  <input id="agCli" placeholder="Nome do cliente" value="${isEditing ? (existingItem.cliente || "") : ""}">
+                </div>
+              </div>
+
+              <div class="grid2">
+                <div class="field">
+                  <label>Início *</label>
+                  <input id="agIni" type="datetime-local" value="${startDefault}">
+                </div>
+                <div class="field">
+                  <label>Término previsto</label>
+                  <input id="agFim" type="time" readonly>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Serviços *</label>
+                <div class="srows" id="agRows"></div>
+                <button class="btn" id="agAdd">+ Adicionar serviço</button>
+              </div>
+
+              <div class="sum" id="agResumo">
+                <div>Total: R$ 0,00</div>
+                <div>Duração: 0min</div>
+              </div>
+
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="agSalvar">${isEditing ? "Salvar alterações" : "Salvar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+          let selectedClientPhone = isEditing ? (existingItem.telefone || "") : "";
+          const cliSel = $m("#agCliSel");
+          if (cliSel) cliSel.addEventListener("change", (ev) => {
+            const opt = ev.target.selectedOptions && ev.target.selectedOptions[0];
+            const name = ev.target.value || "";
+            const phone = opt ? (opt.getAttribute("data-phone") || "") : "";
+            const ip = $m("#agCli");
+            if (ip) ip.value = name;
+            selectedClientPhone = phone;
+          });
+
+          function svcSelectHtml() {
+            const opts = services.map(s => `<option value="${s.id}" data-preco="${s.preco}" data-dur="${s.duracao_min}">${s.nome}</option>`).join("");
+            return `<select class="s-sel">${opts}</select>`;
+          }
+
+          function addRow(defaultId, preset = null) {
+            const row = document.createElement("div");
+            row.className = "srow";
+            row.innerHTML = `
+              ${svcSelectHtml()}
+              <input class="s-preco" type="number" step="0.01" min="0" placeholder="Preço">
+              <input class="s-dur" type="number" step="5" min="5" placeholder="Min">
+              <select class="s-prof">
+                <option value="">Profissional</option>
+                ${users.map(u => `<option value="${(u.nome || "").replace(/"/g,"&quot;")}">${u.nome || ""}</option>`).join("")}
+              </select>
+              <button class="del" title="Remover">✕</button>
+            `;
+            const sel = row.querySelector(".s-sel");
+            const ipP = row.querySelector(".s-preco");
+            const ipD = row.querySelector(".s-dur");
+            const ipPro = row.querySelector(".s-prof");
+            sel.value = defaultId || (services[0]?.id || "");
+            function fillBySvc() {
+              const svc = services.find(s => s.id === sel.value);
+              if (svc) {
+                ipP.value = String(svc.preco ?? 0);
+                ipD.value = String(svc.duracao_min ?? 60);
+              } else {
+                ipP.value = "";
+                ipD.value = "";
+              }
+              recalc();
+            }
+            sel.addEventListener("change", fillBySvc);
+            row.querySelector(".del").addEventListener("click", () => { row.remove(); recalc(); });
+            [$m("#agIni"), ipP, ipD].forEach(inp => inp.addEventListener("input", recalc));
+            $m("#agRows").appendChild(row);
+            if (preset) {
+              if (preset.servico_id) sel.value = preset.servico_id;
+              ipP.value = String(preset.preco ?? 0);
+              ipD.value = String(preset.duracao_min ?? 60);
+              if (preset.profissional) ipPro.value = preset.profissional;
+              recalc();
+            } else {
+              fillBySvc();
+            }
+          }
+
+          function recalc() {
+            const start = parseDT($m("#agIni").value);
+            const rows = Array.from($m("#agRows").children);
+            const total = rows.reduce((acc,r)=>acc+(parseFloat(r.querySelector(".s-preco").value||"0")||0),0);
+            const dur = rows.reduce((acc,r)=>acc+(parseInt(r.querySelector(".s-dur").value||"0",10)||0),0);
+            const end = start ? addMinutes(start, dur) : null;
+            $m("#agResumo").children[0].textContent = "Total: " + moneyBR(total);
+            $m("#agResumo").children[1].textContent = "Duração: " + (dur?minsTxt(dur):"0min");
+            $m("#agFim").value = end ? fmtHourMin(end) : "";
+          }
+
+          // Inicializa linhas
+          if (isEditing && Array.isArray(existingItem.servicos) && existingItem.servicos.length) {
+            existingItem.servicos.forEach(sv => addRow(sv.servico_id || (services[0]?.id || ""), sv));
+          } else if (Array.isArray(preselectIds) && preselectIds.length) {
+            preselectIds.forEach(id => addRow(id));
+          } else {
+            addRow();
+          }
+          recalc();
+
+          function hasConflict(start, end, ignoreId) {
+            try {
+              const dayItems = itemsForDate(agSelectedDate);
+              return dayItems.some(it => String(it.id) !== String(ignoreId || "") && (start < new Date(it.fim)) && (end > new Date(it.inicio)));
+            } catch { return false; }
+          }
+
+          $m("#agSalvar").addEventListener("click", () => {
+            const nome = ($m("#agCli").value || "").trim();
+            if (!nome) { alert("Informe o cliente"); return; }
+            const ini = parseDT($m("#agIni").value);
+            if (!ini) { alert("Informe o início"); return; }
+            const rows = Array.from($m("#agRows").children).map(r => {
+              const sel = r.querySelector(".s-sel").value;
+              const svc = services.find(s=>s.id===sel) || {};
+              return {
+                servico_id: sel,
+                nome: svc.nome || "",
+                preco: parseFloat(r.querySelector(".s-preco").value || "0") || 0,
+                duracao_min: parseInt(r.querySelector(".s-dur").value || "0", 10) || 0,
+                profissional: (r.querySelector(".s-prof")?.value || "").trim(),
+              };
+            });
+            if (!rows.length) { alert("Adicione pelo menos um serviço"); return; }
+            const total = rows.reduce((a,b)=>a+b.preco,0);
+            const dur = rows.reduce((a,b)=>a+b.duracao_min,0);
+            const fim = addMinutes(ini, dur);
+
+            if (hasConflict(ini, fim, isEditing ? existingItem.id : null)) {
+              if (!confirm("Existe outro agendamento que conflita com este horário. Deseja salvar mesmo assim?")) {
+                return;
+              }
+            }
+
+            const ag = getAgenda();
+            if (isEditing) {
+              const idx = (ag.items||[]).findIndex(x => String(x.id) === String(existingItem.id));
+              if (idx >= 0) {
+                const prev = ag.items[idx];
+                ag.items[idx] = {
+                  ...prev,
+                  cliente: nome,
+                  telefone: selectedClientPhone,
+                  inicio: ini.toISOString(),
+                  fim: fim.toISOString(),
+                  servicos: rows,
+                  total,
+                  duracao_min: dur,
+                };
+              }
+            } else {
+              ag.items.push({
+                id: "ag-" + Date.now(),
+                cliente: nome,
+                telefone: selectedClientPhone,
+                inicio: ini.toISOString(),
+                fim: fim.toISOString(),
+                servicos: rows,
+                total,
+                duracao_min: dur,
+                status: "scheduled",
+                created_at: new Date().toISOString(),
+              });
+            }
+            setAgenda(ag);
+            modals.style.display = "none";
+            renderAgendaUI();
+          });
+
+          modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        // Renderiza UI dinâmica da Agenda (substitui o mock)
+        renderAgendaUI();
+
+        // Intercepta o botão padrão e abre o modal integrado
+        page.querySelectorAll("[data-open='agendamento']").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.preventDefault(); e.stopImmediatePropagation();
+            showAgendamentoModal();
+          });
+        });
+
+        // Se veio de /servicos com ?addservice=ID, abre direto com o serviço pré-selecionado
+        try {
+          const p = new URLSearchParams(location.hash.split("?")[1] || "");
+          const id = p.get("addservice");
+          if (id) showAgendamentoModal([id]);
+        } catch {}
       }
 
       // Interações específicas do Caixa (persistência local e cálculos)
@@ -921,11 +2230,23 @@
             totalDinheiro = 0,
             totalDebitos = 0;
           atts.forEach((a) => {
-            const v = Number(a.valor) || 0;
-            if (a.pagamento === "pix") totalPix += v;
-            else if (a.pagamento === "cartao") totalCartao += v;
-            else if (a.pagamento === "dinheiro") totalDinheiro += v;
-            else if (a.pagamento === "mensal") totalDebitos += v;
+            if (Array.isArray(a.servicos) && a.servicos.length) {
+              a.servicos.forEach((sv) => {
+                const v = Number(sv.valor) || 0;
+                const p = sv.pagamento || a.pagamento;
+                if (p === "pix") totalPix += v;
+                else if (p === "cartao") totalCartao += v;
+                else if (p === "dinheiro") totalDinheiro += v;
+                else if (p === "mensal") totalDebitos += v;
+              });
+            } else {
+              const v = Number(a.valor) || 0;
+              const p = a.pagamento;
+              if (p === "pix") totalPix += v;
+              else if (p === "cartao") totalCartao += v;
+              else if (p === "dinheiro") totalDinheiro += v;
+              else if (p === "mensal") totalDebitos += v;
+            }
           });
           let totalDespesas = 0,
             totalDespesasCaixa = 0;
@@ -958,6 +2279,20 @@
           const s = snapshot(selectedDate);
           const brDate = fmtBR(selectedDate);
 
+          function payBadge(att) {
+            const pays = (att.servicos || []).map(s => s.pagamento).filter(Boolean);
+            let lab = att.pagamento || "";
+            if (pays.length) {
+              const uniq = Array.from(new Set(pays));
+              lab = uniq.length === 1 ? uniq[0] : "misto";
+            }
+            if (lab === "pix") return '<span class="badge pay-pix">pix</span>';
+            if (lab === "cartao") return '<span class="badge pay-cartao">cartao</span>';
+            if (lab === "dinheiro") return '<span class="badge pay-dinheiro">dinheiro</span>';
+            if (lab === "mensal") return '<span class="badge pay-mensal">mensal</span>';
+            return '<span class="badge" style="background:#f1f5f9;border:1px solid #e2e8f0;color:#334155;">misto</span>';
+          }
+
           page.innerHTML = `
             <style>
               .cx-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
@@ -979,6 +2314,10 @@
               .list-table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
               .list-table th{ text-align:left; color:#a1125b; font-size:12px; }
               .list-table td{ background:#fff; border:1px solid #f1e6ee; padding:10px; border-radius:10px; }
+              @media(max-width:640px){
+                .list-table{ display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; min-width:720px; }
+                .list-table th, .list-table td{ white-space:nowrap; }
+              }
               .badge{ display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; }
               .pay-pix{ background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
               .pay-cartao{ background:#f3e8ff; border:1px solid #e9d5ff; color:#6d28d9; }
@@ -994,6 +2333,7 @@
             <div class="cx-actions">
               <button class="btn primary" id="btnAtendimento">+ Atendimento Manual</button>
               <button class="btn" id="btnDespesa">+ Despesa</button>
+              <button class="btn" id="btnRecibo">Recibo Semanal</button>
               <button class="btn" id="btnPdf">Exportar PDF</button>
               <button class="btn" id="btnImg">Exportar Imagem</button>
             </div>
@@ -1046,6 +2386,27 @@
                 <label class="muted2">Dinheiro em Caixa (Informado)</label>
                 <input type="number" id="cxDinheiro" value="${s.dinheiroInformado}" step="0.01" min="0">
               </div>
+              <div class="field">
+                <label class="muted2">Exportação compacta</label>
+                <label style="display:flex;align-items:center;gap:8px;font-weight:800;color:#a1125b;">
+                  <input type="checkbox" id="cxExportCompact">
+                  <span>2 colunas, menos espaçamento</span>
+                </label>
+              </div>
+              <div class="field">
+                <label class="muted2">Exportação legível</label>
+                <label style="display:flex;align-items:center;gap:8px;font-weight:800;color:#a1125b;">
+                  <input type="checkbox" id="cxExportLegible">
+                  <span>Layout focado em leitura (blocos de cliente + observações destacadas)</span>
+                </label>
+              </div>
+              <div class="field">
+                <label class="muted2">Legível compacto</label>
+                <label style="display:flex;align-items:center;gap:8px;font-weight:800;color:#a1125b;">
+                  <input type="checkbox" id="cxExportLegibleCompact">
+                  <span>2 colunas no modo legível</span>
+                </label>
+              </div>
             </section>
 
             <section class="section">
@@ -1075,15 +2436,7 @@
                             .join(", ") || a.profissional || "-"}</td>
                           <td class="right">${money(a.valor)}</td>
                           <td>
-                            <span class="badge ${
-                              a.pagamento === "pix"
-                                ? "pay-pix"
-                                : a.pagamento === "cartao"
-                                ? "pay-cartao"
-                                : a.pagamento === "dinheiro"
-                                ? "pay-dinheiro"
-                                : "pay-mensal"
-                            }">${a.pagamento}</span>
+                            ${payBadge(a)}
                           </td>
                           <td>
                             <button class="btn" data-edit-att="${a.id}">Editar</button>
@@ -1173,9 +2526,33 @@
             renderCaixa();
           });
 
+          const expC = byId("cxExportCompact");
+          if (expC) {
+            expC.checked = localStorage.getItem("bella_export_compact") === "1";
+            expC.addEventListener("change", (e) => {
+              localStorage.setItem("bella_export_compact", e.target.checked ? "1" : "0");
+            });
+          }
+          const expL = byId("cxExportLegible");
+          if (expL) {
+            expL.checked = localStorage.getItem("bella_export_legible") === "1";
+            expL.addEventListener("change", (e) => {
+              localStorage.setItem("bella_export_legible", e.target.checked ? "1" : "0");
+            });
+          }
+          const expLC = byId("cxExportLegibleCompact");
+          if (expLC) {
+            expLC.checked = localStorage.getItem("bella_export_legible_compact") === "1";
+            expLC.addEventListener("change", (e) => {
+              localStorage.setItem("bella_export_legible_compact", e.target.checked ? "1" : "0");
+            });
+          }
+
           // Ações
           byId("btnAtendimento").addEventListener("click", () => showAtendimentoModal());
           byId("btnDespesa").addEventListener("click", () => showDespesaModal());
+          const recBtn = byId("btnRecibo");
+          if (recBtn) recBtn.addEventListener("click", () => showReciboModal());
           const pdfBtn = byId("btnPdf");
           if (pdfBtn) pdfBtn.addEventListener("click", () => exportPDF());
           const imgBtn = byId("btnImg");
@@ -1246,15 +2623,22 @@
                 .amodal .field { display:grid; gap:8px; }
                 .amodal label { color:#a1125b; font-weight:900; }
                 .amodal input, .amodal select {
-                  border:2px solid #f3c6d9; border-radius:14px; padding:12px; font-weight:700; color:#a1125b; background:#fff;
+                  border:2px solid #f3c6d9; border-radius:14px; padding:12px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
                 }
                 .amodal input[readonly] { background:#fff7fb; }
                 .amodal .hint { color:#9ca3af; font-weight:700; }
                 .amodal .svc-head { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+                .amodal #svcList { display:grid; gap:10px; }
                 .amodal .svc-row {
-                  display:grid; grid-template-columns: 1fr 130px 180px 42px; gap:8px; align-items:center;
+                  display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; grid-template-areas: "nome valor prof pay del"; gap:10px; align-items:center;
+                  background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:10px;
                 }
-                .amodal .svc-add { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
+                .amodal .svc-row .svc-nome { grid-area: nome; }
+                .amodal .svc-row .svc-valor { grid-area: valor; }
+                .amodal .svc-row .svc-prof { grid-area: prof; }
+                .amodal .svc-row .svc-pay { grid-area: pay; }
+                .amodal .svc-row .svc-del { grid-area: del; justify-self:end; }
+                .amodal .svc-add { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; display:inline-flex; align-items:center; gap:8px; max-width:100%; }
                 .amodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:8px; }
                 .amodal .btn-cancel {
                   border:2px solid #f3c6d9; border-radius:16px; padding:12px 16px; background:#fff; color:#a1125b; font-weight:900;
@@ -1263,9 +2647,16 @@
                   border:0; border-radius:16px; padding:12px 16px; font-weight:900; color:#fff;
                   background:linear-gradient(90deg,var(--bella-500),var(--bella-400));
                 }
-                @media(max-width: 520px){
+                @media(max-width: 640px){
                   .amodal .grid2 { grid-template-columns: 1fr; }
-                  .amodal .svc-row { grid-template-columns: 1fr 110px 1fr 42px; }
+                  .amodal .svc-row { grid-template-columns: 1fr 110px 42px; grid-template-areas:
+                    "nome valor del"
+                    "prof pay del";
+                  }
+                  .amodal .svc-row .svc-nome,
+                  .amodal .svc-row .svc-valor,
+                  .amodal .svc-row .svc-prof,
+                  .amodal .svc-row .svc-pay { min-width: 0; }
                 }
               </style>
 
@@ -1300,14 +2691,11 @@
                   <input value="Atendimento" readonly>
                 </div>
 
+                
+
                 <div class="field">
-                  <label>Forma de Pagamento</label>
-                  <select id="fPagamento">
-                    <option value="dinheiro" ${!existing || existing?.pagamento === "dinheiro" ? "selected" : ""}>Dinheiro</option>
-                    <option value="pix" ${existing?.pagamento === "pix" ? "selected" : ""}>PIX</option>
-                    <option value="cartao" ${existing?.pagamento === "cartao" ? "selected" : ""}>Cartão</option>
-                    <option value="mensal" ${existing?.pagamento === "mensal" ? "selected" : ""}>Mensal (débito)</option>
-                  </select>
+                  <label>Observação</label>
+                  <input id="fObs" placeholder="Opcional (ex.: combo unhas + cabelos R$ 100)" value="${existing?.obs || ""}">
                 </div>
 
                 <div class="footer">
@@ -1321,13 +2709,23 @@
 
             const svcList = modal.querySelector("#svcList");
 
-            function addRow(svc = { nome: "", valor: "", profissional: "" }) {
+            const defaultPay = existing?.pagamento || "dinheiro";
+
+            function addRow(svc = { nome: "", valor: "", profissional: "", pagamento: "" }) {
               const row = document.createElement("div");
               row.className = "svc-row";
+              const payVal = svc.pagamento || defaultPay || "dinheiro";
+              const sel = (val) => (payVal === val ? "selected" : "");
               row.innerHTML = `
                 <input placeholder="Serviço" class="svc-nome" value="${svc.nome || ""}">
                 <input type="number" step="0.01" min="0" placeholder="Valor" class="svc-valor" value="${svc.valor || ""}">
                 <input placeholder="Profissional" class="svc-prof" value="${svc.profissional || ""}">
+                <select class="svc-pay">
+                  <option value="dinheiro" ${sel("dinheiro")}>Dinheiro</option>
+                  <option value="pix" ${sel("pix")}>PIX</option>
+                  <option value="cartao" ${sel("cartao")}>Cartão</option>
+                  <option value="mensal" ${sel("mensal")}>Mensal</option>
+                </select>
                 <button class="closex svc-del" type="button" title="Remover">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 </button>
@@ -1355,13 +2753,18 @@
 
             modal.querySelector("#saveAtt").addEventListener("click", () => {
               const cliente = modal.querySelector("#fCliente").value.trim();
-              const pagamento = modal.querySelector("#fPagamento").value;
+              const obs = (modal.querySelector("#fObs")?.value || "").trim();
               const total = parseFloat(modal.querySelector("#fTotal").value || "0") || 0;
               const servicos = Array.from(modal.querySelectorAll("#svcList .svc-row")).map((r) => ({
                 nome: r.querySelector(".svc-nome").value.trim(),
                 valor: parseFloat(r.querySelector(".svc-valor").value || "0") || 0,
                 profissional: r.querySelector(".svc-prof").value.trim(),
+                pagamento: (r.querySelector(".svc-pay")?.value) || defaultPay || "dinheiro",
               }));
+
+              // pagamento do atendimento: se todos iguais, usa o único; senão, "misto"
+              const uniquePays = Array.from(new Set(servicos.map((s) => s.pagamento).filter(Boolean)));
+              const pagamentoTop = uniquePays.length === 1 ? uniquePays[0] : "misto";
 
               const store = getStore();
               const day = getDay(store, selectedDate);
@@ -1369,15 +2772,16 @@
               if (existing) {
                 const idx = day.atendimentos.findIndex((a) => String(a.id) === String(existing.id));
                 if (idx >= 0)
-                  day.atendimentos[idx] = { ...existing, cliente, pagamento, valor: total, servicos };
+                  day.atendimentos[idx] = { ...existing, cliente, pagamento: pagamentoTop, valor: total, servicos, obs };
               } else {
                 day.atendimentos.push({
                   id: "att-" + Date.now(),
                   data: selectedDate,
                   cliente,
-                  pagamento,
+                  pagamento: pagamentoTop,
                   valor: total,
                   servicos,
+                  obs,
                 });
               }
               setStore(store);
@@ -1424,6 +2828,7 @@
               const f = ev.target.files && ev.target.files[0];
               if (!f) return;
               let text = "";
+              // 1) Tenta via BarcodeDetector (nativo)
               try {
                 if (window.BarcodeDetector) {
                   const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
@@ -1433,11 +2838,47 @@
                 }
               } catch {}
               const fr = new FileReader();
-              fr.onload = () => {
+              fr.onload = async () => {
                 const dataUrl = String(fr.result || "");
+                // 2) Se não conseguiu via nativo, tenta decodificar via jsQR (fallback)
+                if (!text && dataUrl) {
+                  try {
+                    await (async function ensureJsQR() {
+                      if (!window.jsQR) {
+                        await new Promise((resolve, reject) => {
+                          const s = document.createElement("script");
+                          s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
+                          s.onload = resolve;
+                          s.onerror = reject;
+                          document.head.appendChild(s);
+                        });
+                      }
+                    })();
+                    if (window.jsQR) {
+                      await new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                          try {
+                            const canvas = document.createElement("canvas");
+                            canvas.width = img.naturalWidth || img.width;
+                            canvas.height = img.naturalHeight || img.height;
+                            const ctx = canvas.getContext("2d");
+                            ctx.drawImage(img, 0, 0);
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const result = window.jsQR(imageData.data, imageData.width, imageData.height);
+                            if (result && result.data) text = result.data;
+                          } catch {}
+                          resolve();
+                        };
+                        img.onerror = () => resolve();
+                        img.src = dataUrl;
+                      });
+                    }
+                  } catch {}
+                }
+                // Atualiza UI e armazena
                 qrPayload.textContent = text ? ("Payload: " + text) : "";
                 qrPreview.innerHTML = dataUrl ? `<img src="${dataUrl}" style="max-width:140px;border:1px solid #f1e6ee;border-radius:8px;">` : "";
-                // stash temporário nos elementos
                 qrPayload.setAttribute("data-qrtext", text);
                 qrPreview.setAttribute("data-qrimg", dataUrl);
               };
@@ -1484,6 +2925,379 @@
               setStore(store);
               modals.style.display = "none";
               renderCaixa();
+            });
+          }
+
+          // ======== Recibo Semanal (assinatura eletrônica simples, sem custo) ========
+          function showReciboModal() {
+            const modals = document.getElementById("modals");
+            const modal = modals.querySelector(".modal");
+
+            modal.innerHTML = `
+              <style>
+                .rmodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+                .rmodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+                .rmodal .grid3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+                .rmodal .field { display:grid; gap:6px; }
+                .rmodal label { color:#a1125b; font-weight:900; font-size:13px; }
+                .rmodal input, .rmodal select, .rmodal textarea {
+                  border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
+                }
+                .rmodal textarea { resize: vertical; min-height: 64px; }
+                .rmodal .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+                .rmodal .btn { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
+                .rmodal .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+                .rmodal .sigbox { border:2px dashed #f3c6d9; border-radius:14px; padding:8px; background:#fff7fb; }
+                .rmodal .sig-actions { display:flex; justify-content:space-between; gap:8px; margin-top:6px; }
+                .rmodal canvas { width:100%; height:160px; display:block; background:#fff; border-radius:10px; }
+                .rmodal .hint { color:#64748b; font-weight:700; font-size:12px; }
+                .rmodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+                @media(max-width:640px){ .rmodal .grid2, .rmodal .grid3 { grid-template-columns: 1fr; } }
+              </style>
+
+              <div class="rmodal">
+                <div class="row" style="justify-content:space-between;">
+                  <h3>Recibo Semanal — Assinatura</h3>
+                  <button class="btn" data-close aria-label="Fechar">Fechar</button>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label>Nome do Autônomo *</label>
+                    <input id="rcNome" placeholder="Ex.: Kelly Monice">
+                  </div>
+                  <div class="field">
+                    <label>Valor (R$) *</label>
+                    <input id="rcValor" type="number" step="0.01" min="0" placeholder="0,00">
+                  </div>
+                </div>
+
+                <div class="grid3" style="margin-top:8px;">
+                  <div class="field">
+                    <label>CPF *</label>
+                    <input id="rcCPF" placeholder="Somente números">
+                  </div>
+                  <div class="field">
+                    <label>RG</label>
+                    <input id="rcRG" placeholder="Opcional">
+                  </div>
+                  <div class="field">
+                    <label>WhatsApp (p/ enviar código)</label>
+                    <input id="rcWhats" placeholder="(DDD) 9xxxx-xxxx">
+                  </div>
+                </div>
+
+                <div class="grid2" style="margin-top:8px;">
+                  <div class="field">
+                    <label>Período — De *</label>
+                    <input id="rcDe" type="date" value="${selectedDate}">
+                  </div>
+                  <div class="field">
+                    <label>Até *</label>
+                    <input id="rcAte" type="date" value="${selectedDate}">
+                  </div>
+                </div>
+
+                <div class="grid3" style="margin-top:8px;">
+                  <div class="field">
+                    <label>Cidade</label>
+                    <input id="rcCidade" value="Recife">
+                  </div>
+                  <div class="field">
+                    <label>Data do recibo</label>
+                    <input id="rcData" type="date" value="${selectedDate}">
+                  </div>
+                  <div class="field">
+                    <label>Nº (gerado)</label>
+                    <input id="rcNum" value="REC-${Date.now().toString().slice(-6)}" readonly>
+                  </div>
+                </div>
+
+                <div class="field" style="margin-top:8px;">
+                  <label>Confirmação por código (opcional, recomendado)</label>
+                  <div class="row">
+                    <button class="btn" id="rcGenCode">Gerar código</button>
+                    <div class="hint">Código: <strong id="rcCode">—</strong></div>
+                    <button class="btn" id="rcSendWA">Enviar por WhatsApp</button>
+                    <input id="rcOtp" placeholder="Digite o código recebido" style="max-width:220px;">
+                  </div>
+                </div>
+
+                <div class="field" style="margin-top:6px;">
+                  <label>Assinatura do Autônomo *</label>
+                  <div class="sigbox">
+                    <canvas id="sigPad"></canvas>
+                    <div class="sig-actions">
+                      <span class="hint">Assine com o dedo (celular) ou mouse (PC). Use o botão limpar se necessário.</span>
+                      <div>
+                        <button class="btn" id="sigClear">Limpar</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="hint" style="margin-top:6px;">
+                  Ao gerar, salvaremos o PDF do recibo e um arquivo “evidências.json” contendo hash dos dados, IP (quando disponível),
+                  data/hora, dispositivo e a imagem da assinatura. Isso fortalece a prova da assinatura (assinatura eletrônica simples).
+                </div>
+
+                <div class="footer">
+                  <button class="btn" data-close>Cancelar</button>
+                  <button class="btn primary" id="rcGerar">Gerar Recibo (PDF + evidências)</button>
+                </div>
+              </div>
+            `;
+            modals.style.display = "flex";
+
+            // Helpers
+            const $q = (sel) => modal.querySelector(sel);
+            const onlyDigits = (s) => (s || "").replace(/\D+/g, "");
+
+            // OTP
+            let currentCode = "";
+            $q("#rcGenCode").addEventListener("click", () => {
+              currentCode = String(Math.floor(100000 + Math.random() * 900000));
+              $q("#rcCode").textContent = currentCode;
+            });
+            $q("#rcSendWA").addEventListener("click", () => {
+              if (!currentCode) {
+                alert("Gere um código primeiro.");
+                return;
+              }
+              const nome = ($q("#rcNome").value || "").trim();
+              const de = $q("#rcDe").value || "";
+              const ate = $q("#rcAte").value || "";
+              const text = encodeURIComponent(`Código de confirmação do recibo — Espaço Bella's: ${currentCode}\nProfissional: ${nome}\nPeríodo: ${de} a ${ate}.`);
+              const raw = onlyDigits($q("#rcWhats").value);
+              const url = raw ? `https://wa.me/${raw}?text=${text}` : `https://wa.me/?text=${text}`;
+              window.open(url, "_blank");
+            });
+
+            // Signature pad
+            const canvas = $q("#sigPad");
+            const ctx = canvas.getContext("2d");
+            let drawing = false;
+            let hasInk = false;
+
+            function resizeCanvas() {
+              const dpr = Math.max(1, window.devicePixelRatio || 1);
+              const rect = canvas.getBoundingClientRect();
+              canvas.width = Math.floor(rect.width * dpr);
+              canvas.height = Math.floor(rect.height * dpr);
+              ctx.scale(dpr, dpr);
+              ctx.lineWidth = 2;
+              ctx.lineJoin = "round";
+              ctx.lineCap = "round";
+              ctx.strokeStyle = "#111827";
+              ctx.fillStyle = "#ffffff";
+              ctx.clearRect(0, 0, rect.width, rect.height);
+            }
+            // Need to reset transform on resize
+            const initCanvas = () => {
+              const rect = canvas.getBoundingClientRect();
+              const dpr = Math.max(1, window.devicePixelRatio || 1);
+              canvas.width = Math.floor(rect.width * dpr);
+              canvas.height = Math.floor(rect.height * dpr);
+              ctx.setTransform(1,0,0,1,0,0);
+              ctx.scale(dpr, dpr);
+              ctx.lineWidth = 2;
+              ctx.lineJoin = "round";
+              ctx.lineCap = "round";
+              ctx.strokeStyle = "#111827";
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(0, 0, rect.width, rect.height);
+            };
+            initCanvas();
+            window.addEventListener("resize", initCanvas, { once: true });
+
+            const pos = (ev) => {
+              const r = canvas.getBoundingClientRect();
+              const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+              const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - r.top;
+              return { x, y };
+            };
+
+            function start(ev) {
+              drawing = true;
+              hasInk = true;
+              const p = pos(ev);
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ev.preventDefault();
+            }
+            function move(ev) {
+              if (!drawing) return;
+              const p = pos(ev);
+              ctx.lineTo(p.x, p.y);
+              ctx.stroke();
+              ev.preventDefault();
+            }
+            function end() { drawing = false; }
+
+            canvas.addEventListener("mousedown", start);
+            canvas.addEventListener("mousemove", move);
+            window.addEventListener("mouseup", end);
+
+            canvas.addEventListener("touchstart", start, { passive: false });
+            canvas.addEventListener("touchmove", move, { passive: false });
+            canvas.addEventListener("touchend", end);
+
+            $q("#sigClear").addEventListener("click", () => {
+              initCanvas();
+              hasInk = false;
+            });
+
+            // Utils
+            async function sha256HexFromArrayBuffer(buf) {
+              try {
+                const hash = await crypto.subtle.digest("SHA-256", buf);
+                return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,"0")).join("");
+              } catch { return null; }
+            }
+            async function sha256HexFromString(text) {
+              try {
+                const enc = new TextEncoder();
+                return await sha256HexFromArrayBuffer(enc.encode(text));
+              } catch { return null; }
+            }
+            async function getPublicIP() {
+              try {
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), 2500);
+                const r = await fetch("https://api.ipify.org?format=json", { signal: ctrl.signal });
+                clearTimeout(t);
+                if (!r.ok) return null;
+                const j = await r.json();
+                return j?.ip || null;
+              } catch { return null; }
+            }
+            function downloadBlob(blob, filename) {
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+            }
+            function safeName(s) {
+              return String(s || "").normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").replace(/[^a-z0-9_\\-\\.]+/gi,"-").slice(0,80);
+            }
+
+            $q("[data-close]").addEventListener("click", () => (modals.style.display = "none"));
+
+            $q("#rcGerar").addEventListener("click", async () => {
+              const nome = ($q("#rcNome").value || "").trim();
+              const cpf = onlyDigits($q("#rcCPF").value);
+              const rg = ($q("#rcRG").value || "").trim();
+              const valor = parseFloat($q("#rcValor").value || "0") || 0;
+              const de = $q("#rcDe").value || "";
+              const ate = $q("#rcAte").value || "";
+              const cidade = ($q("#rcCidade").value || "Recife").trim();
+              const dataRec = $q("#rcData").value || selectedDate;
+              const numero = ($q("#rcNum").value || ("REC-" + Date.now())).trim();
+              const otpIn = ($q("#rcOtp").value || "").trim();
+
+              if (!nome || !cpf || !valor || !de || !ate) {
+                alert("Preencha Nome, CPF, Valor e o Período (De/Até).");
+                return;
+              }
+              if (!hasInk) {
+                alert("Por favor, colha a assinatura do profissional.");
+                return;
+              }
+
+              const otpOk = currentCode && otpIn ? (otpIn === currentCode) : false;
+
+              await ensureJsPDF();
+              const { jsPDF } = window.jspdf || {};
+              const doc = new jsPDF({ unit: "mm", format: "a4" });
+              const margin = 18;
+              let y = margin;
+
+              // Cabeçalho
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(16);
+              doc.text("Espaço Bella's — Recibo de Pagamento por Serviços Prestados", margin, y);
+              y += 8;
+
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(11);
+
+              const valorBR = (Number(valor) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+              const body =
+                `Eu, ${nome}, CPF ${cpf}${rg ? `, RG ${rg}` : ""}, declaro para os devidos fins que recebi nesta data a quantia de ${valorBR} do estabelecimento Espaço Bella's, referente aos serviços prestados no período de ${de} até ${ate}, na condição de autônomo, não caracterizando vínculo empregatício.\n\n` +
+                "Declaro ainda estar de pleno acordo com os valores descritos e dou plena quitação dos serviços prestados no período informado.\n\n" +
+                `Local e data: ${cidade}, ${new Date(dataRec + "T00:00:00").toLocaleDateString("pt-BR")}\n`;
+
+              const lines = doc.splitTextToSize(body, 210 - margin * 2);
+              doc.text(lines, margin, y);
+              y += lines.length * 5 + 10;
+
+              // Linha de assinatura
+              const sigW = 80, sigH = 28;
+              const sigX = margin, sigY = y;
+              // Desenha a assinatura
+              try {
+                const sigData = canvas.toDataURL("image/png");
+                doc.addImage(sigData, "PNG", sigX, sigY, sigW, sigH);
+              } catch {}
+              doc.setDrawColor(51, 65, 85);
+              doc.line(sigX, sigY + sigH + 2, sigX + sigW, sigY + sigH + 2);
+              doc.setFontSize(10);
+              doc.text("Assinatura do Autônomo", sigX, sigY + sigH + 7);
+              doc.text(`Nome: ${nome}`, sigX + sigW + 10, sigY + sigH - 2);
+              y = sigY + sigH + 16;
+
+              // Rodapé: identificadores
+              const createdAt = new Date().toLocaleString("pt-BR");
+              doc.setFontSize(9);
+              doc.setTextColor(107,114,128);
+              doc.text(`Nº: ${numero}`, margin, 297 - margin - 6);
+              doc.text(`Gerado em: ${createdAt}`, margin, 297 - margin);
+
+              // Evidências
+              const ua = navigator.userAgent || "";
+              const ip = await getPublicIP();
+              const evidBase = {
+                numero,
+                createdAt: new Date().toISOString(),
+                device: { userAgent: ua, screen: { w: window.screen?.width || null, h: window.screen?.height || null } },
+                ip: ip || null,
+                profissional: { nome, cpf, rg },
+                periodo: { de, ate },
+                valor: valor,
+                cidade,
+                dataRecibo: dataRec,
+                otp: currentCode ? { generated: true, provided: !!otpIn, verified: otpOk, code: currentCode, verifiedAt: otpOk ? new Date().toISOString() : null } : { generated: false },
+              };
+              const evidHash = await sha256HexFromString(JSON.stringify(evidBase));
+
+              // Carimba hash de dados no PDF
+              doc.setTextColor(107,114,128);
+              doc.setFontSize(8);
+              doc.text(`Hash dos dados: ${evidHash || "-"}`, 210 - margin, 297 - margin, { align: "right" });
+
+              // Gerar blob/arraybuffer para hash do PDF
+              const pdfArrayBuf = doc.output("arraybuffer");
+              const pdfBlob = new Blob([pdfArrayBuf], { type: "application/pdf" });
+              const pdfSha = await sha256HexFromArrayBuffer(pdfArrayBuf);
+
+              const sigDataUrl = canvas.toDataURL("image/png");
+
+              const evidFull = {
+                ...evidBase,
+                dataHash: evidHash || null,
+                pdfSha256: pdfSha || null,
+                signature: sigDataUrl,
+              };
+
+              // Downloads
+              const base = `recibo_semanal_${dataRec}_${safeName(nome)}`;
+              downloadBlob(pdfBlob, base + ".pdf");
+              downloadBlob(new Blob([JSON.stringify(evidFull, null, 2)], { type: "application/json" }), base + "_evidencias.json");
+
+              modals.style.display = "none";
             });
           }
 
@@ -1715,10 +3529,310 @@
 
           async function exportImage() {
             await ensureHtml2Canvas();
+
+            // Ensure QR generator for embedding QR codes of expense receipts
+            async function ensureQRious() {
+              if (!window.QRious) {
+                await loadScriptOnce("https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js");
+              }
+            }
+            await ensureQRious();
+
             const s2 = snapshot(selectedDate);
             const brDate = fmtBR(selectedDate);
             const genStr = new Date().toLocaleString("pt-BR");
-            const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+            const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+            const compact = localStorage.getItem("bella_export_compact") === "1";
+            const legible = localStorage.getItem("bella_export_legible") === "1";
+            const legibleCompact = localStorage.getItem("bella_export_legible_compact") === "1";
+            const useCompact = legible ? legibleCompact : compact;
+            const legendHTML = legible ? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 8px;">
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;padding:4px 8px;border-radius:999px;font-weight:800;">PIX</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#f3e8ff;border:1px solid #e9d5ff;color:#6d28d9;padding:4px 8px;border-radius:999px;font-weight:800;">Cartão</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:4px 8px;border-radius:999px;font-weight:800;">Dinheiro</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;border:1px solid #fed7aa;color:#b45309;padding:4px 8px;border-radius:999px;font-weight:800;">Mensal</span>
+            </div>` : ``;
+
+            // Group attendances by client and explode multiple services
+            function groupAttsByClient(atts) {
+              const map = {};
+              (atts || []).forEach((a) => {
+                const cliente = a.cliente || "-";
+                if (!map[cliente]) map[cliente] = { items: [], obs: [] };
+                if (a.obs) map[cliente].obs.push(a.obs);
+                const pagamento = a.pagamento || "";
+                if (Array.isArray(a.servicos) && a.servicos.length) {
+                  a.servicos.forEach((sv) => {
+                    map[cliente].items.push({
+                      servico: sv?.nome || a.servico || "-",
+                      profissional: sv?.profissional || a.profissional || "-",
+                      pagamento: sv?.pagamento || pagamento,
+                      valor: Number(sv?.valor ?? 0) || 0,
+                    });
+                  });
+                } else {
+                  map[cliente].items.push({
+                    servico: a.servico || "-",
+                    profissional: a.profissional || "-",
+                    pagamento,
+                    valor: Number(a.valor ?? 0) || 0,
+                  });
+                }
+              });
+              return map;
+            }
+
+            function renderGroupedAttsTable(groups, isCompact) {
+              const entries = Object.entries(groups || {});
+              if (!entries.length) {
+                return `<div class="muted">Sem atendimentos para esta data</div>`;
+              }
+              const paymentSummary = (items) => {
+                const counts = { pix: 0, cartao: 0, dinheiro: 0, mensal: 0 };
+                (items || []).forEach((it) => {
+                  const p = (it.pagamento || "").toLowerCase();
+                  if (counts[p] != null) counts[p] += 1;
+                });
+                const used = Object.entries(counts).filter(([, v]) => v > 0);
+                const uniform = used.length <= 1;
+                const label = used
+                  .map(([k, v]) => (k.toUpperCase() + (v > 1 ? ` ${v}` : "")))
+                  .join(" • ");
+                return { counts, uniform, label, unique: used.map(([k]) => k) };
+              };
+
+              const headPad = isCompact ? "6px 8px" : "10px 12px";
+              const chipPad = isCompact ? "3px 6px" : "4px 8px";
+              const chipFont = isCompact ? "11px" : "12px";
+              const groupRadius = isCompact ? "10px" : "14px";
+              const groupMargin = isCompact ? "8px 0" : "10px 0";
+              const bodyPad = isCompact ? "6px 8px" : "8px 10px";
+              const cellPad = isCompact ? "6px 8px" : "8px 10px";
+              const rowSpace = isCompact ? 4 : 6;
+
+              let html = "";
+              entries.forEach(([cliente, data]) => {
+                const items = (data && data.items) || [];
+                if (!items.length) return;
+                const total = items.reduce((acc, it) => acc + (Number(it.valor) || 0), 0);
+                const stats = paymentSummary(items);
+                const showPayCol = !stats.uniform;
+
+                const obsHtml =
+                  (data && data.obs && data.obs.length)
+                    ? `<div class="client-obs" style="color:#64748b; font-size:12px;">${data.obs.map((o) => String(o)).join(" • ")}</div>`
+                    : "";
+
+                const header = `
+                  <div class="client-group" style="border:1px solid #f1e6ee; border-radius:${groupRadius}; margin:${groupMargin}; overflow:hidden;">
+                    <div class="client-head" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#fff7fb; border-bottom:1px solid #f9e0ea; padding:${headPad};">
+                      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div class="stripe" style="width:4px; height:${isCompact ? "18px" : "20px"}; background:#ec4899; border-radius:999px;"></div>
+                        <div class="client-name" style="font-weight:900; color:#9d174d; font-size:${isCompact ? "15px" : "16px"};">${cliente}</div>
+                        <div class="chips" style="display:flex; gap:6px; flex-wrap:wrap;">
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:${chipFont}; padding:${chipPad}; border-radius:999px;">Total ${money(total)}</span>
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:${chipFont}; padding:${chipPad}; border-radius:999px;">${items.length} serviços</span>
+                          <span class="chip" style="background:#fdf2f8; border:1px solid #f3c6d9; color:#9d174d; font-weight:800; font-size:${chipFont}; padding:${chipPad}; border-radius:999px;">${stats.uniform ? (stats.unique[0] || "").toUpperCase() : stats.label}</span>
+                        </div>
+                      </div>
+                      ${obsHtml}
+                    </div>
+                    <div class="client-body" style="padding:${bodyPad};">
+                      <table class="svc-table" style="width:100%; border-collapse:separate; border-spacing:0 ${rowSpace}px; font-size:13px;">
+                        <thead>
+                          <tr>
+                            <th style="text-align:left; color:#9d174d; font-weight:800;">Serviço</th>
+                            <th style="text-align:left; color:#9d174d; font-weight:800;">Profissional</th>
+                            ${showPayCol ? `<th style="text-align:left; color:#9d174d; font-weight:800;">Pagamento</th>` : ``}
+                            <th style="text-align:right; color:#9d174d; font-weight:800;">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${items
+                            .map((it) => `
+                              <tr>
+                                <td style="padding:${cellPad}; border:1px solid #f1e6ee; background:#fff;">${it.servico || "-"}</td>
+                                <td style="padding:${cellPad}; border:1px solid #f1e6ee; background:#fff;">${it.profissional || "-"}</td>
+                                ${showPayCol ? `<td style="padding:${cellPad}; border:1px solid #f1e6ee; background:#fff;">${(it.pagamento || "").toUpperCase()}</td>` : ``}
+                                <td class="num" style="padding:${cellPad}; border:1px solid #f1e6ee; background:#fff; text-align:right; font-weight:900;">${money(it.valor)}</td>
+                              </tr>
+                            `)
+                            .join("")}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                `;
+                html += header;
+              });
+              return html;
+            }
+
+            // Novo layout legível (cards por cliente com observação destacada)
+            function renderLegibleGroups(groups, isCompact) {
+              const entries = Object.entries(groups || {});
+              if (!entries.length) {
+                return `<div class="muted">Sem atendimentos para esta data</div>`;
+              }
+              const paySummary = (items) => {
+                const counts = { pix:0, cartao:0, dinheiro:0, mensal:0 };
+                items.forEach(it => { const p=(it.pagamento||"").toLowerCase(); if (p in counts) counts[p]++; });
+                const used = Object.entries(counts).filter(([,v])=>v>0);
+                const uniform = used.length<=1;
+                const label = used.map(([k,v])=>k.toUpperCase() + (v>1?` ${v}`:"")).join(" • ");
+                const unique = used.map(([k])=>k);
+                return { uniform, label, unique };
+              };
+
+              const padHead = isCompact ? "8px 10px" : "12px 14px";
+              const padBody = isCompact ? "8px" : "10px";
+              const padCell = isCompact ? "6px 8px" : "8px 10px";
+              const fsTitle = isCompact ? "15px" : "16px";
+              const rowGap = isCompact ? 4 : 6;
+
+              let html = "";
+              entries.forEach(([cliente, data]) => {
+                const items = (data?.items)||[];
+                if (!items.length) return;
+                const total = items.reduce((s,it)=>s+(Number(it.valor)||0),0);
+                const ps = paySummary(items);
+                const showPay = !ps.uniform;
+
+                const obsLine = (data?.obs?.length)
+                  ? `<div style="padding:${isCompact ? "6px 10px" : "8px 12px"}; background:#f8fafc; border-bottom:1px solid #e5e7eb; color:#334155; font-weight:700;">🧾 Observações: ${data.obs.map(String).join(" • ")}</div>`
+                  : "";
+
+                html += `
+                  <div style="border:2px solid #f1e6ee; border-radius:14px; overflow:hidden; background:#fff; margin:${isCompact ? "6px 0" : "8px 0"};">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#fff; padding:${padHead}; border-bottom:1px solid #f1e6ee;">
+                      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div style="width:4px; height:${isCompact ? "18px":"20px"}; background:#ec4899; border-radius:999px;"></div>
+                        <div style="font-weight:900; color:#9d174d; font-size:${fsTitle};">${cliente}</div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                          <span style="display:inline-flex;align-items:center;gap:6px;background:#fdf2f8;border:1px solid #f3c6d9;color:#9d174d;padding:${isCompact ? "3px 6px":"4px 8px"};border-radius:999px;font-weight:800;">Total ${money(total)}</span>
+                          <span style="display:inline-flex;align-items:center;gap:6px;background:#fdf2f8;border:1px solid #f3c6d9;color:#9d174d;padding:${isCompact ? "3px 6px":"4px 8px"};border-radius:999px;font-weight:800;">${items.length} serviços</span>
+                          <span style="display:inline-flex;align-items:center;gap:6px;background:#fdf2f8;border:1px solid #f3c6d9;color:#9d174d;padding:${isCompact ? "3px 6px":"4px 8px"};border-radius:999px;font-weight:800;">${ps.uniform ? (ps.unique[0]||"").toUpperCase() : ps.label}</span>
+                        </div>
+                      </div>
+                    </div>
+                    ${obsLine}
+                    <div style="padding:${padBody};">
+                      <table style="width:100%; border-collapse:separate; border-spacing:0 ${rowGap}px;">
+                        <thead>
+                          <tr>
+                            <th style="text-align:left; color:#9d174d; font-weight:800;">Serviço</th>
+                            <th style="text-align:left; color:#9d174d; font-weight:800;">Profissional</th>
+                            ${showPay ? `<th style="text-align:left; color:#9d174d; font-weight:800;">Pagamento</th>` : ``}
+                            <th style="text-align:right; color:#9d174d; font-weight:800;">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${items.map(it => `
+                            <tr>
+                              <td style="padding:${padCell}; border:1px solid #f1e6ee; background:#fff;">${it.servico || "-"}</td>
+                              <td style="padding:${padCell}; border:1px solid #f1e6ee; background:#fff;">${it.profissional || "-"}</td>
+                              ${showPay ? `<td style="padding:${padCell}; border:1px solid #f1e6ee; background:#fff;">${(it.pagamento||"").toUpperCase()}</td>` : ``}
+                              <td style="padding:${padCell}; border:1px solid #f1e6ee; background:#fff; text-align:right; font-weight:900;">${money(it.valor)}</td>
+                            </tr>
+                          `).join("")}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                `;
+              });
+              return html;
+            }
+
+            // Build QR image for expense proof if qr_text exists
+            function qrImgFor(text) {
+              try {
+                if (!text) return "";
+                const qr = new window.QRious({ value: text, size: useCompact ? 105 : 120, level: "H", background: "white", foreground: "#111827" });
+                if (typeof qr.toDataURL === "function") return qr.toDataURL();
+                if (qr.image && qr.image.src) return qr.image.src;
+                if (qr.canvas && qr.canvas.toDataURL) return qr.canvas.toDataURL("image/png");
+              } catch {}
+              return "";
+            }
+
+            // Compose HTML strings for tables
+            const grouped = groupAttsByClient(s2.atts || []);
+            const attTableHTML = legible ? renderLegibleGroups(grouped, useCompact) : renderGroupedAttsTable(grouped, useCompact);
+
+            const mensalHTML = (() => {
+              const filtered = (s2.atts || [])
+                .map(a => ({ ...a, servicos: (a.servicos || []).filter(sv => (sv.pagamento || a.pagamento) === "mensal") }))
+                .filter(a => (a.servicos || []).length);
+              const has = filtered.length > 0;
+              const groupsHtml = legible ? renderLegibleGroups(groupAttsByClient(filtered), useCompact) : renderGroupedAttsTable(groupAttsByClient(filtered), useCompact);
+              return has ? `<div class="sec"><h3>Débito Mensal (Não Pago)</h3>${groupsHtml}</div>` : "";
+            })();
+
+            const payAgg = (() => {
+              const sums = { pix:0, cartao:0, dinheiro:0, mensal:0 };
+              const cnt = { pix:0, cartao:0, dinheiro:0, mensal:0 };
+              (s2.atts || []).forEach(a => {
+                if (Array.isArray(a.servicos) && a.servicos.length) {
+                  a.servicos.forEach(sv => {
+                    const v = Number(sv.valor)||0;
+                    const p = sv.pagamento || a.pagamento;
+                    if (p === "pix") { sums.pix += v; cnt.pix++; }
+                    else if (p === "cartao") { sums.cartao += v; cnt.cartao++; }
+                    else if (p === "dinheiro") { sums.dinheiro += v; cnt.dinheiro++; }
+                    else if (p === "mensal") { sums.mensal += v; cnt.mensal++; }
+                  });
+                } else {
+                  const v = Number(a.valor)||0;
+                  const p = a.pagamento;
+                  if (p === "pix") { sums.pix += v; cnt.pix++; }
+                  else if (p === "cartao") { sums.cartao += v; cnt.cartao++; }
+                  else if (p === "dinheiro") { sums.dinheiro += v; cnt.dinheiro++; }
+                  else if (p === "mensal") { sums.mensal += v; cnt.mensal++; }
+                }
+              });
+              return { sums, cnt };
+            })();
+
+            const paySummaryHTML = `
+              <div class="sec">
+                <h3>Resumo por Forma de Pagamento</h3>
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;">
+                  <div class="r-card blue"><div class="t">PIX</div><div class="v">${money(payAgg.sums.pix)}</div><div class="muted sm">(${payAgg.cnt.pix} itens)</div></div>
+                  <div class="r-card purple"><div class="t">Cartão</div><div class="v">${money(payAgg.sums.cartao)}</div><div class="muted sm">(${payAgg.cnt.cartao} itens)</div></div>
+                  <div class="r-card green"><div class="t">Dinheiro</div><div class="v">${money(payAgg.sums.dinheiro)}</div><div class="muted sm">(${payAgg.cnt.dinheiro} itens)</div></div>
+                  <div class="r-card amber"><div class="t">Mensal (Débito)</div><div class="v">${money(payAgg.sums.mensal)}</div><div class="muted sm">(${payAgg.cnt.mensal} itens)</div></div>
+                </div>
+              </div>
+            `;
+
+            const depTableHTML =
+              (s2.deps || []).length
+                ? `
+                  <table>
+                    <thead><tr><th>Descrição</th><th>Origem</th><th>Comprovante</th><th>Valor</th></tr></thead>
+                    <tbody>
+                      ${(s2.deps || [])
+                        .map((d) => {
+                          const proof = d.qr_text
+                            ? `<img class="qrimg" src="${qrImgFor(d.qr_text)}" alt="QR da nota">`
+                            : `<span class="muted">—</span>`;
+                          return `
+                            <tr>
+                              <td>${d.descricao}</td>
+                              <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
+                              <td class="qr-cell">${proof}</td>
+                              <td class="num">${money(d.valor)}</td>
+                            </tr>
+                          `;
+                        })
+                        .join("")}
+                    </tbody>
+                  </table>
+                `
+                : `<div class="muted">Sem despesas para esta data</div>`;
+
+            const gridClass = useCompact ? "client-grid grid2" : "client-grid";
 
             const container = document.createElement("div");
             container.id = "report-capture";
@@ -1733,7 +3847,7 @@
 
             container.innerHTML = `
               <style>
-                .r-title { font-weight:900; font-size:24px; color:#9d174d; margin-bottom:4px; }
+                .r-title { font-weight:900; font-size:26px; color:#9d174d; margin-bottom:4px; }
                 .r-sub { color:#475569; font-weight:700; }
                 .r-grid { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0 6px; }
                 .r-card { border:2px solid #f1e6ee; border-radius:12px; padding:10px; }
@@ -1746,17 +3860,29 @@
                 .r-card .v { color:#0f172a; font-weight:900; font-size:18px; margin-top:4px; }
                 .sec { margin-top:14px; }
                 .sec h3 { margin: 0 0 6px; color:#9d174d; font-size:16px; }
-                table { width:100%; border-collapse:separate; border-spacing:0 6px; font-size:13px; }
+                .client-grid { display:block; }
+                .client-grid.grid2 { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:8px; }
+                table { width:100%; border-collapse:separate; border-spacing:0 ${compact ? 4 : 6}px; font-size:13px; }
                 th { text-align:left; color:#9d174d; font-weight:800; }
-                td, th { padding:8px 10px; border:1px solid #f1e6ee; background:#fff; }
+                td, th { padding:${compact ? "6px 8px" : "8px 10px"}; border:1px solid #f1e6ee; background:#fff; }
                 td.num { text-align:right; font-weight:900; }
                 .muted { color:#64748b; }
+                .sm { font-size:12px; }
                 .foot { margin-top: 8px; color:#64748b; font-size:12px; }
+                .r-client-cell { background:#fff7fb; border-width:2px; border-color:#f1e6ee; min-width:180px; vertical-align:top; }
+                .r-client-cell .nm { font-weight:900; color:#9d174d; }
+                .qrimg { width:${compact ? 105 : 120}px; height:${compact ? 105 : 120}px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+                .qr-cell { text-align:center; }
               </style>
 
-              <div class="r-title">Fechamento de Caixa — Espaço Bella's</div>
-              <div class="r-sub">Data do caixa: <strong>${brDate}</strong> • Gerado em: ${genStr}</div>
-              <div class="r-sub">CNPJ: 30.504.701/0001-29 • Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 • Tel: (81) 98628-8749</div>
+              <div style="display:flex; align-items:flex-end; justify-content:space-between; gap: 10px; margin-bottom: 4px;">
+                <div>
+                  <div class="r-title" style="font-size:26px;">Fechamento de Caixa — Espaço Bella's</div>
+                  <div class="r-day" style="font-size:22px; font-weight:900; color:#7a0f3f;">Dia: <strong>${brDate}</strong></div>
+                </div>
+                <div class="r-meta" style="color:#64748b; font-weight:700; text-align:right;">Gerado em: ${genStr}</div>
+              </div>
+              ${legendHTML}
 
               <div class="r-grid">
                 <div class="r-card green"><div class="t">Total Entradas (PIX+Cartão+Dinheiro)</div><div class="v">${money(s2.entradas)}</div></div>
@@ -1769,68 +3895,18 @@
                 <div class="r-card"><div class="t">Dinheiro em Caixa (Informado)</div><div class="v">${money(s2.dinheiroInformado)}</div></div>
                 <div class="r-card ${ (s2.dinheiroCalculado - s2.dinheiroInformado) === 0 ? 'green' : 'red' }"><div class="t">Diferença</div><div class="v">${money(s2.dinheiroCalculado - s2.dinheiroInformado)}</div></div>
               </div>
+              ${paySummaryHTML}
 
               <div class="sec">
                 <h3>Detalhes dos Atendimentos</h3>
-                ${
-                  s2.atts.length
-                    ? `<table>
-                        <thead><tr><th>Cliente</th><th>Serviços</th><th>Funcionário</th><th>Pagamento</th><th>Valor</th></tr></thead>
-                        <tbody>
-                          ${s2.atts.map(a => `
-                            <tr>
-                              <td>${a.cliente || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-"}</td>
-                              <td>${(a.pagamento || "").toUpperCase()}</td>
-                              <td class="num">${money(a.valor)}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>`
-                    : `<div class="muted">Sem atendimentos para esta data</div>`
-                }
+                <div class="${gridClass}">${attTableHTML}</div>
               </div>
 
-              ${
-                s2.atts.filter(a => a.pagamento === "mensal").length
-                  ? `<div class="sec">
-                      <h3>Débito Mensal (Não Pago)</h3>
-                      <table>
-                        <thead><tr><th>Cliente</th><th>Serviços</th><th>Funcionário</th><th>Valor</th></tr></thead>
-                        <tbody>
-                          ${s2.atts.filter(a => a.pagamento === "mensal").map(a => `
-                            <tr>
-                              <td>${a.cliente || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.nome).join(" + ") || a.servico || "-"}</td>
-                              <td>${(a.servicos || []).map(sv => sv.profissional).filter(Boolean).join(", ") || a.profissional || "-"}</td>
-                              <td class="num">${money(a.valor)}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>
-                    </div>`
-                  : ""
-              }
+              ${mensalHTML}
 
               <div class="sec">
                 <h3>Detalhes das Despesas</h3>
-                ${
-                  s2.deps.length
-                    ? `<table>
-                        <thead><tr><th>Descrição</th><th>Origem</th><th>Valor</th></tr></thead>
-                        <tbody>
-                          ${s2.deps.map(d => `
-                            <tr>
-                              <td>${d.descricao}</td>
-                              <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
-                              <td class="num">${money(d.valor)}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>`
-                    : `<div class="muted">Sem despesas para esta data</div>`
-                }
+                ${depTableHTML}
               </div>
 
               <div class="sec">
@@ -1846,7 +3922,10 @@
                 </table>
               </div>
 
-              <div class="foot">Gerado em ${genStr}</div>
+              <div class="foot">
+                <div style="margin-bottom:4px;">CNPJ: 30.504.701/0001-29 • Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 • Tel: (81) 98628-8749</div>
+                <div>Gerado em ${genStr}</div>
+              </div>
             `;
 
             document.body.appendChild(container);
@@ -2522,6 +4601,150 @@
 
         // Primeira renderização da página Estoque
         renderEstoque();
+      }
+
+      // ==== Gestão de Usuários (Funcionários) ====
+      if (hash === "/usuarios") {
+        ensureUsersDefaults();
+        const listEl = page.querySelector("#usrList");
+
+        function userColor(name) {
+          const u = (getUsersStore().users || []).find(x => (x.nome||"") === (name||""));
+          return u?.cor || "#f472b6";
+        }
+
+        function renderUsersList() {
+          const s = getUsersStore();
+          const users = (s.users || []).slice().sort((a,b) => (a.nome||"").localeCompare(b.nome||""));
+          if (!users.length) {
+            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum usuário. Clique em “Novo Usuário”.</div>`;
+            return;
+          }
+          const svc = getSvcStore();
+          const svcName = id => (svc.items || []).find(i => i.id === id)?.nome || "";
+          listEl.innerHTML = users.map(u => `
+            <div class="row" data-id="${u.id}">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div class="u-ava" style="background:${u.cor || "#f472b6"}">${(u.nome||"?").slice(0,1).toUpperCase()}</div>
+                <div>
+                  <div style="font-weight:900; color:#7a0f3f;">${u.nome || "-"}</div>
+                  <div class="muted" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <span class="role ${u.role === "admin" ? "admin":"staff"}">${u.role === "admin" ? "Admin" : "Staff"}</span>
+                    ${u.handle ? `<span class="skill">@${u.handle.replace(/^@/,"")}</span>` : ``}
+                    ${u.telefone ? `<span class="skill">${u.telefone}</span>` : ``}
+                    ${(u.skills||[]).slice(0,4).map(id => `<span class="skill">${svcName(id)}</span>`).join("")}
+                    ${(u.skills||[]).length > 4 ? `<span class="skill">+${(u.skills||[]).length - 4}</span>` : ``}
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn" data-act="edit">Editar</button>
+                <button class="btn" data-act="del">Excluir</button>
+              </div>
+            </div>
+          `).join("");
+        }
+
+        function showUserModal(existing = null) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const svc = getSvcStore();
+          const it = existing ? { ...existing } : {
+            id: "u-" + Date.now(),
+            nome: "",
+            handle: "",
+            telefone: "",
+            cor: "#10b981",
+            role: "staff",
+            skills: []
+          };
+          function svcCheckListHTML() {
+            const items = (svc.items || []).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+            return items.map(s => {
+              const checked = (it.skills || []).includes(s.id) ? "checked" : "";
+              return `<label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" value="${s.id}" ${checked}> <span>${s.nome}</span></label>`;
+            }).join("");
+          }
+          modal.innerHTML = `
+            <style>
+              .umodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .umodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .umodal .field { display:grid; gap:6px; }
+              .umodal label { color:#a1125b; font-weight:900; font-size:13px; }
+              .umodal input, .umodal select, .umodal textarea { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0; }
+              .umodal .skills { border:1px solid #f1e6ee; border-radius:12px; padding:10px; max-height:220px; overflow:auto; background:#fff; }
+              .umodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              @media(max-width:640px){ .umodal .grid2 { grid-template-columns:1fr; } }
+            </style>
+            <div class="umodal">
+              <h3>${existing ? "Editar Usuário" : "Novo Usuário"}</h3>
+              <div class="grid2">
+                <div class="field"><label>Nome *</label><input id="uNome" value="${(it.nome||"").replace(/"/g,"&quot;")}"></div>
+                <div class="field"><label>Handle</label><input id="uHandle" value="${(it.handle||"").replace(/"/g,"&quot;")}"></div>
+                <div class="field"><label>Telefone</label><input id="uTel" value="${(it.telefone||"").replace(/"/g,"&quot;")}"></div>
+                <div class="field"><label>Perfil</label><select id="uRole"><option value="staff" ${it.role==="staff"?"selected":""}>Staff</option><option value="admin" ${it.role==="admin"?"selected":""}>Admin</option></select></div>
+                <div class="field"><label>Cor</label><input id="uCor" type="color" value="${it.cor || "#10b981"}"></div>
+              </div>
+              <div class="field">
+                <label>Funções (serviços que executa)</label>
+                <div class="skills" id="uSkills">${svcCheckListHTML()}</div>
+              </div>
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="uSalvar">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          $m("#uSalvar").addEventListener("click", () => {
+            const nome = ($m("#uNome").value || "").trim();
+            if (!nome) { alert("Informe o nome"); return; }
+            const handle = ($m("#uHandle").value || "").trim();
+            const telefone = ($m("#uTel").value || "").trim();
+            const role = $m("#uRole").value || "staff";
+            const cor = $m("#uCor").value || "#10b981";
+            const skills = Array.from($m("#uSkills").querySelectorAll("input[type='checkbox']:checked")).map(c=>c.value);
+
+            const s = getUsersStore();
+            const idx = (s.users || []).findIndex(u => String(u.id) === String(it.id));
+            const payload = { ...it, nome, handle, telefone, role, cor, skills };
+            if (idx >= 0) s.users[idx] = payload; else s.users = (s.users || []).concat(payload);
+            setUsersStore(s);
+            modals.style.display = "none";
+            renderUsersList();
+          });
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        page.querySelector("#usrNovo")?.addEventListener("click", () => showUserModal());
+        page.querySelector("#usrDefaults")?.addEventListener("click", () => { if (confirm("Aplicar padrões de cores/roles? (não altera nomes)")) { ensureUsersDefaults(); renderUsersList(); } });
+        if (listEl) {
+          listEl.addEventListener("click", (e) => {
+            const btn = e.target.closest("[data-act]");
+            if (!btn) return;
+            const act = btn.getAttribute("data-act");
+            const row = e.target.closest(".row[data-id]");
+            if (!row) return;
+            const id = row.getAttribute("data-id");
+            const s = getUsersStore();
+            const idx = (s.users || []).findIndex(u => String(u.id) === String(id));
+            const existing = idx >= 0 ? s.users[idx] : null;
+            if (act === "edit" && existing) {
+              showUserModal(existing);
+            } else if (act === "del") {
+              if (confirm("Excluir este usuário?")) {
+                s.users.splice(idx,1);
+                setUsersStore(s);
+                renderUsersList();
+              }
+            }
+          });
+        }
+        renderUsersList();
       }
     }
 
