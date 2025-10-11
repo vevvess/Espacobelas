@@ -1707,11 +1707,11 @@
             const dateStr = `${start.toLocaleDateString("pt-BR")}, ${fmtHourMin(start)}`;
             const workers = Array.from(new Set((it.servicos||[]).map(s => s.profissional).filter(Boolean)));
             const total = moneyBR(it.total || 0);
-            const tel = onlyDigitsAg(it.telefone ||_code;
+            const tel = onlyDigitsAg(it.telefone || "");
             const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : "scheduled"));
             const stLabel = st === "done" ? "Concluído" : st === "canceled" ? "Cancelado" : st === "in-progress" ? "Em Andamento" : "Agendado";
             const svcLines = (it.servicos||[]).map((s) => {
-              const price = moneyBR(s.pr_codee
+              const price = moneyBR(s.preco);
               const pro = s.profissional ? `<span class="svc-pro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>${s.profissional}</span>` : "";
               return `<div class="svc-line"><div><span class="svc-name">${s.nome || "-"}</span>${pro}</div><div>${price}</div></div>`;
             }).join("");
