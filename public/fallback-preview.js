@@ -931,13 +931,30 @@
       function ensureUsersDefaults() {
         const s = getUsersStore();
         if (!Array.isArray(s.users)) s.users = [];
+        const palette = ["#10b981", "#ec4899", "#6366f1", "#f59e0b", "#06b6d4", "#84cc16", "#ef4444", "#14b8a6"];
+        // Initialize defaults if empty
         if ((s.users || []).length === 0) {
           s.users = [
-            { id: "u-kelly", nome: "Kelly Monice", handle: "@Kelly", telefone: "" },
-            { id: "u-simone", nome: "Simone Barboza", handle: "@Simone", telefone: "" },
+            { id: "u-kelly", nome: "Kelly Monice", handle: "@Kelly", telefone: "", color: "#10b981" }, // verde
+            { id: "u-simone", nome: "Simone Barboza", handle: "@Simone", telefone: "", color: "#ec4899" }, // rosa
           ];
           setUsersStore(s);
+          return;
         }
+        // Ensure each user has a color
+        let changed = false;
+        s.users = (s.users || []).map((u, i) => {
+          if (!u.color) { changed = true; return { ...u, color: palette[i % palette.length] }; }
+          return u;
+        });
+        if (changed) setUsersStore(s);
+      }
+      function userColorByName(name) {
+        try {
+          const nm = String(name || "").toLowerCase();
+          const u = (getUsersStore().users || []).find(x => String(x.nome || "").toLowerCase() === nm);
+          return u && u.color ? u.color : "#9d174d";
+        } catch { return "#9d174d"; }
       }
 
       // ==== Serviços: armazenamento local (catálogo usado nos agendamentos) ====
@@ -1639,18 +1656,41 @@
             const start = new Date(it.inicio);
             const end = new Date(it.fim);
             const dateStr = `${start.toLocaleDateString("pt-BR")}, ${fmtHourMin(start)}`;
+            const endStr = fmtHourMin(end);
             const workers = Array.from(new Set((it.servicos||[]).map(s => s.profissional).filter(Boolean)));
             const total = moneyBR2(it.total || 0);
             const tel = onlyDigitsAg(it.telefone || "");
-            const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : "scheduled"));
             const stLabel = st === "done" ? "Concluído" : st === "canceled" ? "Cancelado" : st === "in-progress" ? "Em Andamento" : "Agendado";
+            const minimized = st === "done";
+            // progress %
+            let pct = 0;
+            try {
+              const now = new Date();
+              if (now <= start) pct = 0;
+              else if (now >= end) pct = 100;
+              else pct = Math.max(0, Math.min(100, ((now - start) / (end - start)) * 100));
+            } catch {}
+            // colorbar (listras)
+            const colors = workers.map(w => userColorByName(w)).filter(Boolean);
+            let colorbarStyle = "";
+            if (!colors.length) {
+              colorbarStyle = "background:#f3c6d9;";
+            } else if (colors.length === 1) {
+              colorbarStyle = `background:${colors[0]};`;
+            } else {
+              const seg = 100 / colors.length;
+              const stops = colors.map((c, i) => `${c} ${Math.round(i*seg)}%, ${c} ${Math.round((i+1)*seg)}%`).join(", ");
+              colorbarStyle = `background:linear-gradient(180deg, ${stops});`;
+            }
             const svcLines = (it.servicos||[]).map((s) => {
               const price = moneyBR2(s.preco);
               const pro = s.profissional ? `<span class="svc-pro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>${s.profissional}</span>` : "";
               return `<div class="svc-line"><div><span class="svc-name">${s.nome || "-"}</span>${pro}</div><div>${price}</div></div>`;
             }).join("");
             return `
-              <article class="appt ${cls}" data-id="${it.id}">
+              <article class="appt ${minimized ? "min" : ""} ${st === "in-progress" ? "in-progress" : (st === "canceled" ? "canceled" : (st === "scheduled" ? "scheduled" : ""))}" data-id="${it.id}">
+                <div class="progress-fill" style="width:${pct}%;"></div>
+                <div class="colorbar" style="${colorbarStyle}"></div>
                 <div class="inner">
                   <div>
                     <div class="header">
@@ -1663,6 +1703,10 @@
                     <div class="pill">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.5"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                       ${dateStr}
+                    </div>
+                    <div class="pill">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 12h20" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round"/><path d="M12 6v12" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round"/></svg>
+                      Término previsto: ${endStr}
                     </div>
                     ${tel ? `<div class="pill"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> (${tel.slice(0,2)}) ${tel.slice(2)}</div>` : ``}
                     <div class="label">Serviços:</div>
@@ -1711,7 +1755,7 @@
               .appt.in-progress { border-color:#f59e0b; background: linear-gradient(180deg,#fef9c3,#fff7ed); }
               .appt.scheduled { border-color:#059669; background:#ecfdf5; }
               .appt.canceled { border-color:#b91c1c; background:#fee2e2; }
-              .appt .inner { position:relative; display:grid; grid-template-columns: 1fr 84px; gap: 12px; }
+              .appt .inner { position:relative; z-index:2; display:grid; grid-template-columns: 1fr 84px; gap: 12px; }
               .appt .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
               .appt .left-head { display:flex; align-items:center; gap:12px; }
               .appt .ava { width:56px; height:56px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; font-size:20px; }
@@ -1734,6 +1778,12 @@
               .appt .action-rail .abtn.success { color:#065f46; border-color:#a7f3d0; }
               .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
               .worker-pill { display:inline-flex; align-items:center; gap:8px; background:#def7ec; border:1px solid #a7f3d0; color:#065f46; padding:8px 10px; border-radius:14px; font-weight:800; margin-right:6px; }
+              .progress-fill { position:absolute; left:0; top:0; bottom:0; width:0; background: linear-gradient(90deg, rgba(16,185,129,.25), rgba(16,185,129,.08)); }
+              .colorbar { position:absolute; left:0; top:0; bottom:0; width:10px; border-top-left-radius:inherit; border-bottom-left-radius:inherit; pointer-events:none; z-index:3; }
+              .appt.min { padding:10px; border-width:2px; }
+              .appt.min .pill, .appt.min .label, .appt.min .svc-pane, .appt.min .worker-pill, .appt.min .total-row { display:none; }
+              .appt.min .name { font-size:18px; }
+              .appt.min .action-rail .abtn { width:40px; height:40px; }
             </style>
 
             <div class="ag-hero">
@@ -2046,6 +2096,23 @@
 
         // Renderiza UI dinâmica da Agenda (substitui o mock)
         renderAgendaUI();
+
+        // Atualização automática de status e progresso (30s)
+        function __applyAutoStatusTransitions() {
+          const ag = getAgenda();
+          let changed = false;
+          (ag.items || []).forEach((it) => {
+            const prev = it.status || "scheduled";
+            const next = statusFor(it);
+            if (prev !== next) { it.status = next; changed = true; }
+          });
+          if (changed) setAgenda(ag);
+          renderAgendaUI();
+        }
+        if (window.__agendaTimer) clearInterval(window.__agendaTimer);
+        window.__agendaTimer = setInterval(__applyAutoStatusTransitions, 30000);
+        // disparo inicial
+        __applyAutoStatusTransitions();
 
         // Intercepta o botão padrão e abre o modal integrado
         page.querySelectorAll("[data-open='agendamento']").forEach((btn) => {
