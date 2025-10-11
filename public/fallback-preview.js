@@ -1687,7 +1687,7 @@
           }).join(", ");
           return `linear-gradient(90deg, ${stops})`;
         }
-        function onlyDigitsAg(s) { return String(s||"").replace(/\D+/g, ""_code; }
+        function onlyDigitsAg(s) { return String(s||"").replace(/\D+/g, "_codee; }
 
         function renderAgendaUI() {
           const items = itemsForDate(agSelectedDate).slice().sort((a,b) => new Date(a.inicio) - new Date(b.inicio));
@@ -1707,12 +1707,12 @@
             const end = new Date(it.fim);
             const dateStr = `${start.toLocaleDateString("pt-BR")}, ${fmtHourMin(start)}`;
             const workers = Array.from(new Set((it.servicos||[]).map(s => s.profissional).filter(Boolean)));
-            const total = moneyBR(it.total ||_code
+            const total = moneyBR2(it.total |_code
             const tel = onlyDigitsAg(it.telefone || "");
             const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : "scheduled"));
             const stLabel = st === "done" ? "Concluído" : st === "canceled" ? "Cancelado" : st === "in-progress" ? "Em Andamento" : "Agendado";
             const svcLines = (it.servicos||[]).map((s) => {
-              const price = moneyBR(s.pre_code
+              const price = moneyBR2(s.pr_code
               const pro = s.profissional ? `<span class="svc-pro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>${s.profissional}</span>` : "";
               return `<div class="svc-line"><div><span class="svc-name">${s.nome || "-"}</span>${pro}</div><div>${price}</div></div>`;
             }).join("");
@@ -1853,7 +1853,7 @@
             const idx = (ag.items||[]).findIndex(x=>String(x.id)===String(id));
             const it = idx>=0 ? ag.items[idx] : null;
             if (!it) return;
-            if (act === "edit") {
+            if (act === "edit" || act === "view") {
               showAgendamentoModal([], it);
             } else if (act === "done") {
               it.status = "done";
@@ -1878,6 +1878,64 @@
               window.open(url, "_blank");
             }
           });
+          // Enhance cards: color stripe per profissional, live progress and auto-minimize on end time
+          (function setupAgendaEnhancements(){
+            if (!document.getElementById('agenda-extra-css')) {
+              const st = document.createElement('style');
+              st.id = 'agenda-extra-css';
+              st.textContent = `
+              .appt .colorbar{position:absolute;left:0;right:0;top:0;height:6px;}
+              .appt .progress-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,rgba(16,185,129,.18),rgba(16,185,129,.06));pointer-events:none;transition:width .6s linear;}
+              .appt.ready{border-color:#10b981;background:#ecfdf5;}
+              .appt.mini .pill,.appt.mini .label,.appt.mini .svc-pane,.appt.mini .total-row{display:none;}
+              .appt.mini .name{font-size:18px;}
+              `;
+              document.head.appendChild(st);
+            }
+            function enhanceAgendaCards(){
+              const list = page.querySelector('#agList');
+              if (!list) return;
+              const items = itemsForDate(agSelectedDate).slice();
+              items.forEach((it)=>{
+                const el = list.querySelector(`.appt[data-id="${it.id}"]`);
+                if (!el) return;
+                // color stripe based on envolvidos
+                let bar = el.querySelector('.colorbar');
+                const workers = Array.from(new Set((it.servicos||[]).map(s=>s.profissional).filter(Boolean)));
+                const bg = gradientForWorkers(workers);
+                if (!bar){ bar = document.createElement('div'); bar.className='colorbar'; el.appendChild(bar); }
+                if (bg) bar.style.background = bg;
+                // progress fill
+                let pf = el.querySelector('.progress-fill');
+                if (!pf){ pf = document.createElement('div'); pf.className='progress-fill'; el.insertBefore(pf, el.firstChild); }
+                const st = statusFor(it);
+                const p = st==='ready' ? 1 : st==='in-progress' ? progressFor(it) : 0;
+                pf.style.width = Math.round(p*100)+'%';
+                el.classList.toggle('in-progress', st==='in-progress');
+                el.classList.toggle('ready', st==='ready');
+                el.classList.toggle('mini', st==='ready');
+                const lab = el.querySelector('.status');
+                if (lab) lab.textContent = (st==='done'?'Concluído':st==='canceled'?'Cancelado':st==='in-progress'?'Em Andamento':st==='ready'?'Pronto':'Agendado');
+                // previsao pill
+                const end = new Date(it.fim);
+                let prev = el.querySelector('.pill[data-prev]');
+                if (!prev){
+                  prev = document.createElement('div');
+                  prev.className = 'pill';
+                  prev.setAttribute('data-prev','1');
+                  const after = el.querySelector('.pill');
+                  if (after && after.parentNode) after.parentNode.insertBefore(prev, after.nextSibling);
+                  else el.appendChild(prev);
+                }
+                prev.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 7H5M16 3v4M8 3v4M5 11h14v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-8z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round"/></svg> Previsto: '+fmtHourMin(end);
+              });
+              const last = document.getElementById('lastUpdate');
+              if (last) last.textContent = new Date().toLocaleTimeString('pt-BR');
+            }
+            enhanceAgendaCards();
+            if (window.__agendaTicker) clearInterval(window.__agendaTicker);
+            window.__agendaTicker = setInterval(enhanceAgendaCards, 60000);
+          })();
         }
 
         function showAgendamentoModal(preselectIds = [], existingItem = null) {
