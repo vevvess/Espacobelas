@@ -2078,7 +2078,7 @@
               <div class="field">
                 <label>Serviços *</label>
                 <div class="srows" id="agRows"></div>
-                <button class="btn" id="agAdd">+ Adicionar serviço</button>
+                <button class="btn" id="agAdd" type="button">+ Adicionar serviço</button>
               </div>
 
               <div class="sum" id="agResumo">
@@ -2174,6 +2174,11 @@
             addRow();
           }
           recalc();
+          // Wire + Adicionar serviço (fix: ensure works on all devices)
+          modal.addEventListener("click", (ev) => {
+            const trg = ev.target.closest("#agAdd");
+            if (trg) { ev.preventDefault(); ev.stopPropagation(); addRow(); }
+          });
 
           function hasConflict(start, end, ignoreId) {
             try {
