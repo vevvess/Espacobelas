@@ -639,10 +639,26 @@
     `;
 
     const Usuarios = () => `
-      <div class="hero"><h1>Usuários</h1><p>Times, permissões e perfis</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Weslley Raphael</strong><div class="muted">Administrador</div></div><span class="pill">Ativo</span></div>
-        <div class="row"><div><strong>Claudia</strong><div class="muted">Staff</div></div><span class="pill">Ativa</span></div>
+      <style>
+        .u-actions{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+        .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+        .u-ava { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; color:#fff; font-weight:900; }
+        .skill { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; padding:6px 8px; border-radius:999px; font-weight:800; color:#334155; }
+        .role { display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border-radius:999px; font-weight:900; }
+        .role.admin { background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; }
+        .role.staff { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+      </style>
+      <div class="hero"><h1>Usuários</h1><p>Times, permissões, cores e funções</p></div>
+      <section class="section">
+        <div class="u-actions">
+          <button class="btn primary" id="usrNovo">+ Novo Usuário</button>
+          <button class="btn" id="usrDefaults">Aplicar padrões (cores/roles)</button>
+        </div>
+      </section>
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Equipe</h2>
+        <div class="list" id="usrList"></div>
       </section>
     `;
 
@@ -932,10 +948,31 @@
         const s = getUsersStore();
         if (!Array.isArray(s.users)) s.users = [];
         if ((s.users || []).length === 0) {
+          // Defaults solicitados: cores e perfis
           s.users = [
-            { id: "u-kelly", nome: "Kelly Monice", handle: "@Kelly", telefone: "" },
-            { id: "u-simone", nome: "Simone Barboza", handle: "@Simone", telefone: "" },
+            { id: "u-simone", nome: "Simone Barboza", handle: "@Simone", telefone: "", cor: "#10b981", role: "admin", skills: [] }, // verde claro
+            { id: "u-kelly", nome: "Kelly Monice", handle: "@Kelly", telefone: "", cor: "#f59e0b", role: "staff", skills: [] }, // laranja
+            { id: "u-helena", nome: "Helena", handle: "@Helena", telefone: "", cor: "#facc15", role: "staff", skills: [] }, // amarelo (prefere Helena)
+            { id: "u-veronica", nome: "Verônica Marques", handle: "@Veronica", telefone: "", cor: "#7c3aed", role: "staff", skills: [] }, // roxo
+            { id: "u-weslley", nome: "Weslley Raphael", handle: "@Weslley", telefone: "", cor: "#06b6d4", role: "admin", skills: [] }, // azul ciano
+            { id: "u-anaclecia", nome: "Ana Clécia", handle: "@Ana", telefone: "", cor: "#ec4899", role: "staff", skills: [] }, // rosa
           ];
+          setUsersStore(s);
+        } else {
+          // Garante propriedades novas sem sobrescrever nomes/existentes
+          s.users = (s.users || []).map(u => ({
+            ...u,
+            cor: u.cor || (
+              /simone/i.test(u.nome||"") ? "#10b981" :
+              /kelly/i.test(u.nome||"") ? "#f59e0b" :
+              /helena|maria helena/i.test(u.nome||"") ? "#facc15" :
+              /ver[oô]nica/i.test(u.nome||"") ? "#7c3aed" :
+              /weslley/i.test(u.nome||"") ? "#06b6d4" :
+              /ana/i.test(u.nome||"") ? "#ec4899" : "#f472b6"
+            ),
+            role: u.role || ((/weslley|simone/i.test(u.nome||"")) ? "admin" : "staff"),
+            skills: Array.isArray(u.skills) ? u.skills : []
+          }));
           setUsersStore(s);
         }
       }
@@ -1555,10 +1592,12 @@
         const setAgenda = (s) => localStorage.setItem(AGENDA_KEY, JSON.stringify(s));
 
         ensureSvcDefaults();
+        ensureUsersDefaults();
 
         function parseDT(val) {
           // returns Date or null
           try { return val ? new Date(val) : null; } catch { return null; }
+     _code
         }
         function addMinutes(date, mins) {
           const d = new Date(date.getTime());
@@ -1616,11 +1655,39 @@
           const now = new Date();
           const start = new Date(it.inicio);
           const end = new Date(it.fim);
+          if (now < start) return "scheduled";
           if (now >= start && now <= end) return "in-progress";
+          if (now > end) return "ready";
           return "scheduled";
         }
-        function moneyBR2(n) { return (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" }); }
-        function onlyDigitsAg(s) { return String(s||"").replace(/\D+/g, ""); }
+        function progressFor(it) {
+          try {
+            const now = new Date().getTime();
+            const start = new Date(it.inicio).getTime();
+            const end = new Date(it.fim).getTime();
+            if (!isFinite(start) || !isFinite(end) || end <= start) return 0;
+            if (now <= start) return 0;
+            if (now >= end) return 1;
+            return (now - start) / (end - start);
+          } catch { return 0; }
+        }
+        function userColorByName(name) {
+          const u = (getUsersStore().users || []).find(x => (x.nome||"") === (name||""));
+          return u?.cor || "#f472b6";
+        }
+        function gradientForWorkers(workers) {
+          const colors = (workers || []).map(userColorByName).filter(Boolean);
+          if (!colors.length) return "#f3c6d9";
+          if (colors.length === 1) return colors[0];
+          const n = colors.length;
+          const stops = colors.map((c, i) => {
+            const p0 = Math.round((i / n) * 100);
+            const p1 = Math.round(((i + 1) / n) * 100);
+            return `${c} ${p0}% ${p1}%`;
+          }).join(", ");
+          return `linear-gradient(90deg, ${stops})`;
+        }
+        function onlyDigitsAg(s) { return String(s||"").replace(/\D+/g, ""_code; }
 
         function renderAgendaUI() {
           const items = itemsForDate(agSelectedDate).slice().sort((a,b) => new Date(a.inicio) - new Date(b.inicio));
@@ -1640,12 +1707,12 @@
             const end = new Date(it.fim);
             const dateStr = `${start.toLocaleDateString("pt-BR")}, ${fmtHourMin(start)}`;
             const workers = Array.from(new Set((it.servicos||[]).map(s => s.profissional).filter(Boolean)));
-            const total = moneyBR2(it.total || 0);
+            const total = moneyBR(it.total ||_code
             const tel = onlyDigitsAg(it.telefone || "");
             const cls = st === "in-progress" ? "in-progress" : (st === "done" ? "scheduled" : (st === "canceled" ? "canceled" : "scheduled"));
             const stLabel = st === "done" ? "Concluído" : st === "canceled" ? "Cancelado" : st === "in-progress" ? "Em Andamento" : "Agendado";
             const svcLines = (it.servicos||[]).map((s) => {
-              const price = moneyBR2(s.preco);
+              const price = moneyBR(s.pre_code
               const pro = s.profissional ? `<span class="svc-pro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>${s.profissional}</span>` : "";
               return `<div class="svc-line"><div><span class="svc-name">${s.nome || "-"}</span>${pro}</div><div>${price}</div></div>`;
             }).join("");
@@ -4477,6 +4544,150 @@
 
         // Primeira renderização da página Estoque
         renderEstoque();
+      }
+
+      // ==== Gestão de Usuários (Funcionários) ====
+      if (hash === "/usuarios") {
+        ensureUsersDefaults();
+        const listEl = page.querySelector("#usrList");
+
+        function userColor(name) {
+          const u = (getUsersStore().users || []).find(x => (x.nome||"") === (name||""));
+          return u?.cor || "#f472b6";
+        }
+
+        function renderUsersList() {
+          const s = getUsersStore();
+          const users = (s.users || []).slice().sort((a,b) => (a.nome||"").localeCompare(b.nome||""));
+          if (!users.length) {
+            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum usuário. Clique em “Novo Usuário”.</div>`;
+            return;
+          }
+          const svc = getSvcStore();
+          const svcName = id => (svc.items || []).find(i => i.id === id)?.nome || "";
+          listEl.innerHTML = users.map(u => `
+            <div class="row" data-id="${u.id}">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div class="u-ava" style="background:${u.cor || "#f472b6"}">${(u.nome||"?").slice(0,1).toUpperCase()}</div>
+                <div>
+                  <div style="font-weight:900; color:#7a0f3f;">${u.nome || "-"}</div>
+                  <div class="muted" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <span class="role ${u.role === "admin" ? "admin":"staff"}">${u.role === "admin" ? "Admin" : "Staff"}</span>
+                    ${u.handle ? `<span class="skill">@${u.handle.replace(/^@/,"")}</span>` : ``}
+                    ${u.telefone ? `<span class="skill">${u.telefone}</span>` : ``}
+                    ${(u.skills||[]).slice(0,4).map(id => `<span class="skill">${svcName(id)}</span>`).join("")}
+                    ${(u.skills||[]).length > 4 ? `<span class="skill">+${(u.skills||[]).length - 4}</span>` : ``}
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn" data-act="edit">Editar</button>
+                <button class="btn" data-act="del">Excluir</button>
+              </div>
+            </div>
+          `).join("");
+        }
+
+        function showUserModal(existing = null) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const svc = getSvcStore();
+          const it = existing ? { ...existing } : {
+            id: "u-" + Date.now(),
+            nome: "",
+            handle: "",
+            telefone: "",
+            cor: "#10b981",
+            role: "staff",
+            skills: []
+          };
+          function svcCheckListHTML() {
+            const items = (svc.items || []).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+            return items.map(s => {
+              const checked = (it.skills || []).includes(s.id) ? "checked" : "";
+              return `<label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" value="${s.id}" ${checked}> <span>${s.nome}</span></label>`;
+            }).join("");
+          }
+          modal.innerHTML = `
+            <style>
+              .umodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .umodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .umodal .field { display:grid; gap:6px; }
+              .umodal label { color:#a1125b; font-weight:900; font-size:13px; }
+              .umodal input, .umodal select, .umodal textarea { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0; }
+              .umodal .skills { border:1px solid #f1e6ee; border-radius:12px; padding:10px; max-height:220px; overflow:auto; background:#fff; }
+              .umodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              @media(max-width:640px){ .umodal .grid2 { grid-template-columns:1fr; } }
+            </style>
+            <div class="umodal">
+              <h3>${existing ? "Editar Usuário" : "Novo Usuário"}</h3>
+              <div class="grid2">
+                <div class="field"><label>Nome *</label><input id="uNome" value="${(it.nome||"").replace(/"/g,"&quot;")}"></div>
+                <div class="field"><label>Handle</label><input id="uHandle" value="${(it.handle||"").replace(/"/g,"&quot;")}"></div>
+                <div class="field"><label>Telefone</label><input id="uTel" value="${(it.telefone||"").replace(/"/g,"&quot;")}"></div>
+                <div class="field"><label>Perfil</label><select id="uRole"><option value="staff" ${it.role==="staff"?"selected":""}>Staff</option><option value="admin" ${it.role==="admin"?"selected":""}>Admin</option></select></div>
+                <div class="field"><label>Cor</label><input id="uCor" type="color" value="${it.cor || "#10b981"}"></div>
+              </div>
+              <div class="field">
+                <label>Funções (serviços que executa)</label>
+                <div class="skills" id="uSkills">${svcCheckListHTML()}</div>
+              </div>
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="uSalvar">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          $m("#uSalvar").addEventListener("click", () => {
+            const nome = ($m("#uNome").value || "").trim();
+            if (!nome) { alert("Informe o nome"); return; }
+            const handle = ($m("#uHandle").value || "").trim();
+            const telefone = ($m("#uTel").value || "").trim();
+            const role = $m("#uRole").value || "staff";
+            const cor = $m("#uCor").value || "#10b981";
+            const skills = Array.from($m("#uSkills").querySelectorAll("input[type='checkbox']:checked")).map(c=>c.value);
+
+            const s = getUsersStore();
+            const idx = (s.users || []).findIndex(u => String(u.id) === String(it.id));
+            const payload = { ...it, nome, handle, telefone, role, cor, skills };
+            if (idx >= 0) s.users[idx] = payload; else s.users = (s.users || []).concat(payload);
+            setUsersStore(s);
+            modals.style.display = "none";
+            renderUsersList();
+          });
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        page.querySelector("#usrNovo")?.addEventListener("click", () => showUserModal());
+        page.querySelector("#usrDefaults")?.addEventListener("click", () => { if (confirm("Aplicar padrões de cores/roles? (não altera nomes)")) { ensureUsersDefaults(); renderUsersList(); } });
+        if (listEl) {
+          listEl.addEventListener("click", (e) => {
+            const btn = e.target.closest("[data-act]");
+            if (!btn) return;
+            const act = btn.getAttribute("data-act");
+            const row = e.target.closest(".row[data-id]");
+            if (!row) return;
+            const id = row.getAttribute("data-id");
+            const s = getUsersStore();
+            const idx = (s.users || []).findIndex(u => String(u.id) === String(id));
+            const existing = idx >= 0 ? s.users[idx] : null;
+            if (act === "edit" && existing) {
+              showUserModal(existing);
+            } else if (act === "del") {
+              if (confirm("Excluir este usuário?")) {
+                s.users.splice(idx,1);
+                setUsersStore(s);
+                renderUsersList();
+              }
+            }
+          });
+        }
+        renderUsersList();
       }
     }
 
