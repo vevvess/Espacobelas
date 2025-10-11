@@ -1,1865 +1,446 @@
 (function () {
-  window.__runFallbackPreview = function (root) {
-    const formatDateLong = () =>
-      new Date().toLocaleDateString("pt-BR", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+  // Fallback Preview — versão estabilizada
+  // Objetivo: garantir que o preview estático abra SEM ERROS de sintaxe.
+  // Depois reintroduziremos incrementos com segurança.
 
+  window.__runFallbackPreview = function (root) {
     const css = `
       <style>
         :root {
           --bella-50:#fdf2f8; --bella-100:#fce7f3; --bella-200:#fbcfe8; --bella-300:#f9a8d4;
           --bella-400:#f472b6; --bella-500:#ec4899; --bella-600:#db2777; --bella-700:#be185d;
-          --bella-800:#9d174d; --bella-900:#831843;
-          --surface:#ffffff; --line:#f3e6ee; --shadow: 0 10px 30px rgba(173,24,94,.08);
+          --bella-800:#9d174d; --bella-900:#831843; --line:#f1e6ee;
         }
         html, body, #root { height: 100%; margin: 0; }
         *, *::before, *::after { box-sizing: border-box; }
-        body {
-          background:
-            radial-gradient(1200px 400px at -10% -5%, rgba(236,72,153,.08), transparent 60%),
-            radial-gradient(800px 300px at 110% 0%, rgba(236,72,153,.06), transparent 60%),
-            #fff;
-          color: #0f172a;
-          font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-        }
+        body { background:#fff; color:#0f172a; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+        .topnav { display:flex; align-items:center; justify-content:space-between; gap:12px; position:sticky; top:0; padding:12px 10px; background:#fff; border-bottom:1px solid var(--line); }
+        .menu, .shield { width:36px; height:36px; border-radius:10px; border:1px solid var(--line); display:grid; place-items:center; background:#fff; }
+        .titlebar { font-weight:900; color:#9d174d; }
         .shell { max-width: 980px; margin: 0 auto; padding: 16px 14px 56px; }
-
-        /* Topbar mobile */
-        .topnav {
-          display: flex; align-items: center; justify-content: space-between;
-          position: sticky; top: 0; background: rgba(255,255,255,.7); backdrop-filter: blur(10px);
-          border-bottom: 1px solid #f1e6ee; padding: 12px 10px; z-index: 20;
-        }
-        .menu {
-          width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
-          background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow);
-          color: var(--bella-700);
-        }
-        .titlebar {
-          display: flex; align-items: center; gap: 8px; color: var(--bella-800);
-          font-weight: 800; font-size: 18px; letter-spacing: .2px; position: relative;
-        }
-        .titlebar::after {
-          content:""; position:absolute; left:0; bottom:-8px; height:3px; width:120px;
-          background: linear-gradient(90deg, var(--bella-700), var(--bella-400)); border-radius: 999px;
-        }
-        .shield {
-          width: 36px; height: 36px; border-radius: 999px; display:grid; place-items:center;
-          background: radial-gradient(circle at 30% 30%, #ffc2d6, #f472b6);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 8px 22px rgba(236,72,153,.28);
-          border: 2px solid #fff;
-        }
-
-        /* Drawer */
-        .drawer { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: none; z-index: 30; }
-        .drawer .panel { position:absolute; top:0; left:0; bottom:0; width: 320px; background:#fff; border-right:1px solid #f1e6ee; box-shadow: var(--shadow); display:flex; flex-direction:column; }
-        .brandbar {
-          background: linear-gradient(90deg, var(--bella-500), var(--bella-400));
-          color: #fff; display:flex; align-items:center; justify-content:space-between;
-          padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.25);
-        }
-        .brandbar .left { display:flex; align-items:center; gap: 10px; font-weight: 900; font-size: 18px; }
-        .brandbar .heart {
-          width: 36px; height: 36px; border-radius: 999px; background: rgba(255,255,255,.25);
-          display:grid; place-items:center; box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
-        }
-        .brandbar .close {
-          width: 40px; height: 40px; border-radius: 12px; display:grid; place-items:center;
-          background: rgba(255,255,255,.25); border: 1px solid rgba(255,255,255,.4);
-        }
-
-        .usercard {
-          display:flex; gap: 12px; align-items:center; padding: 14px; border-bottom:1px solid #f1e6ee;
-          background: linear-gradient(180deg, #fff, #fff9fb);
-        }
-        .usercard .ava {
-          width: 52px; height: 52px; border-radius: 16px; display:grid; place-items:center;
-          background: radial-gradient(circle at 30% 30%, #ffc2d6, #f472b6);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 8px 22px rgba(236,72,153,.28);
-          border: 2px solid #fff;
-        }
-        .usercard .name { font-weight: 900; color: #8b1049; }
-        .chips { display:flex; gap: 6px; margin-top: 4px; align-items:center; }
-        .chip { font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: #fde7f2; color:#8b1049; }
-        .online { width: 8px; height: 8px; border-radius: 999px; background:#22c55e; display:inline-block; }
-
-        .navlist { padding: 12px; display:grid; gap: 8px; }
-        .section-divider { display:flex; align-items:center; gap: 12px; color:#9c1d5f; font-weight: 900; padding: 10px 14px; }
-        .section-divider::before, .section-divider::after { content:""; height:1px; background:#f3c6d9; flex:1; border-radius: 999px; }
-
-        .item {
-          display:flex; align-items:center; gap: 12px; text-decoration:none; color:#a1125b;
-          padding: 12px; border-radius: 14px; border:1px solid #f7d2e2; background:#fff;
-          box-shadow: 0 2px 10px rgba(173,24,94,.05);
-        }
-        .item .icon { width: 22px; height: 22px; display:grid; place-items:center; color:#a1125b; }
-        .item .label { font-weight: 800; }
-        .item.active {
-          background: linear-gradient(90deg, rgba(236,72,153,.10), rgba(236,72,153,.03));
-          border: 2px solid #f3a1c8;
-          box-shadow: 0 10px 26px rgba(173,24,94,.15);
-        }
-        .item.danger { color:#b91c1c; border-color:#fca5a5; }
-        .logout { margin-top: auto; padding: 12px; border-top:1px solid #f1e6ee; }
-
-        /* Hero */
+        .drawer { position: fixed; inset: 0; display:none; background: rgba(15,23,42,.55); z-index: 30; }
+        .drawer .panel { position:absolute; top:0; bottom:0; left:0; width:300px; background:#fff; border-right:1px solid var(--line); display:flex; flex-direction:column; }
+        .brandbar { display:flex; align-items:center; justify-content:space-between; padding: 12px; background: linear-gradient(90deg, var(--bella-500), var(--bella-400)); color:#fff; }
+        .navlist { padding: 12px; display:grid; gap:8px; }
+        .item { display:flex; align-items:center; gap:10px; text-decoration:none; color:#9d174d; padding:10px; border:1px solid var(--line); border-radius:12px; background:#fff; }
+        .item.active { border-color:#f3a1c8; box-shadow: 0 6px 20px rgba(173,24,94,.10); }
+        .section { padding:14px; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow: 0 10px 30px rgba(173,24,94,.06); margin:14px 0; }
         .hero { padding: 18px 4px 10px; }
-        .hero h1 {
-          margin: 0 0 6px; font-size: 32px; line-height: 1.15;
-          color: var(--bella-800); font-weight: 900; letter-spacing: .2px;
-        }
-        .hero p { margin: 0; color: #9d3a69; font-weight: 600; }
-
-        /* Common surface */
-        .card, .datecard, .kpi, .section {
-          background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
-        }
-        .datecard { padding: 14px 16px; margin: 16px 0 14px; }
-        .dot { width: 10px; height: 10px; border-radius: 999px; background: #22c55e; display:inline-block; margin-right: 8px; }
+        .hero h1 { margin:0 0 6px; font-size:28px; color:#9d174d; font-weight:900; }
+        .hero p { margin:0; color:#9d3a69; font-weight:600; }
+        .btn { border-radius:12px; padding:10px 14px; border:1px solid var(--line); background:#fff; color:#9d174d; font-weight:900; }
+        .btn.primary { background: linear-gradient(90deg, var(--bella-500), var(--bella-400)); color:#fff; border:0; }
+        .badge{ display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; background:#fdf2f8; color:#9d174d; border:1px solid #f3c6d9; }
+        .list-table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
+        .list-table th{ text-align:left; color:#9d174d; font-size:12px; }
+        .list-table td{ background:#fff; border:1px solid var(--line); padding:10px; border-radius:10px; }
         .muted { color:#6b7280; }
-
-        /* KPI */
-        .kpi { padding: 16px; margin: 14px 0; }
-        .kpi .title { color:#c23475; font-weight:800; }
-        .kpi .value { font-size: 36px; font-weight: 900; color: var(--bella-800); margin: 4px 0; }
-        .kpi .note-ok { color:#16a34a; font-weight:700; }
-        .kpi .note { color:#6b7280; font-weight:700; }
-
-        /* Sections */
-        .section { padding: 14px; margin: 14px 0; }
-        .section h2 { margin: 0 0 8px; font-size: 18px; color: var(--bella-800); }
-        .badge { display:inline-block; background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; font-weight: 800; padding:6px 10px; border-radius: 999px; font-size: 12px; }
-        .empty { text-align:center; color:#9ca3af; padding: 22px 0; }
-
-        /* Birthdays */
-        .birth-head {
-          display:flex; align-items:center; justify-content:center; gap: 8px;
-          background: linear-gradient(90deg,#fde68a,#fecaca);
-          border: 2px solid #f59e0b; color:#7c2d12; border-radius: 14px; padding: 8px; font-weight:900;
-          margin-bottom: 10px;
-        }
-        .month-box { background:#eff6ff; border: 2px solid #93c5fd; padding: 10px; border-radius: 14px; }
-        .month-item { display:flex; align-items:center; justify-content:space-between; padding: 10px; border-radius: 12px; margin-bottom: 8px; background: #fff; border: 1px solid #e5e7eb; }
-        .circle { width:32px; height:32px; border-radius: 999px; display:grid; place-items:center; background:#93c5fd; color:#1e3a8a; font-weight: 900; }
-        .tel { color:#1e3a8a; text-decoration:none; font-weight:700; }
-
-        /* Lists */
-        .list { display:grid; gap: 10px; }
-        .row { display:flex; align-items:center; justify-content:space-between; gap: 10px; border: 1px solid #f1e6ee; background: #fff; border-radius: 12px; padding: 12px; }
-        .pill { display:inline-block; padding:6px 10px; border-radius:999px; background: var(--bella-50); color: var(--bella-900); font-weight:700; font-size:12px; }
-
-        /* Buttons */
-        .btn-primary { color:#fff; background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); border:0; border-radius: 10px; padding: 10px 14px; }
-        .btn-outline { border: 1px solid #e5e7eb; background:#fff; border-radius: 10px; padding: 10px 14px; }
-
-        /* Modals */
+        .right { text-align:right; }
         .modals { position: fixed; inset: 0; display:none; align-items:center; justify-content:center; background: rgba(15,23,42,.45); padding: 16px; z-index:40; }
-        .modal { width: min(92vw, 520px); max-width: 520px; background: #fff; border-radius: 16px; border:1px solid #e5e7eb; padding: 16px; max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; }
-        .modal h3 { margin: 0 0 12px; }
+        .modal { width: min(92vw, 520px); max-width: 520px; background: #fff; border-radius: 16px; border:1px solid var(--line); padding: 16px; max-height: calc(100dvh - 24px); overflow: auto; }
+        .modal h3 { margin: 0 0 12px; font-weight:900; color:#9d174d; }
         .field { display:grid; gap:6px; margin-bottom: 10px; }
-        .field label { font-size: 13px; color: #334155; font-weight: 600; }
-        .field input { border:1px solid #e5e7eb; border-radius: 10px; padding: 10px; font-family: inherit; }
-
-        @media (min-width: 980px) {
-          .hero h1 { font-size: 42px; }
-          .kpi-grid { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
-          .split { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        }
+        .field label { font-size: 13px; color: #334155; font-weight: 700; }
+        .field input, .field select { border:1px solid var(--line); border-radius: 10px; padding: 10px; font-family: inherit; font-weight:700; color:#9d174d; }
+        @media(max-width:640px){ .list-table{ display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; min-width:720px; } .list-table th, .list-table td{ white-space:nowrap; } }
       </style>
     `;
-
-    // Pages
-    const Dashboard = () => `
-      <div class="hero">
-        <h1>Bem-vindo, Weslley<br/>Raphael! 👋</h1>
-        <p>Aqui está um resumo das suas atividades de hoje</p>
-      </div>
-      <div class="datecard">
-        <div style="font-size: 14px; font-weight:800;">${formatDateLong()}</div>
-        <div class="muted" style="margin-top: 4px;"><span class="dot"></span>Sistema online</div>
-      </div>
-      <div class="kpi-grid">
-        <div class="kpi"><div class="title">Agendamentos Hoje</div><div class="value">1</div><div class="note-ok">1 confirmados</div></div>
-        <div class="kpi"><div class="title">Receita do Mês</div><div class="value">R$ 0,00</div><div class="note">Até hoje</div></div>
-        <div class="kpi"><div class="title">Total de Clientes</div><div class="value">168</div><div class="note-ok">0 novos este mês</div></div>
-      </div>
-      <div class="split">
-        <section class="section">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <h2>Agendamentos de Hoje</h2>
-            <span class="badge">0 agendamentos</span>
-          </div>
-          <div class="empty">Nenhum agendamento para hoje</div>
-        </section>
-        <section class="section">
-          <h2>Próximos</h2>
-          <div class="empty">Nenhum agendamento próximo</div>
-        </section>
-      </div>
-      <section class="section" id="birthSection">
-        <div class="birth-head"><span>🎂</span><span>ANIVERSARIANTES</span><span>🎉</span></div>
-        <div class="month-box" id="birthBox">
-          <div class="empty">Sem dados de aniversariantes. Importe clientes do Notion em “Clientes › Importar do Notion”.</div>
-        </div>
-      </section>
-      <section class="section">
-        <h2>Ações Rápidas</h2>
-        <div class="list">
-          <button class="btn-primary" data-open="agendamento">Novo Agendamento</button>
-          <button class="btn-outline" data-open="cliente">Novo Cliente</button>
-          <button class="btn-outline" data-open="venda">Registrar Venda</button>
-        </div>
-      </section>
-    `;
-
-    const Agenda = () => `
-      <style>
-        .icon { width: 18px; height: 18px; vertical-align: -3px; }
-        .agenda-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; display:flex; align-items:center; gap:10px; }
-        .agenda-hero .chip-online { display:inline-flex; align-items:center; gap:6px; background:#eafff1; color:#15803d; font-weight:800; padding:6px 12px; border-radius:999px; font-size:12px; border:1px solid #bbf7d0; }
-        .agenda-hero p { margin: 0; color: #9d3a69; font-weight: 600; }
-        .btn-lg { display:inline-flex; align-items:center; gap:10px; background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; font-weight:900; border-radius:16px; padding:16px 22px; border:0; box-shadow: var(--shadow); }
-        .card-blue { background:#eff6ff; border:1px solid #bfdbfe; border-radius:18px; padding:14px; box-shadow: var(--shadow); }
-        .card-blue .grid { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
-        .muted-strong { color:#334155; font-weight:800; }
-        .ok { color:#16a34a; font-weight:800; }
-        .row-info { display:flex; align-items:center; gap:16px; color:#6b7280; font-weight:700; flex-wrap: wrap; }
-        .row-info .chip { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; padding:6px 10px; border-radius:10px; }
-        .row-info .btn-refresh { display:inline-flex; align-items:center; gap:6px; background:#eef2ff; border:1px solid #c7d2fe; padding:8px 12px; border-radius:12px; color:#4338ca; font-weight:800; }
-
-        .kpi-mini { display:grid; gap:12px; margin:14px 0; }
-        .kpi-mini .item { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; display:flex; align-items:center; justify-content:space-between; box-shadow: var(--shadow); }
-        .kpi-mini .item.orange { background: #fff7ed; border-color:#fed7aa; }
-        .kpi-mini .item.purple { border-color:#e9d5ff; }
-        .kpi-mini .title { color:#a1125b; font-weight:900; }
-        .kpi-mini .val { font-size:32px; font-weight:900; color:#a1125b; }
-
-        .view-card { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; box-shadow: var(--shadow); display:grid; gap:12px; }
-        .view-switch { display:flex; gap:8px; }
-        .view-switch .btn { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
-        .view-switch .btn.active { background: linear-gradient(180deg,#fff,#ffe9f1); border:2px solid #f3a1c8; box-shadow: var(--shadow); }
-        .date-nav { display:flex; align-items:center; justify-content:space-between; }
-        .date-nav .arrow { width:40px; height:40px; display:grid; place-items:center; border-radius:12px; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
-        .date-nav .date { font-size:22px; font-weight:900; color:#a1125b; }
-        .date-nav .chip { border:1px solid #fde2f1; background:#fff4f9; padding:6px 12px; border-radius:999px; font-weight:800; color:#a1125b; }
-
-        .staff-card .top { display:flex; align-items:center; justify-content:space-between; }
-        .staff-card .badge { background:#fee2f2; color:#a1125b; border:1px solid #fbcfe8; padding:6px 10px; border-radius:999px; font-weight:800; }
-        .staff-item { display:flex; align-items:center; justify-content:space-between; gap: 10px; background:#fff7fb; border:1px solid #f3c6d9; border-radius:14px; padding:12px; }
-        .staff-item .left { display:flex; gap:10px; align-items:center; }
-        .staff-item .ava { width:34px; height:34px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
-        .staff-footer { display:flex; align-items:center; justify-content:space-between; color:#a1125b; font-weight:900; }
-
-        .filters .field { display:grid; gap:6px; margin:8px 0; }
-        .filters select { width:100%; border:1px solid #f3c6d9; padding:12px; border-radius:14px; background:#fff; font-weight:700; color:#a1125b; }
-        .filters .check { display:flex; align-items:center; gap:8px; font-weight:800; color:#a1125b; }
-
-        .title-row { display:flex; align-items:center; justify-content:space-between; }
-        .title-row .badge { background:#fee2f2; color:#a1125b; border:1px solid #fbcfe8; padding:8px 12px; border-radius:999px; font-weight:800; }
-
-        /* Appointment cards */
-        .appt { position:relative; border-radius:20px; padding:14px; background:#fff; box-shadow: var(--shadow); border:2px solid #f9c3a7; margin-bottom:16px; overflow:hidden; }
-        .appt.in-progress { border-color:#f59e0b; background: #fff7ed; }
-        .appt .progress-fill { position:absolute; left:0; top:0; bottom:0; width:0; background: linear-gradient(90deg, rgba(34,197,94,.3), rgba(34,197,94,.08)); }
-        .appt .inner { position:relative; display:grid; grid-template-columns: 1fr auto; gap: 10px; }
-        .appt .header { display:flex; align-items:center; gap:12px; }
-        .appt .ava { width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
-        .appt .name { font-weight:900; color:#7a0f3f; font-size:20px; }
-        .appt .status { background:#fef3c7; color:#a16207; padding:6px 10px; border-radius:999px; font-weight:900; border:1px solid #fde68a; }
-        .appt .status.scheduled { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
-        .appt .actions { display:grid; gap:10px; color:#a1125b; }
-        .appt .row { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
-        .appt .section-title { color:#a1125b; font-weight:900; margin: 8px 0 6px; }
-        .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
-        .chip-sub { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
-        .worker-pill { display:inline-flex; align-items:center; gap:8px; background:#def7ec; border:1px solid #a7f3d0; color:#065f46; padding:10px 12px; border-radius:14px; font-weight:800; }
-        .total { background:#fff; border:1px solid #f3c6d9; padding:12px 14px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
-        .total .label { color:#a1125b; font-weight:900; }
-        .total .value { color:#16a34a; font-weight:900; }
-
-        .appt.scheduled { border-color:#10b981; background:#ecfdf5; }
-        .appt.scheduled .ava { background:#10b981; }
-      </style>
-
-      <div class="agenda-hero">
-        <h1>Agenda <span class="chip-online"><span class="dot"></span>Online</span></h1>
-        <p>Gerencie os agendamentos do salão</p>
-      </div>
-
-      <button class="btn-lg" data-open="agendamento">
-        <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
-        Novo Agendamento
-      </button>
-
-      <div class="card-blue" style="margin-top:12px;">
-        <div class="grid">
-          <div><div class="muted">Status</div><div class="muted-strong">Automático</div></div>
-          <div><div class="muted">Tempo real por</div><div class="muted-strong">eventos</div></div>
-          <div><div class="muted">1</div><div class="muted-strong">em andamento</div></div>
-          <div><div class="muted">Eventos do</div><div class="muted-strong">sistema</div></div>
-        </div>
-        <div class="muted" style="margin-top:10px;">
-          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4z" stroke="#334155" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 4v16M4 8h16" stroke="#334155" stroke-width="1.5"/></svg>
-          1 agendamentos hoje • Atualiza apenas quando algo muda
-        </div>
-      </div>
-
-      <div class="row-info" style="margin-top:10px;">
-        <span class="chip"><span class="dot"></span>Tempo real ativo</span>
-        <span class="chip">
-          <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#334155" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Atualizado: <span id="lastUpdate">Agora</span>
-        </span>
-        <button id="btnAtualizar" class="btn-refresh">
-          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 8M20 8V4m0 4h-4" stroke="#4338ca" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Atualizar
-        </button>
-      </div>
-
-      <div class="kpi-mini">
-        <div class="item">
-          <div>
-            <div class="title">Hoje (01/10/2025)</div>
-            <div class="val">1</div>
-          </div>
-          <div>
-            <svg class="icon" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#a1125b" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </div>
-        </div>
-        <div class="item">
-          <div>
-            <div class="title">Pendentes</div>
-            <div class="val">1</div>
-          </div>
-          <div>
-            <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-        </div>
-        <div class="item orange">
-          <div>
-            <div class="title" style="color:#d97706;">Aguardando Confirmação</div>
-            <div class="val" style="color:#d97706;">0</div>
-          </div>
-          <div>
-            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 6v12M17 10c0-1.657-2.239-3-5-3s-5 1.343-5 3 2.239 3 5 3 5 1.343 5 3-2.239 3-5 3-5-1.343-5-3" stroke="#d97706" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </div>
-        </div>
-        <div class="item purple">
-          <div>
-            <div class="title" style="color:#a21caf;">Concluídos</div>
-            <div class="val" style="color:#a21caf;">0</div>
-          </div>
-          <div>
-            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#a21caf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-        </div>
-      </div>
-
-      <div class="view-card">
-        <div class="view-switch">
-          <button class="btn active"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="#a1125b" stroke-width="2" stroke-linecap="round"/></svg></button>
-          <button class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" stroke="#a1125b" stroke-width="1.8"/></svg></button>
-          <button class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#a1125b" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg></button>
-        </div>
-        <div class="date-nav">
-          <button class="arrow" aria-label="Anterior"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="#a1125b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <div style="text-align:center;">
-            <div class="date">02/10/2025</div>
-            <div class="muted">02/10/2025 ▾</div>
-          </div>
-          <button class="arrow" aria-label="Próximo"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="#a1125b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        </div>
-        <div><span class="chip">Hoje</span></div>
-      </div>
-
-      <section class="section staff-card">
-        <div class="top">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0M12 7a4 4 0 110-8 4 4 0 010 8z" transform="translate(0,4)" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <h2 style="margin:0;">Funcionários</h2><span class="badge">1 ativo</span>
-          </div>
-          <div class="muted" style="display:flex; gap:14px; align-items:center;">
-            <a href="#" style="color:#a1125b; font-weight:900; text-decoration:none;">Ver Todos</a>
-            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#64748b" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="#64748b"/></svg>
-          </div>
-        </div>
-
-        <div class="staff-item" style="margin:12px 0;">
-          <div class="left">
-            <div class="ava">K</div>
-            <div>
-              <div class="muted-strong">Kelly Monice</div>
-              <div class="muted">@Kelly</div>
-            </div>
-          </div>
-          <span class="badge">1 agend.</span>
-        </div>
-
-        <div class="staff-footer">
-          <div>1 Agendamentos</div>
-          <div>1 Funcionários</div>
-        </div>
-      </section>
-
-      <section class="section filters">
-        <div class="field">
-          <label class="muted-strong">Data</label>
-          <select>
-            <option>02/10/2025</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="muted-strong">Status</label>
-          <select>
-            <option>Todos os status</option>
-          </select>
-        </div>
-        <label class="check"><input type="checkbox"> Mostrar concluídos</label>
-      </section>
-
-      <section class="section" id="agendaSection">
-        <div class="title-row" style="align-items:center; gap:8px;">
-          <h2 style="margin:0;">Agendamentos — <span id="agDayTitle"></span></h2>
-          <span class="badge" id="agCount">0 agendamentos</span>
-        </div>
-        <div class="row-info" style="margin:10px 0;">
-          <div class="chip">
-            Data:
-            <input type="date" id="agDateInput" style="border:1px solid #f3c6d9; border-radius:8px; padding:6px 8px; color:#a1125b; font-weight:800;">
-          </div>
-          <div class="chip">
-            Status:
-            <select id="agStatus" style="border:1px solid #f3c6d9; border-radius:8px; padding:6px 8px; color:#a1125b; font-weight:800;">
-              <option value="all">Todos</option>
-              <option value="scheduled">Agendado</option>
-              <option value="in_progress">Em andamento</option>
-              <option value="done">Concluído</option>
-            </select>
-          </div>
-          <div style="margin-left:auto; display:flex; gap:6px;">
-            <button class="btn-refresh" id="agPrev">← Dia anterior</button>
-            <button class="btn-refresh" id="agNext">Próximo dia →</button>
-          </div>
-        </div>
-        <div id="agList"></div>
-      </section>
-    `;
-
-    const Clientes = () => `
-      <div class="hero"><h1>Clientes</h1><p>Integração e cadastro</p></div>
-      <section class="section">
-        <div class="list">
-          <div class="row" style="justify-content:space-between; gap:8px;">
-            <div>
-              <strong>Integração com Notion</strong>
-              <div class="muted">Importe clientes e datas de aniversário a partir de uma base do Notion</div>
-            </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button class="btn-primary" id="btnNotionImport">Importar do Notion</button>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section class="section">
-        <h2 style="margin:0 0 8px;">Lista de clientes</h2>
-        <div class="list" id="clientsList"></div>
-      </section>
-    `;
-
-    const FichaCliente = () => `
-      <div class="hero"><h1>Ficha Cliente</h1><p>Histórico e informações do cliente</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Nome</strong><div class="muted">Claudia Maria</div></div><span class="pill">Ativa</span></div>
-        <div class="row"><div><strong>Último atendimento</strong><div class="muted">há 15 dias</div></div><span class="pill">Coloração</span></div>
-        <div class="row"><div><strong>Observações</strong><div class="muted">Prefere sábado à tarde</div></div></div>
-      </section>
-    `;
-
-    const ClientesMensais = () => `
-      <div class="hero"><h1>Clientes Mensais</h1><p>Assinaturas e recorrência</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Rafael</strong><div class="muted">Plano: Mensal</div></div><span class="pill">Ativo</span></div>
-        <div class="row"><div><strong>Mari</strong><div class="muted">Plano: Mensal</div></div><span class="pill">Ativo</span></div>
-      </section>
-    `;
-
-    const Servicos = () => `
-      <style>
-        .svc-hero h1 { margin:0 0 6px; font-size:28px; color:var(--bella-800); font-weight:900; letter-spacing:.2px; }
-        .svc-hero p { margin:0; color:#9d3a69; font-weight:600; }
-        .svc-actions { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
-        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
-        .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
-        .svc-filters { display:grid; gap:10px; margin:12px 0; }
-        .svc-filters .field { display:grid; gap:6px; }
-        .svc-filters input, .svc-filters select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
-        .tabs { display:flex; gap:8px; overflow:auto; padding-bottom:2px; }
-        .tab { white-space:nowrap; padding:8px 12px; border-radius:999px; border:1px solid #f3c6d9; color:#a1125b; font-weight:800; background:#fff; }
-        .tab.active { background:#fff4f9; border:2px solid #f3a1c8; }
-        .svc-list { display:grid; gap:12px; }
-        .svc-card { display:grid; grid-template-columns: 108px 1fr; gap:12px; background:#fff; border:1px solid #f1e6ee; border-radius:18px; padding:12px; box-shadow: var(--shadow); }
-        .svc-photo { width:100%; height:100%; max-height:92px; border-radius:14px; object-fit:cover; border:1px solid #f1e6ee; background:#fff7fb; }
-        .svc-title { font-weight:900; color:#9d174d; text-transform:uppercase; letter-spacing:.2px; }
-        .svc-desc { color:#6b7280; font-weight:600; font-size:13px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-        .svc-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; }
-        .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-weight:900; }
-        .chip.time { background:#eef2ff; border:1px solid #c7d2fe; color:#4338ca; }
-        .chip.price { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; }
-        .svc-actions-inline { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
-        @media(max-width:520px){ .svc-card { grid-template-columns: 1fr; } .svc-photo { max-height:160px; } }
-      </style>
-
-      <div class="svc-hero">
-        <h1>Serviços</h1>
-        <p>Catálogo, preços e duração (usado nos agendamentos)</p>
-      </div>
-
-      <div class="svc-actions">
-        <button class="btn primary" id="svcNovo">+ Novo Serviço</button>
-        <button class="btn" id="svcCat">Gerenciar Categorias</button>
-      </div>
-
-      <section class="section svc-filters">
-        <div class="field">
-          <label class="muted">Pesquisar</label>
-          <input id="svcQ" placeholder="Nome ou descrição">
-        </div>
-        <div class="field">
-          <label class="muted">Categorias</label>
-          <div class="tabs" id="svcTabs"></div>
-        </div>
-      </section>
-
-      <section class="section">
-        <h2 style="margin:0 0 8px;">Lista</h2>
-        <div class="svc-list" id="svcList"></div>
-      </section>
-    `;
-
-    const Caixa = () => `
-      <div id="caixa-root"></div>
-    `;
-
-    const Estoque = () => `
-      <div id="estoque-root"></div>
-    `;
-
-    const Usuarios = () => `
-      <style>
-        .usr-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
-        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
-        .btn.primary{ background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
-        .usr-list { display:grid; gap:10px; }
-        .usr-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid #f1e6ee; background:#fff; border-radius:12px; padding:12px; }
-        .usr-left { display:flex; gap:10px; align-items:center; }
-        .usr-ava { width:40px; height:40px; border-radius:12px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
-        .badge { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:800; }
-      </style>
-      <div class="hero"><h1>Usuários</h1><p>Profissionais e administradores</p></div>
-      <div class="usr-actions">
-        <button class="btn primary" id="usrNovo">+ Novo Usuário</button>
-      </div>
-      <section class="section">
-        <h2 style="margin:0 0 8px;">Lista</h2>
-        <div class="usr-list" id="usrList"></div>
-      </section>
-    `;
-
-    const Configuracoes = () => `
-      <div class="hero"><h1>Configurações</h1><p>Preferências do sistema</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Tema</strong><div class="muted">Claro</div></div><button class="btn-outline">Alterar</button></div>
-        <div class="row"><div><strong>Notificações</strong><div class="muted">Ativadas</div></div><button class="btn-outline">Editar</button></div>
-      </section>
-      <section class="section list">
-        <div class="row">
-          <div><strong>Exportar Build/Dist</strong><div class="muted">Gera um snapshot ZIP do preview estático</div></div>
-          <button class="btn-outline" id="btnDistZip">Gerar ZIP</button>
-        </div>
-      </section>
-    `;
-
-    // Rotas (sem Relatórios, conforme pedido)
-    const AgendaNew = () => `
-      <style>
-        .icon { width: 18px; height: 18px; vertical-align: -3px; }
-        .agenda-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; display:flex; align-items:center; gap:10px; }
-        .agenda-hero .chip-online { display:inline-flex; align-items:center; gap:6px; background:#eafff1; color:#15803d; font-weight:800; padding:6px 12px; border-radius:999px; font-size:12px; border:1px solid #bbf7d0; }
-        .agenda-hero p { margin: 0; color: #9d3a69; font-weight: 600; }
-        .btn-lg { display:inline-flex; align-items:center; gap:10px; background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; font-weight:900; border-radius:16px; padding:16px 22px; border:0; box-shadow: var(--shadow); }
-        .kpi-mini { display:grid; gap:12px; margin:14px 0; }
-        .kpi-mini .item { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; display:flex; align-items:center; justify-content:space-between; box-shadow: var(--shadow); }
-        .kpi-mini .item.orange { background: #fff7ed; border-color:#fed7aa; }
-        .kpi-mini .item.purple { border-color:#e9d5ff; }
-        .kpi-mini .title { color:#a1125b; font-weight:900; }
-        .kpi-mini .val { font-size:32px; font-weight:900; color:#a1125b; }
-        .view-card { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; box-shadow: var(--shadow); display:grid; gap:12px; margin-bottom:12px; }
-        .view-switch { display:flex; gap:8px; }
-        .view-switch .btn { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
-        .view-switch .btn.active { background: linear-gradient(180deg,#fff,#ffe9f1); border:2px solid #f3a1c8; box-shadow: var(--shadow); }
-        .row-info { display:flex; align-items:center; gap:10px; color:#6b7280; font-weight:700; flex-wrap: wrap; }
-        .row-info .chip { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; padding:6px 10px; border-radius:10px; }
-        .btn-refresh { display:inline-flex; align-items:center; gap:6px; background:#eef2ff; border:1px solid #c7d2fe; padding:8px 12px; border-radius:12px; color:#4338ca; font-weight:800; }
-        .title-row { display:flex; align-items:center; justify-content:space-between; }
-        .badge { background:#fee2f2; color:#a1125b; border:1px solid #fbcfe8; padding:8px 12px; border-radius:999px; font-weight:800; }
-        /* Appointment cards (compatível com renderAgendaList) */
-        .appt { position:relative; border-radius:20px; padding:14px; background:#fff; box-shadow: var(--shadow); border:2px solid #f9c3a7; margin-bottom:16px; overflow:hidden; }
-        .appt.in-progress { border-color:#f59e0b; background: #fff7ed; }
-        .appt .progress-fill { position:absolute; left:0; top:0; bottom:0; width:0; background: linear-gradient(90deg, rgba(34,197,94,.3), rgba(34,197,94,.08)); }
-        .appt .inner { position:relative; display:grid; grid-template-columns: 1fr auto; gap: 10px; }
-        .appt .header { display:flex; align-items:center; gap:12px; }
-        .appt .ava { width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
-        .appt .name { font-weight:900; color:#7a0f3f; font-size:20px; }
-        .appt .status { background:#fef3c7; color:#a16207; padding:6px 10px; border-radius:999px; font-weight:900; border:1px solid #fde68a; }
-        .appt .status.scheduled { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
-        .appt .actions { display:grid; gap:10px; color:#a1125b; }
-        .appt .row { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
-        .section-title { color:#a1125b; font-weight:900; margin: 8px 0 6px; }
-        .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
-      </style>
-
-      <div class="agenda-hero">
-        <h1>Agenda <span class="chip-online"><span class="dot"></span>Online</span></h1>
-        <p>Gerencie os agendamentos do salão</p>
-      </div>
-
-      <button class="btn-lg" data-open="agendamento">
-        <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
-        Novo Agendamento
-      </button>
-
-      <div class="kpi-mini">
-        <div class="item"><div><div class="title">Hoje</div><div class="val">0</div></div></div>
-        <div class="item"><div><div class="title">Agendados</div><div class="val">0</div></div></div>
-        <div class="item orange"><div><div class="title" style="color:#d97706;">Em andamento</div><div class="val" style="color:#d97706;">0</div></div></div>
-        <div class="item purple"><div><div class="title" style="color:#a21caf;">Concluídos</div><div class="val" style="color:#a21caf;">0</div></div></div>
-      </div>
-
-      <div class="view-card">
-        <div class="view-switch">
-          <button class="btn active" id="agViewDay">Dia</button>
-          <button class="btn" id="agViewWeek">Semana</button>
-          <button class="btn" id="agViewMonth">Mês</button>
-        </div>
-        <div class="row-info">
-          <span class="chip">
-            Data:
-            <input type="date" id="agDateInput" style="border:1px solid #f3c6d9; border-radius:8px; padding:6px 8px; color:#a1125b; font-weight:800;">
-          </span>
-          <span class="chip">
-            Status:
-            <select id="agStatus" style="border:1px solid #f3c6d9; border-radius:8px; padding:6px 8px; color:#a1125b; font-weight:800;">
-              <option value="all">Todos</option>
-              <option value="scheduled">Agendado</option>
-              <option value="in_progress">Em andamento</option>
-              <option value="done">Concluído</option>
-            </select>
-          </span>
-          <span class="chip">
-            Buscar:
-            <input type="text" id="agQ" placeholder="Cliente ou telefone" style="border:1px solid #f3c6d9; border-radius:8px; padding:6px 8px; color:#a1125b; font-weight:800; min-width:180px;">
-          </span>
-          <label class="chip"><input type="checkbox" id="agShowDone" style="margin-right:6px;"> Mostrar concluídos</label>
-          <div style="margin-left:auto; display:flex; gap:6px;">
-            <button class="btn-refresh" id="agPrev">← Dia anterior</button>
-            <button class="btn-refresh" id="agNext">Próximo dia →</button>
-          </div>
-        </div>
-      </div>
-
-      <section class="section" id="agendaSection">
-        <div class="title-row" style="align-items:center; gap:8px;">
-          <h2 style="margin:0;">Agendamentos — <span id="agDayTitle"></span></h2>
-          <span class="badge" id="agCount">0 agendamentos</span>
-        </div>
-        <div id="agList"></div>
-      </section>
-
-      <section class="section" id="weekSection" style="display:none;">
-       <<div class="title-ro"><<h2 style="margin:0;">Semana d <<span id="agWeekTit"></</sp></</></</div>
-       <<div id="agWe"></</div>
-    </</sect_code
-      <section class="section" id="monthSection" style="display:none;">
-       <<div class="title-row">
-         <mh2 style="margin:0;">Mês d <gspan id="agMonthTitleh2></div>
-        <div id="agMonth"></div>
-      </section>
-    `;
-    const routes = {
-      "/dashboard": { title: "Dashboard", view: Dashboard },
-      "/agenda": { title: "Agenda", view: AgendaNew },
-      "/clientes": { title: "Clientes", view: Clientes },
-      "/ficha-cliente": { title: "Ficha Cliente", view: FichaCliente },
-      "/clientes-mensais": { title: "Clientes Mensais", view: ClientesMensais },
-      "/servicos": { title: "Serviços", view: Servicos },
-      "/caixa": { title: "Caixa", view: Caixa },
-      "/estoque": { title: "Estoque", view: Estoque },
-      "/usuarios": { title: "Usuários", view: Usuarios },
-      "/configuracoes": { title: "Configurações", view: Configuracoes },
-    };
 
     const layout = `
       ${css}
       <div class="topnav">
-        <button class="menu" id="menuBtn" aria-label="menu" title="Menu">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        </button>
+        <button class="menu" id="menuBtn" title="Menu">☰</button>
         <div class="titlebar" id="titlebar">Dashboard</div>
-        <div class="shield" title="Conta"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 5-3.5 9-7 9s-7-4-7-9V7l7-4z" fill="white" fill-opacity=".85"/></svg></div>
+        <div class="shield" id="accBtn" title="Conta">👤</div>
       </div>
 
       <div class="drawer" id="drawer">
         <div class="panel">
           <div class="brandbar">
-            <div class="left">
-              <div class="heart"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 21s-6.4-3.7-9.2-8C.8 10.1 1.3 6.7 4.2 5.3A5 5 0 0 1 12 7a5 5 0 0 1 7.8-1.7c2.9 1.4 3.4 4.8 1.4 7.7C18.4 17.3 12 21 12 21z" fill="white" fill-opacity=".9"/></svg></div>
-              <div>Bella's</div>
-            </div>
-            <button class="close" id="drawerClose" aria-label="Fechar">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
+            <div style="font-weight:900;">Espaço Bella's</div>
+            <button class="btn" id="drawerClose" style="border:1px solid rgba(255,255,255,.5); color:#fff; background:transparent;">Fechar</button>
           </div>
-
-          <div class="usercard">
-            <div class="ava"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 5-3.5 9-7 9s-7-4-7-9V7l7-4z" fill="white" fill-opacity=".85"/></svg></div>
-            <div style="flex:1;">
-              <div class="name">Weslley Raphael</div>
-              <div class="chips">
-                <span class="online"></span>
-                <span class="chip">Admin</span>
-                <span class="chip">Admin</span>
-              </div>
-            </div>
-          </div>
-
           <nav class="navlist">
-            <a class="item" href="#/dashboard" data-link="/dashboard"><span class="icon">🏠</span><span class="label">Dashboard</span></a>
-            <a class="item" href="#/agenda" data-link="/agenda"><span class="icon">📅</span><span class="label">Agenda</span></a>
-            <a class="item" href="#/clientes" data-link="/clientes"><span class="icon">👥</span><span class="label">Clientes</span></a>
-            <a class="item" href="#/ficha-cliente" data-link="/ficha-cliente"><span class="icon">📄</span><span class="label">Ficha Cliente</span></a>
-            <a class="item" href="#/clientes-mensais" data-link="/clientes-mensais"><span class="icon">🗓️</span><span class="label">Clientes Mensais</span></a>
-            <a class="item" href="#/servicos" data-link="/servicos"><span class="icon">⚙️</span><span class="label">Serviços</span></a>
-            <a class="item" href="#/caixa" data-link="/caixa"><span class="icon">💵</span><span class="label">Caixa</span></a>
-            <a class="item" href="#/estoque" data-link="/estoque"><span class="icon">📦</span><span class="label">Estoque</span></a>
+            <a class="item" href="#/dashboard" data-link="/dashboard">🏠 Dashboard</a>
+            <a class="item" href="#/agenda" data-link="/agenda">📅 Agenda</a>
+            <a class="item" href="#/servicos" data-link="/servicos">⚙️ Serviços</a>
+            <a class="item" href="#/caixa" data-link="/caixa">💵 Caixa</a>
+            <a class="item" href="#/estoque" data-link="/estoque">📦 Estoque</a>
           </nav>
-
-          <div class="section-divider"><span>ADMINISTRAÇÃO</span></div>
-
-          <nav class="navlist" style="padding-top: 0;">
-            <a class="item" href="#/usuarios" data-link="/usuarios"><span class="icon">🛡️</span><span class="label">Usuários</span></a>
-            <a class="item" href="#/configuracoes" data-link="/configuracoes"><span class="icon">🔧</span><span class="label">Configurações</span></a>
-          </nav>
-
-          <div class="logout">
-            <a class="item danger" href="#" id="logoutBtn"><span class="icon">↪️</span><span class="label">Sair</span></a>
-          </div>
         </div>
       </div>
 
       <div class="shell"><div id="page"></div></div>
 
-      <!-- Modal shell -->
-      <div class="modals" id="modals">
-        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <h3 id="modal-title">Novo Agendamento</h3>
-          <div class="field"><label>Cliente</label><input placeholder="Nome do cliente"></div>
-          <div class="field"><label>Serviço</label><input placeholder="Ex.: Corte, Coloração..."></div>
-          <div class="field"><label>Data e hora</label><input type="datetime-local"></div>
-          <div style="display:flex; justify-content:flex-end; gap:8px;">
-            <button class="btn-outline" data-close>Cancelar</button>
-            <button class="btn-primary" data-close>Salvar</button>
-          </div>
-        </div>
-      </div>
+      <div class="modals" id="modals"><div class="modal"></div></div>
     `;
 
-    // Monta layout
-    root.innerHTML = layout;
+    // Pages (mínimo viável e estável)
+    const Dashboard = () => `
+      <div class="hero"><h1>Dashboard</h1><p>Preview estático carregado com sucesso.</p></div>
+      <section class="section">
+        <div class="muted">Use o menu para acessar Agenda, Serviços e Caixa. Este preview não depende do Vercel.</div>
+      </section>
+    `;
 
-    // Helpers
+    const Agenda = () => `
+      <div class="hero"><h1>Agenda</h1><p>Versão estável do preview (em breve funcionalidades completas).</p></div>
+      <section class="section">
+        <div class="muted">A agenda do preview foi temporariamente simplificada para garantir que o app abra sem erros. As funções avançadas voltarão na próxima rodada.</div>
+      </section>
+    `;
+
+    const Servicos = () => `
+      <div class="hero"><h1>Serviços</h1><p>Catálogo local (somente leitura no preview seguro).</p></div>
+      <section class="section">
+        <div class="muted">Lista exibida com base em defaults salvos no navegador.</div>
+        <div id="svcList"></div>
+      </section>
+    `;
+
+    const Estoque = () => `
+      <div class="hero"><h1>Estoque</h1><p>Em estabilização no preview.</p></div>
+      <section class="section">
+        <div class="muted">As funções de estoque permanecerão desativadas aqui no preview até concluirmos a revalidação.</div>
+      </section>
+    `;
+
+    const Caixa = () => `
+      <div class="hero"><h1>Caixa</h1><p>Preview estático seguro — dados no navegador (localStorage)</p></div>
+      <section class="section" id="cxFilters">
+        <div class="field">
+          <label>Data</label>
+          <input type="date" id="cxDate">
+        </div>
+        <div class="field">
+          <label>Dinheiro em Caixa (Informado)</label>
+          <input type="number" id="cxDinheiro" step="0.01" min="0">
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+          <button class="btn primary" id="btnAtendimento">+ Atendimento Manual</button>
+          <button class="btn" id="btnDespesa">+ Despesa</button>
+        </div>
+      </section>
+      <section class="section" id="cxCards"></section>
+      <section class="section" id="cxAtts"></section>
+      <section class="section" id="cxDeps"></section>
+    `;
+
+    const routes = {
+      "/dashboard": { title: "Dashboard", view: Dashboard },
+      "/agenda": { title: "Agenda", view: Agenda },
+      "/servicos": { title: "Serviços", view: Servicos },
+      "/caixa": { title: "Caixa", view: Caixa },
+      "/estoque": { title: "Estoque", view: Estoque },
+    };
+
+    // Mount
+    root.innerHTML = layout;
     const $ = (sel) => document.querySelector(sel);
     const page = $("#page");
     const titlebar = $("#titlebar");
     const drawer = $("#drawer");
     $("#menuBtn").addEventListener("click", () => (drawer.style.display = "block"));
     $("#drawerClose").addEventListener("click", () => (drawer.style.display = "none"));
-    drawer.addEventListener("click", (e) => {
-      if (e.target === drawer) drawer.style.display = "none";
-    });
-    $("#logoutBtn").addEventListener("click", (e) => {
-      e.preventDefault();
-      alert("Sessão encerrada (simulação).");
-      drawer.style.display = "none";
-    });
+    drawer.addEventListener("click", (e) => { if (e.target === drawer) drawer.style.display = "none"; });
+
+    function setActive(hash) {
+      drawer.querySelectorAll("a[data-link]").forEach(a => {
+        a.classList.toggle("active", a.getAttribute("data-link") === hash);
+      });
+    }
 
     function renderRoute() {
       const hash = location.hash.replace("#", "") || "/dashboard";
       const route = routes[hash] || routes["/dashboard"];
       titlebar.textContent = route.title;
       page.innerHTML = route.view();
+      setActive(hash);
 
-      // destacar item ativo
-      drawer.querySelectorAll("a[data-link]").forEach((a) => {
-        const active = a.getAttribute("data-link") === hash;
-        a.classList.toggle("active", active);
-      });
-
-      // Modais simples
-      const modals = $("#modals");
-      function openModal(title) {
-        $("#modal-title").textContent = title;
-        modals.style.display = "flex";
-      }
-      function closeModal() {
-        modals.style.display = "none";
-      }
-      page.querySelectorAll("[data-open='agendamento']").forEach((b) =>
-        b.addEventListener("click", () => openModal("Novo Agendamento"))
-      );
-      page.querySelectorAll("[data-open='cliente']").forEach((b) =>
-        b.addEventListener("click", () => openModal("Novo Cliente"))
-      );
-      page.querySelectorAll("[data-open='venda']").forEach((b) =>
-        b.addEventListener("click", () => openModal("Registrar Venda"))
-      );
-      modals.addEventListener("click", (e) => {
-        if (e.target === modals || e.target.hasAttribute("data-close")) closeModal();
-      });
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeModal();
-      });
-
-      // Configurações: gerar ZIP do dist (snapshot)
-      async function ensureJSZip() {
-        // @ts-ignore
-        if (!window.__loadedScripts) window.__loadedScripts = {};
-        const src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
-        if (!window.__loadedScripts[src]) {
-          await new Promise((resolve, reject) => {
-            const s = document.createElement("script");
-            s.src = src;
-            s.onload = resolve;
-            s.onerror = reject;
-            document.head.appendChild(s);
-          });
-          window.__loadedScripts[src] = true;
-        }
-      }
-      async function generateDistZip() {
-        try {
-          await ensureJSZip();
-          const JSZip = window.JSZip;
-          const zip = new JSZip();
-          const fetchText = async (path) => {
-            try {
-              const res = await fetch(path);
-              return res.ok ? await res.text() : "";
-            } catch {
-              return "";
-            }
-          };
-          const fetchBlob = async (path) => {
-            try {
-              const res = await fetch(path);
-              return res.ok ? await res.blob() : new Blob([]);
-            } catch {
-              return new Blob([]);
-            }
-          };
-
-          const idx = await fetchText("/index.html");
-          if (idx) zip.file("index.html", idx);
-          const fb = await fetchText("/public/fallback-preview.js");
-          if (fb) zip.file("public/fallback-preview.js", fb);
-          const manRoot = await fetchText("/cosine-manifest.json");
-          if (manRoot) zip.file("cosine-manifest.json", manRoot);
-          const manPub = await fetchText("/public/cosine-manifest.json");
-          if (manPub) zip.file("public/cosine-manifest.json", manPub);
-
-          const assets = [
-            { path: "/public/favicon.ico", name: "public/favicon.ico", binary: true },
-            { path: "/public/robots.txt", name: "public/robots.txt" },
-            { path: "/public/placeholder.svg", name: "public/placeholder.svg" },
-          ];
-          for (const a of assets) {
-            if (a.binary) {
-              const blob = await fetchBlob(a.path);
-              if (blob.size) zip.file(a.name, blob);
-            } else {
-              const txt = await fetchText(a.path);
-              if (txt) zip.file(a.name, txt);
-            }
-          }
-
-          const content = await zip.generateAsync({ type: "blob" });
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(content);
-          a.download = `bella-app-dist-snapshot_${new Date().toISOString().slice(0,10)}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          URL.revokeObjectURL(a.href);
-          a.remove();
-        } catch (e) {
-          console.warn("Falha ao gerar dist snapshot:", e);
-        }
-      }
-      if (hash === "/configuracoes") {
-        const btn = page.querySelector("#btnDistZip");
-        btn && btn.addEventListener("click", generateDistZip);
-      }
-
-      // ==== Clientes: armazenamento e integração com Notion ====
-      const CLIENTS_KEY = "bella_clients_v1";
-      function getClientsStore() {
-        try {
-          return JSON.parse(localStorage.getItem(CLIENTS_KEY) || '{"clients":[]}');
-        } catch {
-          return { clients: [] };
-        }
-      }
-      function setClientsStore(s) {
-        localStorage.setItem(CLIENTS_KEY, JSON.stringify(s));
-      }
-      function onlyDigitsLocal(s) { return String(s || "").replace(/\D+/g, ""); }
-      function fmtDDMMLocal(iso) {
-        if (!iso) return "";
-        try { const [y,m,d] = iso.slice(0,10).split("-"); return `${d}/${m}`; } catch { return ""; }
-      }
-      function monthDayLocal(iso) {
-        try { const [y,m,d] = iso.slice(0,10).split("-").map(Number); return { m, d }; } catch { return { m:null, d:null }; }
-      }
-      const NOTION_CFG_KEY = "bella_notion_cfg";
-      function getNotionCfg() {
-        try {
-          return JSON.parse(localStorage.getItem(NOTION_CFG_KEY) || '{"secret":"","dbid":"","map":{"name":"Name","phone":"Phone","birth":"Birthday"}}');
-        } catch {
-          return { secret:"", dbid:"", map:{ name:"Name", phone:"Phone", birth:"Birthday" } };
-        }
-      }
-      function setNotionCfg(cfg) {
-        localStorage.setItem(NOTION_CFG_KEY, JSON.stringify(cfg));
-      }
-
-      // ==== Usuários (profissionais) ====
-      const USERS_KEY = "bella_users_v1";
-      function getUsersStore() { try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{"users":[]}'); } catch { return { users: [] }; } }
-      function setUsersStore(s) { localStorage.setItem(USERS_KEY, JSON.stringify(s)); }
-      function uidUser(p) { return `${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
-      function ensureUsersDefaults() {
-        const s = getUsersStore();
-        if ((s.users || []).length) return;
-        s.users = [
-          { id: uidUser("usr"), nome: "Weslley Raphael", role: "admin" },
-          { id: uidUser("usr"), nome: "Kelly Monice", role: "prof" },
-        ];
-        setUsersStore(s);
-      }
-
-      const SVC_KEY = "bella_services_v1";
-      function svcUid(p) { return `${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
-      function getSvcStore() {
-        try { return JSON.parse(localStorage.getItem(SVC_KEY) || '{"cats":[],"items":[]}'); } catch { return { cats:[], items:[] }; }
-      }
-      function setSvcStore(s) { localStorage.setItem(SVC_KEY, JSON.stringify(s)); }
-      function moneyBR(n) { return (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" }); }
-      function minsTxt(min) {
-        min = Number(min)||0;
-        if (min < 60) return `${min}min`;
-        const h = Math.floor(min/60); const m = min%60;
-        return m ? `${h}h ${m}min` : `${h}h`;
-      }
-      function ensureSvcDefaults() {
-        const s = getSvcStore();
-        if ((s.items||[]).length) return;
-        s.cats = [
-          { id: svcUid("cat"), nome: "Unhas" },
-          { id: svcUid("cat"), nome: "Cabelos" },
-          { id: svcUid("cat"), nome: "Sobrancelha" },
-          { id: svcUid("cat"), nome: "Depilação" },
-        ];
-        const cat = (name) => s.cats.find(c=>c.nome===name)?.id || s.cats[0].id;
-        s.items = [
-          { id: svcUid("svc"), nome: "Alongamento em Acrigel", cat_id: cat("Unhas"), preco: 150, duracao_min: 150, desc:"O que está incluso no serviço e principais benefícios. Tempo médio e objetivos.", foto: "/public/placeholder.svg" },
-          { id: svcUid("svc"), nome: "Alongamento em Gel", cat_id: cat("Unhas"), preco: 150, duracao_min: 150, desc:"Descrição breve e objetiva do procedimento.", foto: "/public/placeholder.svg" },
-          { id: svcUid("svc"), nome: "Alongamento Fibra de Vidro", cat_id: cat("Unhas"), preco: 180, duracao_min: 165, desc:"Durável e leve. Inclui manutenção básica.", foto: "/public/placeholder.svg" },
-          { id: svcUid("svc"), nome: "Corte Feminino", cat_id: cat("Cabelos"), preco: 40, duracao_min: 40, desc:"Corte com acabamento escova simples.", foto: "/public/placeholder.svg" },
-          { id: svcUid("svc"), nome: "Coloração", cat_id: cat("Cabelos"), preco: 120, duracao_min: 90, desc:"Coloração completa com tonalização.", foto: "/public/placeholder.svg" },
-          { id: svcUid("svc"), nome: "Design de Sobrancelhas", cat_id: cat("Sobrancelha"), preco: 35, duracao_min: 30, desc:"Medição, marcação e alinhamento.", foto: "/public/placeholder.svg" },
-        ];
-        setSvcStore(s);
-      }
-      if (hash === "/dashboard") {
-        const box = page.querySelector("#birthBox");
-        if (box) {
-          const s = getClientsStore();
-          const list = (s.clients || []).filter(c => !!c.birthdate);
-          const now = new Date();
-          const cm = now.getMonth() + 1;
-          const cd = now.getDate();
-          const curr = list.filter(c => monthDayLocal(c.birthdate).m === cm)
-                           .sort((a,b) => monthDayLocal(a.birthdate).d - monthDayLocal(b.birthdate).d);
-          const today = curr.filter(c => monthDayLocal(c.birthdate).d === cd);
-          const past = curr.filter(c => monthDayLocal(c.birthdate).d < cd);
-          const upcoming = curr.filter(c => monthDayLocal(c.birthdate).d > cd);
-
-          function item(c, tag) {
-            const ch = (c.name || "?").slice(0,1).toUpperCase();
-            const tel = onlyDigitsLocal(c.phone || "");
-            const badge = tag ? `<span class="pill" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca;">${tag}</span>` : "";
-            return `
-              <div class="month-item">
-                <div style="display:flex; gap:10px; align-items:center;">
-                  <div class="circle">${ch}</div>
-                  <div>
-                    <div style="font-weight:900;">${c.name || "-"}</div>
-                    <div class="muted"><span>📅</span> ${fmtDDMMLocal(c.birthdate)} ${badge}</div>
-                  </div>
-                </div>
-                ${tel ? `<a class="tel" href="tel:+55${tel}" title="Ligar para o cliente">Ligar</a>` : `<span></span>`}
-              </div>
-            `;
-          }
-
-          if (!curr.length) {
-            box.innerHTML = `<div class="empty">Nenhum aniversariante deste mês. Importe clientes do Notion em “Clientes › Importar do Notion”.</div>`;
-          } else {
-            const parts = [];
-            parts.push(`<h3 style="margin:0 0 10px; display:flex; align-items:center; gap:8px;"><span>📅</span><span>Todos deste mês (${curr.length})</span></h3>`);
-            if (today.length) {
-              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Hoje</div>`);
-              parts.push(today.map(c => item(c, "hoje")).join(""));
-            }
-            if (upcoming.length) {
-              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Próximos</div>`);
-              parts.push(upcoming.map(c => item(c, "")).join(""));
-            }
-            if (past.length) {
-              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Já passaram</div>`);
-              parts.push(past.map(c => item(c, "passou")).join(""));
-            }
-            box.innerHTML = parts.join("");
-          }
-        }
-      }
-
-      // Clientes: listar e importar do Notion
-      if (hash === "/clientes") {
-        const listEl = page.querySelector("#clientsList");
-        function renderClientsList() {
-          if (!listEl) return;
-          const s = getClientsStore();
-          const arr = (s.clients || []).slice().sort((a,b) => (a.name || "").localeCompare(b.name || ""));
-          if (!arr.length) {
-            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum cliente cadastrado. Importe do Notion.</div>`;
-            return;
-          }
-          listEl.innerHTML = arr.map(c => `
-            <div class="row">
-              <div>
-                <strong>${c.name || "-"}</strong>
-                <div class="muted">${c.phone || ""}</div>
-              </div>
-              <span class="pill">${fmtDDMMLocal(c.birthdate) || "—"}</span>
-            </div>
-          `).join("");
-        }
-
-        function showNotionImportModal() {
-          const modals = document.getElementById("modals");
-          const modal = modals.querySelector(".modal");
-          const cfg = getNotionCfg();
-          modal.innerHTML = `
-            <h3>Importar do Notion</h3>
-            <div class="field"><label>Integration Secret *</label><input id="ntSecret" placeholder="secret_..." value="${cfg.secret || ""}"></div>
-            <div class="field"><label>Database ID *</label><input id="ntDb" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="${cfg.dbid || ""}"></div>
-            <div class="field"><label>Campo — Nome (Title)</label><input id="ntMapName" value="${(cfg.map && cfg.map.name) || "Name"}"></div>
-            <div class="field"><label>Campo — Telefone (Phone ou Rich text)</label><input id="ntMapPhone" value="${(cfg.map && cfg.map.phone) || "Phone"}"></div>
-            <div class="field"><label>Campo — Aniversário (Date)</label><input id="ntMapBirth" value="${(cfg.map && cfg.map.birth) || "Birthday"}"></div>
-            <div class="muted" style="font-size:12px;">Dica: no Notion, compartilhe sua base com a integração e use um campo do tipo "Date" para o aniversário.</div>
-            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-              <button class="btn-outline" data-close>Cancelar</button>
-              <button class="btn-primary" id="ntImport">Importar</button>
-            </div>
-          `;
-          modals.style.display = "flex";
-          const $m = (sel) => modal.querySelector(sel);
-          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
-
-          async function notionQueryAll(secret, dbid) {
-            let cursor = undefined;
-            let all = [];
-            for (let i = 0; i < 20; i++) {
-              const body = cursor ? { start_cursor: cursor, page_size: 100 } : { page_size: 100 };
-              const r = await fetch(`https://api.notion.com/v1/databases/${dbid}/query`, {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${secret}`,
-                  "Content-Type": "application/json",
-                  "Notion-Version": "2022-06-28",
-                },
-                body: JSON.stringify(body),
-              });
-              if (!r.ok) throw new Error("Falha ao consultar a base do Notion. Verifique o Secret, o Database ID e o compartilhamento.");
-              const j = await r.json();
-              all = all.concat(j.results || []);
-              if (j.has_more && j.next_cursor) cursor = j.next_cursor; else break;
-            }
-            return all;
-          }
-          function getTitle(prop){ try { return (prop?.title || []).map(t=>t.plain_text).join("").trim(); } catch { return ""; } }
-          function getText(prop){
-            try {
-              if (!prop) return "";
-              if (prop.type === "phone_number") return prop.phone_number || "";
-              if (prop.type === "rich_text") return (prop.rich_text || []).map(t=>t.plain_text).join(" ").trim();
-              if (prop.type === "title") return getTitle(prop);
-              return "";
-            } catch { return ""; }
-          }
-          function getDate(prop){ try { return (prop?.date?.start || "").slice(0,10); } catch { return ""; } }
-
-          $m("#ntImport").addEventListener("click", async () => {
-            try {
-              const secret = ($m("#ntSecret").value || "").trim();
-              const dbid = ($m("#ntDb").value || "").trim();
-              const map = {
-                name: ($m("#ntMapName").value || "Name").trim(),
-                phone: ($m("#ntMapPhone").value || "Phone").trim(),
-                birth: ($m("#ntMapBirth").value || "Birthday").trim(),
-              };
-              if (!secret || !dbid) { alert("Informe o Secret e o Database ID."); return; }
-              setNotionCfg({ secret, dbid, map });
-              const pages = await notionQueryAll(secret, dbid);
-              const clients = [];
-              pages.forEach(p => {
-                const props = p.properties || {};
-                const nameProp = props[map.name];
-                const phoneProp = props[map.phone];
-                const birthProp = props[map.birth];
-                const name = nameProp ? (getTitle(nameProp) || getText(nameProp)) : "";
-                if (!name) return;
-                const phone = phoneProp ? getText(phoneProp) : "";
-                const birthdate = birthProp ? getDate(birthProp) : "";
-                clients.push({ id: p.id, name, phone, birthdate });
-              });
-              setClientsStore({ clients });
-              modals.style.display = "none";
-              renderClientsList();
-              alert(`Importados ${clients.length} clientes do Notion.`);
-            } catch (e) {
-              alert(e.message || "Erro ao importar do Notion.");
-            }
-          });
-        }
-
-        page.querySelector("#btnNotionImport")?.addEventListener("click", showNotionImportModal);
-        renderClientsList();
-      }
-
-      // Usuários: CRUD local
-      if (hash === "/usuarios") {
-        ensureUsersDefaults();
-        const listEl = page.querySelector("#usrList");
-        const modals = document.getElementById("modals");
-        function renderUsers() {
-          const s = getUsersStore();
-          const arr = (s.users || []).slice().sort((a,b) => (a.nome||"").localeCompare(b.nome||""));
-          listEl.innerHTML = arr.length ? arr.map(u => `
-            <div class="usr-row" data-id="${u.id}">
-              <div class="usr-left">
-                <div class="usr-ava">${(u.nome||"?").slice(0,1).toUpperCase()}</div>
-                <div>
-                  <div style="font-weight:900;color:#7a0f3f;">${u.nome || "-"}</div>
-                  <div class="muted">${u.role === "admin" ? "Administrador" : "Profissional"}</div>
-                </div>
-              </div>
-              <div>
-                <button class="btn" data-act="edit">Editar</button>
-                <button class="btn" data-act="del">Excluir</button>
-              </div>
-            </div>
-          `).join("") : `<div class="muted" style="padding:12px;">Nenhum usuário. Clique em “+ Novo Usuário”.</div>`;
-          listEl.querySelectorAll(".usr-row .btn").forEach(btn => {
-            const id = btn.closest(".usr-row").getAttribute("data-id");
-            const act = btn.getAttribute("data-act");
-            if (act === "edit") {
-              btn.addEventListener("click", () => showUserModal(getUsersStore().users.find(x => x.id === id)));
-            } else if (act === "del") {
-              btn.addEventListener("click", () => {
-                if (!confirm("Excluir usuário?")) return;
-                const s2 = getUsersStore();
-                s2.users = (s2.users || []).filter(x => x.id !== id);
-                setUsersStore(s2);
-                renderUsers();
-              });
-            }
-          });
-        }
-        function showUserModal(existing) {
-          const modal = modals.querySelector(".modal");
-          const it = existing ? { ...existing } : { id: uidUser("usr"), nome: "", role: "prof" };
-          modal.innerHTML = `
-            <style>
-              .umodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-              .umodal .field { display:grid; gap:6px; }
-              .umodal input, .umodal select { border:2px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
-              @media(max-width:520px){ .umodal .grid2 { grid-template-columns: 1fr; } }
-            </style>
-            <div class="umodal">
-              <h3>${existing ? "Editar Usuário" : "Novo Usuário"}</h3>
-              <div class="grid2">
-                <div class="field"><label>Nome *</label><input id="uNome" value="${it.nome}"></div>
-                <div class="field">
-                  <label>Papel</label>
-                  <select id="uRole">
-                    <option value="prof" ${it.role==="prof"?"selected":""}>Profissional</option>
-                    <option value="admin" ${it.role==="admin"?"selected":""}>Administrador</option>
-                  </select>
-                </div>
-              </div>
-              <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-                <button class="btn" data-close>Cancelar</button>
-                <button class="btn primary" id="uSave">${existing ? "Salvar" : "Criar"}</button>
-              </div>
-            </div>
-          `;
-          modals.style.display = "flex";
-          const $m = (sel) => modal.querySelector(sel);
-          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
-          $m("#uSave").addEventListener("click", () => {
-            it.nome = ($m("#uNome").value || "").trim();
-            it.role = $m("#uRole").value || "prof";
-            if (!it.nome) { alert("Informe o nome."); return; }
-            const s2 = getUsersStore();
-            if (existing) {
-              const idx = (s2.users || []).findIndex(x => x.id === it.id);
-              if (idx >= 0) s2.users[idx] = it;
-            } else {
-              s2.users = (s2.users || []).concat(it);
-            }
-            setUsersStore(s2);
-            modals.style.display = "none";
-            renderUsers();
-          });
-        }
-        page.querySelector("#usrNovo")?.addEventListener("click", () => showUserModal());
-        renderUsers();
-      }
-
-      // Serviços: catálogo com abas, busca, cards e integração com agendamento
       if (hash === "/servicos") {
-        ensureSvcDefaults();
-        const st = getSvcStore();
-
-        // estado via querystring
-        const params = new URLSearchParams(location.hash.split("?")[1] || "");
-        let q = params.get("q") || "";
-        let cat = params.get("cat") || "all";
-
-        function setParams(newQ, newCat) {
-          const p = new URLSearchParams();
-          if (newQ) p.set("q", newQ);
-          if (newCat && newCat !== "all") p.set("cat", newCat);
-          location.hash = "/servicos" + (p.toString() ? "?" + p.toString() : "");
-        }
-
-        function catName(id) {
-          if (id === "all") return "Todas";
-          return (st.cats || []).find(c => c.id === id)?.nome || "";
-        }
-
-        function filtered() {
-          const items = (getSvcStore().items || []);
-          return items
-            .filter(s => (cat === "all" ? true : s.cat_id === cat))
-            .filter(s => {
-              if (!q) return true;
-              const v = `${s.nome} ${s.desc || ""}`.toLowerCase();
-              return v.includes(q.toLowerCase());
-            })
-            .sort((a,b) => a.nome.localeCompare(b.nome));
-        }
-
-        function renderTabs() {
-          const tabs = page.querySelector("#svcTabs");
-          const s = getSvcStore();
-          const catList = [{ id: "all", nome: "Todas" }, ...s.cats];
-          tabs.innerHTML = catList.map(c => `
-            <button class="tab ${cat === c.id ? "active": ""}" data-cat="${c.id}">${c.nome}</button>
-          `).join("");
-          tabs.querySelectorAll(".tab").forEach(b => {
-            b.addEventListener("click", () => {
-              cat = b.getAttribute("data-cat");
-              setParams(q, cat);
-            });
-          });
-        }
-
-        function cardHtml(svc) {
-          const foto = svc.foto || "/public/placeholder.svg";
-          return `
-            <article class="svc-card" data-id="${svc.id}">
-              <img class="svc-photo" src="${foto}" alt="${svc.nome}">
-              <div>
-                <div class="svc-title">${svc.nome}</div>
-                <div class="svc-desc">${svc.desc || ""}</div>
-                <div class="svc-meta">
-                  <span class="chip time">⏱️ ${minsTxt(svc.duracao_min)} </span>
-                  <span class="chip price"> ${moneyBR(svc.preco)} </span>
-                </div>
-                <div class="svc-actions-inline">
-                  <button class="btn" data-act="agendar">Agendar</button>
-                  <button class="btn" data-act="editar">Editar</button>
-                  <button class="btn" data-act="remover">Excluir</button>
-                </div>
-              </div>
-            </article>
-          `;
-        }
-
-        function renderList() {
-          const list = page.querySelector("#svcList");
-          const arr = filtered();
-          list.innerHTML = arr.length ? arr.map(cardHtml).join("") : `<div class="muted" style="padding:12px;">Nenhum serviço encontrado.</div>`;
-          list.querySelectorAll(".svc-card .btn").forEach(btn => {
-            const act = btn.getAttribute("data-act");
-            const id = btn.closest(".svc-card").getAttribute("data-id");
-            if (act === "agendar") {
-              btn.addEventListener("click", () => {
-                location.hash = "/agenda?addservice=" + encodeURIComponent(id);
-              });
-            } else if (act === "editar") {
-              btn.addEventListener("click", () => showServiceModal((getSvcStore().items||[]).find(i=>i.id===id)));
-            } else if (act === "remover") {
-              btn.addEventListener("click", () => {
-                const s2 = getSvcStore();
-                s2.items = (s2.items||[]).filter(i => i.id !== id);
-                setSvcStore(s2);
-                renderList();
-              });
-            }
-          });
-        }
-
-        function showCatsModal() {
-          const modals = document.getElementById("modals");
-          const modal = modals.querySelector(".modal");
-          const s = getSvcStore();
-          modal.innerHTML = `
-            <style>
-              .mgrid { display:grid; gap:10px; }
-              .row { display:flex; gap:8px; align-items:center; }
-              .row input { flex:1; border:1px solid #f1e6ee; border-radius:10px; padding:8px; }
-              .btn { border:1px solid #f1e6ee; border-radius:10px; padding:8px 10px; font-weight:800; color:#a1125b; background:#fff; }
-            </style>
-            <h3>Categorias de Serviços</h3>
-            <div id="catList" class="mgrid">
-              ${(s.cats||[]).map(c => `
-                <div class="row" data-id="${c.id}">
-                  <input value="${c.nome}">
-                  <button class="btn" data-del>Excluir</button>
-                </div>
-              `).join("")}
-            </div>
-            <div style="display:flex; gap:8px; margin-top:8px;">
-              <button class="btn" id="addCat">+ Adicionar</button>
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-              <button class="btn" data-close>Fechar</button>
-              <button class="btn primary" id="saveCats">Salvar</button>
-            </div>
-          `;
-          modals.style.display = "flex";
-          const $m = (sel)=>modal.querySelector(sel);
-          $m("#addCat").addEventListener("click", () => {
-            const row = document.createElement("div");
-            row.className="row";
-            row.setAttribute("data-id", svcUid("cat"));
-            row.innerHTML = `<input value=""><button class="btn" data-del>Excluir</button>`;
-            $m("#catList").appendChild(row);
-            row.querySelector("[data-del]").addEventListener("click", ()=> row.remove());
-          });
-          modal.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", ()=> b.closest(".row").remove()));
-          $m("#saveCats").addEventListener("click", () => {
-            const cats = Array.from($m("#catList").children).map(r => ({
-              id: r.getAttribute("data-id"),
-              nome: r.querySelector("input").value.trim() || "Sem nome",
-            })).filter(c=>c.nome);
-            const s2 = getSvcStore();
-            s2.cats = cats;
-            setSvcStore(s2);
-            modals.style.display = "none";
-            renderTabs();
-            renderList();
-          });
-          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
-        }
-
-        function showServiceModal(existing) {
-          const modals = document.getElementById("modals");
-          const modal = modals.querySelector(".modal");
-          const s = getSvcStore();
-          const it = existing ? { ...existing } : { id: svcUid("svc"), nome:"", cat_id: (s.cats[0]||{}).id || "", preco: 0, duracao_min: 60, desc:"", foto:"/public/placeholder.svg" };
-          modal.innerHTML = `
-            <style>
-              .amodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
-              .amodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-              .amodal .field { display:grid; gap:8px; }
-              .amodal label { color:#a1125b; font-weight:900; }
-              .amodal input, .amodal select, .amodal textarea { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
-              .amodal textarea { min-height: 80px; resize: vertical; }
-              .row { display:flex; gap:8px; align-items:center; }
-              .photo { width:92px; height:92px; border:1px solid #f1e6ee; border-radius:12px; overflow:hidden; display:grid; place-items:center; background:#fff7fb; }
-              .btn { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; }
-              .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
-              @media(max-width:520px){ .amodal .grid2 { grid-template-columns: 1fr; } }
-            </style>
-            <div class="amodal">
-              <h3>${existing ? "Editar Serviço" : "Novo Serviço"}</h3>
-              <div class="grid2">
-                <div class="field">
-                  <label>Nome *</label>
-                  <input id="sNome" value="${it.nome}">
-                </div>
-                <div class="field">
-                  <label>Categoria *</label>
-                  <select id="sCat">
-                    ${(s.cats||[]).map(c => `<option value="${c.id}" ${it.cat_id===c.id?"selected":""}>${c.nome}</option>`).join("")}
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Preço (R$) *</label>
-                  <input id="sPreco" type="number" step="0.01" min="0" value="${it.preco}">
-                </div>
-                <div class="field">
-                  <label>Duração (min) *</label>
-                  <input id="sDur" type="number" step="5" min="5" value="${it.duracao_min}">
-                </div>
-              </div>
-             <<div class="field">
-                <label>Descrição</label>
-                <textarea id="sDesc" placeholder="O que está incluso, benefícios e observações">${it.desc || ""}</textarea>
-              </div>
-              <div class="field">
-                <label>Imagem</label>
-                <div class="row">
-                  <div class="photo" id="sThumb">${it.foto ? `<img src="${it.foto}" style="width:100%;height:100%;object-fit:cover;">` : "📷"}</div>
-                  <input type="file" id="sFoto" accept="image/*;capture=camera" style="display:none;">
-                  <button class="btn" id="btnFoto">Tirar/Escolher foto</button>
-                </div>
-              </div>
-              <div class="footer">
-                <button class="btn" data-close>Cancelar</button>
-                <button class="btn primary" id="saveSvc">${existing ? "Salvar" : "Criar"}</button>
-              </div>
-            </div>
-          `;
-          modals.style.display = "flex";
-          const $m = (sel)=>modal.querySelector(sel);
-
-          function compressImageToDataUrl(file, maxW = 900, quality = 0.85) {
-            return new Promise((resolve, reject) => {
-              const img = new Image(); const fr = new FileReader();
-              fr.onload = () => { img.onload = () => {
-                  const canvas = document.createElement("canvas");
-                  const scale = Math.min(1, maxW / img.width);
-                  canvas.width = Math.round(img.width * scale);
-                  canvas.height = Math.round(img.height * scale);
-                  const ctx = canvas.getContext("2d");
-                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                  resolve(canvas.toDataURL("image/jpeg", quality));
-                }; img.onerror = reject; img.src = fr.result; };
-              fr.onerror = reject; fr.readAsDataURL(file);
-            });
-          }
-
-          $m("#btnFoto").addEventListener("click", () => $m("#sFoto").click());
-          $m("#sFoto").addEventListener("change", async (ev) => {
-            const f = ev.target.files && ev.target.files[0]; if (!f) return;
-            try {
-              const dataUrl = await compressImageToDataUrl(f);
-              $m("#sThumb").innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;">`;
-              it.foto = dataUrl;
-            } catch {}
-            ev.target.value = "";
-          });
-
-          $m("#saveSvc").addEventListener("click", () => {
-            it.nome = $m("#sNome").value.trim();
-            it.cat_id = $m("#sCat").value || it.cat_id;
-            it.preco = parseFloat($m("#sPreco").value || "0") || 0;
-            it.duracao_min = parseInt($m("#sDur").value || "0", 10) || 0;
-            it.comissao_func_pct = Math.max(0, Math.min(100, parseFloat($m("#sCom").value || "40") || 40));
-            it.desc = ($m("#sDesc").value || "").trim();
-            if (!it.nome || !it.cat_id || !it.duracao_min) { alert("Preencha Nome, Categoria e Duração."); return; }
-            const s2 = getSvcStore();
-            if (existing) {
-              const idx = (s2.items||[]).findIndex(x => x.id === it.id);
-              if (idx >= 0) s2.items[idx] = it;
-            } else {
-              s2.items = (s2.items||[]).concat(it);
-            }
-            setSvcStore(s2);
-            modals.style.display = "none";
-            renderList();
-          });
-
-          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
-        }
-
-        // Inicializa UI
-        const qInput = page.querySelector("#svcQ");
-        qInput.value = q;
-        qInput.addEventListener("input", (e) => {
-          q = e.target.value || "";
-          setParams(q, cat);
-        });
-
-        renderTabs();
-        renderList();
-
-        page.querySelector("#svcNovo").addEventListener("click", () => showServiceModal());
-        page.querySelector("#svcCat").addEventListener("click", () => showCatsModal());
+        // defaults simples de serviços
+        const items = [
+          { nome: "Alongamento em Acrigel", dur: 150, preco: 150 },
+          { nome: "Corte Feminino", dur: 40, preco: 40 },
+          { nome: "Coloração", dur: 90, preco: 120 },
+        ];
+        const el = document.createElement("div");
+        el.innerHTML = `
+          <table class="list-table">
+            <thead><tr><th>Serviço</th><th>Duração</th><th class="right">Preço</th></tr></thead>
+            <tbody>
+              ${items.map(s => `<tr><td>${s.nome}</td><td>${s.dur}min</td><td class="right">R$ ${s.preco.toFixed(2)}</td></tr>`).join("")}
+            </tbody>
+          </table>
+        `;
+        page.querySelector("#svcList").appendChild(el);
       }
 
-      // Interações específicas da Agenda (progresso, atualizar e novo agendamento integrado a Serviços)
-      if (hash === "/agenda") {
-        const btnUpd = document.getElementById("btnAtualizar");
-        const last = document.getElementById("lastUpdate");
-        btnUpd && btnUpd.addEventListener("click", () => (last.textContent = "Agora"));
-        // Progresso: simulação suave de preenchimento
-        const card = page.querySelector("#appt1 .progress-fill");
-        if (card) {
-          let w = parseFloat(card.style.width) || 64;
-          function step() {
-            w += 0.15; // ~0.15% por frame (~9%/seg a 60fps)
-            if (w >= 100) w = 100;
-            card.style.width = w + "%";
-            if (w < 100) requestAnimationFrame(step);
+      if (hash === "/caixa") {
+        // Caixa — implementação segura
+        const storageKey = "bella_caixa_v1";
+        const todayYMD = (() => {
+          const t = new Date(); const y = t.getFullYear();
+          const m = String(t.getMonth()+1).padStart(2,"0");
+          const d = String(t.getDate()).padStart(2,"0");
+          return `${y}-${m}-${d}`;
+        })();
+        let selectedDate = localStorage.getItem("bella_caixa_selected_date") || todayYMD;
+        function money(n){ return (Number(n)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}); }
+        function fmtBR(ymd){ const [y,m,d]=ymd.split("-"); return `${d}/${m}/${y}`; }
+        function getStore(){ try{ return JSON.parse(localStorage.getItem(storageKey)||'{"days":{}}'); }catch{ return {days:{}}; } }
+        function setStore(s){ localStorage.setItem(storageKey, JSON.stringify(s)); }
+        function getDay(store, ymd){
+          if (!store.days[ymd]) store.days[ymd] = { atendimentos: [], despesas: [], dinheiroInformado: 0 };
+          return store.days[ymd];
+        }
+        function snapshot(ymd){
+          const store = getStore(); const day = getDay(store, ymd);
+          let totalPix=0,totalCartao=0,totalDinheiro=0,totalDebitos=0;
+          (day.atendimentos||[]).forEach(a=>{
+            if (Array.isArray(a.servicos) && a.servicos.length){
+              a.servicos.forEach(sv=>{
+                const v=Number(sv.valor)||0; const p=sv.pagamento||a.pagamento;
+                if (p==="pix") totalPix+=v; else if (p==="cartao") totalCartao+=v; else if (p==="dinheiro") totalDinheiro+=v; else if (p==="mensal") totalDebitos+=v;
+              });
+            } else {
+              const v=Number(a.valor)||0; const p=a.pagamento;
+              if (p==="pix") totalPix+=v; else if (p==="cartao") totalCartao+=v; else if (p==="dinheiro") totalDinheiro+=v; else if (p==="mensal") totalDebitos+=v;
+            }
+          });
+          let totalDespesas=0,totalDespesasCaixa=0;
+          (day.despesas||[]).forEach(d=>{ const v=Number(d.valor)||0; totalDespesas+=v; if (d.origem==="caixa") totalDespesasCaixa+=v; });
+          const entradas = totalPix + totalCartao + totalDinheiro;
+          const dinheiroInformado = Number(day.dinheiroInformado||0);
+          const dinheiroCalculado = dinheiroInformado + totalDinheiro - totalDespesasCaixa;
+          return { store, day, entradas, totalPix, totalCartao, totalDinheiro, totalDebitos, totalDespesas, totalDespesasCaixa, dinheiroInformado, dinheiroCalculado };
+        }
+        function payBadge(att){
+          const pays = (att.servicos||[]).map(s=>s.pagamento).filter(Boolean);
+          let lab = att.pagamento || ""; if (pays.length){ const u=[...new Set(pays)]; lab = u.length===1 ? u[0] : "misto"; }
+          const style = 'class="badge"';
+          if (lab==="pix") return `<span ${style}>pix</span>`;
+          if (lab==="cartao") return `<span ${style}>cartao</span>`;
+          if (lab==="dinheiro") return `<span ${style}>dinheiro</span>`;
+          if (lab==="mensal") return `<span ${style}>mensal</span>`;
+          return `<span ${style}>misto</span>`;
+        }
+
+        function render(){
+          const s = snapshot(selectedDate);
+          // filtros
+          const f = page.querySelector("#cxFilters");
+          if (f){
+            f.querySelector("#cxDate").value = selectedDate;
+            f.querySelector("#cxDinheiro").value = s.dinheiroInformado;
           }
-          requestAnimationFrame(step);
+          // cards
+          const cards = page.querySelector("#cxCards");
+          cards.innerHTML = `
+            <div style="display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr));">
+              <div class="section"><div class="muted">Data</div><div style="font-weight:900;">${fmtBR(selectedDate)}</div></div>
+              <div class="section"><div class="muted">Entradas</div><div style="font-weight:900;">${money(s.entradas)}</div></div>
+              <div class="section"><div class="muted">Dinheiro (Calc)</div><div style="font-weight:900;">${money(s.dinheiroCalculado)}</div></div>
+            </div>
+          `;
+          // atendimentos
+          const atts = page.querySelector("#cxAtts");
+          const listA = (s.day.atendimentos||[]);
+          atts.innerHTML = `
+            <h2 style="margin:0 0 10px;">Atendimentos — ${fmtBR(selectedDate)}</h2>
+            ${
+              listA.length ? `
+              <table class="list-table">
+                <thead><tr><th>Cliente</th><th>Serviços</th><th class="right">Total</th><th>Pagamento</th><th>Ações</th></tr></thead>
+                <tbody>
+                  ${listA.map(a=>`
+                    <tr>
+                      <td>${a.cliente||"-"}</td>
+                      <td>${(a.servicos||[]).map(sv=>sv.nome).join(", ")||a.servico||"-"}</td>
+                      <td class="right">${money(a.valor)}</td>
+                      <td>${payBadge(a)}</td>
+                      <td>
+                        <button class="btn" data-edit-att="${a.id}">Editar</button>
+                        <button class="btn" data-del-att="${a.id}">Excluir</button>
+                      </td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>` : `<div class="muted">Sem atendimentos</div>`
+            }
+          `;
+          // despesas
+          const deps = page.querySelector("#cxDeps");
+          const listD = (s.day.despesas||[]);
+          deps.innerHTML = `
+            <h2 style="margin:0 0 10px;">Despesas</h2>
+            ${
+              listD.length ? `
+              <table class="list-table">
+                <thead><tr><th>Descrição</th><th>Origem</th><th class="right">Valor</th><th>Ações</th></tr></thead>
+                <tbody>
+                  ${listD.map(d=>`
+                    <tr>
+                      <td>${d.descricao||"-"}</td>
+                      <td>${d.origem==="caixa"?"Retirada do Caixa":"Outro"}</td>
+                      <td class="right">${money(d.valor)}</td>
+                      <td>
+                        <button class="btn" data-edit-dep="${d.id}">Editar</button>
+                        <button class="btn" data-del-dep="${d.id}">Excluir</button>
+                      </td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>` : `<div class="muted">Nenhuma despesa</div>`
+            }
+          `;
+
+          // binds (editar/excluir)
+          page.querySelectorAll("[data-del-att]").forEach(b=>{
+            b.addEventListener("click", ()=>{
+              const id = b.getAttribute("data-del-att");
+              const store = getStore(); const day = getDay(store, selectedDate);
+              day.atendimentos = (day.atendimentos||[]).filter(a=>String(a.id)!==String(id));
+              setStore(store); render();
+            });
+          });
+          page.querySelectorAll("[data-edit-att]").forEach(b=>{
+            b.addEventListener("click", ()=>{
+              const id = b.getAttribute("data-edit-att");
+              const store = getStore(); const day = getDay(store, selectedDate);
+              const it = (day.atendimentos||[]).find(a=>String(a.id)===String(id));
+              showAttModal(it);
+            });
+          });
+          page.querySelectorAll("[data-del-dep]").forEach(b=>{
+            b.addEventListener("click", ()=>{
+              const id = b.getAttribute("data-del-dep");
+              const store = getStore(); const day = getDay(store, selectedDate);
+              day.despesas = (day.despesas||[]).filter(a=>String(a.id)!==String(id));
+              setStore(store); render();
+            });
+          });
+          page.querySelectorAll("[data-edit-dep]").forEach(b=>{
+            b.addEventListener("click", ()=>{
+              const id = b.getAttribute("data-edit-dep");
+              const store = getStore(); const day = getDay(store, selectedDate);
+              const it = (day.despesas||[]).find(a=>String(a.id)===String(id));
+              showDepModal(it);
+            });
+          });
         }
 
-        // ---- Novo Agendamento (ligado ao catálogo de serviços)
-        const AGENDA_KEY = "bella_agenda_v1";
-        const getAgenda = () => { try { return JSON.parse(localStorage.getItem(AGENDA_KEY) || '{"items":[]}'); } catch { return { items: [] }; } };
-        const setAgenda = (s) => localStorage.setItem(AGENDA_KEY, JSON.stringify(s));
+        // filtros
+        const dateInput = page.querySelector("#cxDate");
+        const moneyInput = page.querySelector("#cxDinheiro");
+        dateInput.value = selectedDate;
+        dateInput.addEventListener("change",(e)=>{
+          selectedDate = e.target.value || selectedDate;
+          localStorage.setItem("bella_caixa_selected_date", selectedDate);
+          render();
+        });
+        moneyInput.addEventListener("change",(e)=>{
+          const v = parseFloat(e.target.value||"0")||0;
+          const s = getStore(); const day = getDay(s, selectedDate);
+          day.dinheiroInformado = v; setStore(s); render();
+        });
 
-        ensureSvcDefaults();
+        // ações
+        page.querySelector("#btnAtendimento").addEventListener("click", ()=> showAttModal());
+        page.querySelector("#btnDespesa").addEventListener("click", ()=> showDepModal());
 
-        function parseDT(val) {
-          // returns Date or null
-          try { return val ? new Date(val) : null; } catch { return null; }
-        }
-        function addMinutes(date, mins) {
-          const d = new Date(date.getTime());
-          d.setMinutes(d.getMinutes() + (Number(mins)||0));
-          return d;
-        }
-        function dtLocalStr(d) {
-          if (!d) return "";
-          const yyyy = d.getFullYear();
-          const mm = String(d.getMonth()+1).padStart(2,"0");
-          const dd = String(d.getDate()).padStart(2,"0");
-          const HH = String(d.getHours()).padStart(2,"0");
-          const MM = String(d.getMinutes()).padStart(2,"0");
-          return `${yyyy}-${mm}-${dd}T${HH}:${MM}`;
-        }
-        function fmtHourMin(d) {
-          if (!d) return "";
-          return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
-        }
-
-        function showAgendamentoModal(preselectIds = [], existingAppt = null) {
-          const modals = document.getElementById("modals");
-          const modal = modals.querySelector(".modal");
-          const svcStore = getSvcStore();
-          const services = (svcStore.items || []);
-          const cats = (svcStore.cats || []);
-          const now = new Date();
-          const startDefault = (existingAppt && parseDT(existingAppt.inicio)) ? dtLocalStr(parseDT(existingAppt.inicio)) : dtLocalStr(now);
-
+        function showAttModal(existing){
+          const modals = $("#modals"); const modal = modals.querySelector(".modal");
+          const it = existing ? { ...existing } : {
+            id: "att-" + Date.now(), cliente: "", pagamento: "dinheiro", valor: 0, servicos: [{ nome:"", valor:0, pagamento:"dinheiro" }], obs:""
+          };
           modal.innerHTML = `
-            <style>
-              .amodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
-              .amodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-              .amodal .field { display:grid; gap:8px; }
-              .amodal label { color:#a1125b; font-weight:900; }
-              .amodal input, .amodal select { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
-              .srows { display:grid; gap:8px; margin-top:6px; }
-              .srow { display:grid; grid-template-columns: 1fr 1fr 100px 110px 42px; gap:8px; align-items:center; background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:8p_codex;new </}
-              .srow .del { justify-self:end; border:1px solid #f3c6d9; border-radius:10px; background:#fff; padding:8px; color:#a1125b; }
-              .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
-              .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
-              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
-              @media(max-width:640px){ .amodal .grid2 { grid-template-columns: 1fr; } .srow { grid-template-columns: 1fr 100px 110px 42px; } }
-              .muted { color:#6b7280; font-weight:700; }
-              .sum { display:flex; align-items:center; justify-content:space-between; background:#fff7fb; border:1px solid #f3c6d9; padding:10px; border-radius:12px; font-weight:900; color:#a1125b; }
-            </style>
-            <div class="amodal">
-              <h3>Novo Agendamento</h3>
-              <div class="grid2">
-                <div class="field">
-                  <label>Cliente *</label>
-                  <input id="agCli" list="agClientsList" placeholder="Nome do cliente">
-                  <datalist id="agClientsList"></datalist>
-                </div>
-                <div class="field">
-                  <label>Telefone</label>
-                  <input id="agTel" placeholder="(DDD) 9xxxx-xxxx">
-                </div>
-              </div>
-
-              <div class="grid2">
-                <div class="field">
-                  <label>Início *</label>
-                  <input id="agIni" type="datetime-local" value="${startDefault}">
-                </div>
-                <div class="field">
-                  <label>Término previsto</label>
-                  <input id="agFim" type="time" readonly>
-                </div>
-              </div>
-
-              <div class="field">
-                <label>Serviços *</label>
-                <div class="srows" id="agRows"></div>
-                <button class="btn" id="agAdd">+ Adicionar serviço</button>
-              </div>
-
-              <div class="sum" id="agResumo">
-                <div>Total: R$ 0,00</div>
-                <div>Duração: 0min</div>
-              </div>
-
-              <div class="footer">
-                <button class="btn" data-close>Cancelar</button>
-                <button class="btn primary" id="agSalvar">Salvar</button>
-              </div>
+            <h3>${existing ? "Editar Atendimento" : "Novo Atendimento"}</h3>
+            <div class="field"><label>Cliente *</label><input id="fCli" value="${it.cliente||""}"></div>
+            <div class="field"><label>Serviço</label><input id="fServ" value="${(it.servicos&&it.servicos[0]?.nome)||""}" placeholder="Ex.: Corte + Escova"></div>
+            <div class="field"><label>Valor (R$)</label><input id="fVal" type="number" step="0.01" min="0" value="${Number(it.valor||0).toFixed(2)}"></div>
+            <div class="field">
+              <label>Pagamento</label>
+              <select id="fPay">
+                <option value="dinheiro" ${it.pagamento==="dinheiro"?"selected":""}>Dinheiro</option>
+                <option value="pix" ${it.pagamento==="pix"?"selected":""}>PIX</option>
+                <option value="cartao" ${it.pagamento==="cartao"?"selected":""}>Cartão</option>
+                <option value="mensal" ${it.pagamento==="mensal"?"selected":""}>Mensal</option>
+              </select>
+            </div>
+            <div class="field"><label>Observação</label><input id="fObs" value="${it.obs||""}" placeholder="Opcional"></div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+              <button class="btn" data-close>Cancelar</button>
+              <button class="btn primary" id="fSave">Salvar</button>
             </div>
           `;
           modals.style.display = "flex";
-          const $m = (sel)=>modal.querySelector(sel);
-
-          // Preenche datalist de clientes e ações rápidas de criação
-          function refreshClientsDatalist() {
-            try {
-              const s = getClientsStore();
-              const dl = $m("#agClientsList");
-              if (!dl) return;
-              const opts = (s.clients || []).map(c => {
-                const name = String(c.name || "").replace(/"/g, "&quot;");
-                const phone = String(c.phone || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                return `<option value="${name}">${phone}</option>`;
-              }).join("");
-              dl.innerHTML = opts;
-            } catch {}
-          }
-          refreshClientsDatalist();
-          // Auto-preenche telefone ao selecionar cliente existente
-          const __cliInput = $m("#agCli");
-          const __telInput = $m("#agTel");
-          function __maybeFillPhone() {
-            try {
-              const name = String(__cliInput?.value || "").trim().toLowerCase();
-              if (!name) return;
-              const c = (getClientsStore().clients || []).find(x => String(x.name || "").toLowerCase() === name);
-              if (c && __telInput && !__telInput.value) __telInput.value = c.phone || "";
-            } catch {}
-          }
-          __cliInput && __cliInput.addEventListener("change", __maybeFillPhone);
-          __cliInput && __cliInput.addEventListener("blur", __maybeFillPhone);
-
-          $m("#agAddClient")?.addEventListener("click", () => {
-            const nome = prompt("Nome do cliente:");
-            if (!nome) return;
-            const tel = prompt("Telefone (opcional):") || "";
-            const store = getClientsStore();
-            (store.clients || (store.clients = [])).push({ id: "cli-" + Date.now(), name: nome.trim(), phone: tel.trim() });
-            setClientsStore(store);
-            refreshClientsDatalist();
-            const ip = $m("#agCli"); if (ip && !ip.value) ip.value = nome.trim();
-          });
-          $m("#agAddUser")?.addEventListener("click", () => {
-            const nome = prompt("Nome do funcionário:");
-            if (!nome) return;
-            const us = getUsersStore();
-            (us.users || (us.users = [])).push({ id: uidUser("usr"), nome: nome.trim(), role: "prof" });
-            setUsersStore(us);
-            // Atualiza selects de profissionais
-            const users = (getUsersStore().users || []);
-            const opts = users.map(u => `<option value="${u.id}">${u.nome}</option>`).join("");
-            $m("#agRows")?.querySelectorAll(".s-prof").forEach(sel => {
-              const curr = sel.value;
-              sel.innerHTML = opts;
-              if (curr) sel.value = curr; else sel.value = (users[0]?.id || "");
-            });
-          });
-
-          function svcOption(s) { return `<option value="${s.id}">${s.nome}</option>`; }
-          function svcSelectHtml(val) {
-            const opts = services.map(svcOption).join("");
-            return `<select class="s-sel">${opts}</select>`;
-          }
-          function userOption(u) { return `<option value="${u.id}">${u.nome}</option>`; }
-          function usersSelectHtml(selectedId) {
-            const u = (getUsersStore().users || []);
-            const opts = u.map(userOption).join("");
-            return `<select class="s-prof">${opts}</select>`;
-          }
-          function addRow(defaultId, rowData = null) {
-            const row = document.createElement("div");
-            row.className = "srow";
-            row.innerHTML = `
-              ${svcSelectHtml(defaultId)}
-              ${usersSelectHtml(rowData?.prof_id || "")}
-              <input class="s-preco" type="number" step="0.01" min="0" placeholder="Preço">
-              <input class="s-dur" type="number" step="5" min="5" placeholder="Min">
-              <button class="del" title="Remover">✕</button>
-            `;
-            const selSvc = row.querySelector(".s-sel");
-            const selProf = row.querySelector(".s-prof");
-            const ipP = row.querySelector(".s-preco");
-            const ipD = row.querySelector(".s-dur");
-            selSvc.value = defaultId || (services[0]?.id || "");
-            function fillBySvc() {
-              const svc = services.find(s => s.id === selSvc.value);
-              if (svc) {
-                ipP.value = String(svc.preco ?? 0);
-                ipD.value = String(svc.duracao_min ?? 60);
-              }
-              recalc();
-            }
-            selSvc.addEventListener("change", fillBySvc);
-            row.querySelector(".del").addEventListener("click", () => { row.remove(); recalc(); });
-            [$m("#agIni"), ipP, ipD].forEach(inp => inp.addEventListener("input", recalc));
-            $m("#agRows").appendChild(row);
-            if (rowData) {
-              try {
-                const match = services.find(s => (s.nome || "").toLowerCase() === String(rowData.nome || "").toLowerCase());
-                if (match) {
-                  selSvc.value = match.id;
-                }
-                fillBySvc();
-                if (typeof rowData.preco !== "undefined") ipP.value = String(rowData.preco);
-                if (typeof rowData.duracao_min !== "undefined") ipD.value = String(rowData.duracao_min);
-                // Prefill professional
-                if (rowData.prof_id) {
-                  selProf.value = rowData.prof_id;
-                } else if (rowData.profissional) {
-                  const u = (getUsersStore().users || []).find(x => (x.nome || "").toLowerCase() === String(rowData.profissional || "").toLowerCase());
-                  if (u) selProf.value = u.id;
-                }
-                recalc();
-              } catch {}
+          modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; }, { once:true });
+          modal.querySelector("#fSave").addEventListener("click", ()=>{
+            const store = getStore(); const day = getDay(store, selectedDate);
+            const cliente = modal.querySelector("#fCli").value.trim();
+            const serv = modal.querySelector("#fServ").value.trim();
+            const valor = parseFloat(modal.querySelector("#fVal").value||"0")||0;
+            const pagamento = modal.querySelector("#fPay").value || "dinheiro";
+            const obs = modal.querySelector("#fObs").value.trim();
+            const rec = {
+              id: it.id, data: selectedDate, cliente, pagamento, valor,
+              servicos: [{ nome: serv, valor, pagamento }], obs
+            };
+            if (existing){
+              const idx = (day.atendimentos||[]).findIndex(a=>String(a.id)===String(it.id));
+              if (idx>=0) day.atendimentos[idx] = rec; else day.atendimentos.push(rec);
             } else {
-              fillBySvc();
+              day.atendimentos.push(rec);
             }
-          }
-          function recalc() {
-            const start = parseDT($m("#agIni").value);
-            const rows = Array.from($m("#agRows").children);
-            const total = rows.reduce((acc,r)=>acc+(parseFloat(r.querySelector(".s-preco").value||"0")||0),0);
-            const dur = rows.reduce((acc,r)=>acc+(parseInt(r.querySelector(".s-dur").value||"0",10)||0),0);
-            const end = start ? addMinutes(start, dur) : null;
-            $m("#agResumo").children[0].textContent = "Total: " + moneyBR(total);
-            $m("#agResumo").children[1].textContent = "Duração: " + (dur?minsTxt(dur):"0min");
-            $m("#agFim").value = end ? fmtHourMin(end) : "";
-          }
-
-          $m("#agAdd").addEventListener("click", () => addRow());
-          // Preenchimento inicial das linhas
-          if (existingAppt && Array.isArray(existingAppt.servicos) && existingAppt.servicos.length) {
-            existingAppt.servicos.forEach(sv => addRow(null, sv));
-          } else if (Array.isArray(preselectIds) && preselectIds.length) {
-            preselectIds.forEach(id => addRow(id));
-          } else {
-            addRow();
-          }
-          // Prefill campos principais se edição
-          if (existingAppt) {
-            $m("#agCli").value = existingAppt.cliente || "";
-            $m("#agTel").value = existingAppt.telefone || "";
-            $m("#agIni").value = startDefault;
-          }
-          recalc();
-
-          $m("#agSalvar").addEventListener("click", () => {
-            const nome = ($m("#agCli").value || "").trim();
-            if (!nome) { alert("Informe o cliente"); return; }
-            const ini = parseDT($m("#agIni").value);
-            if (!ini) { alert("Informe o início"); return; }
-            const rows = Array.from($m("#agRows").children).map(r => ({
-              servico_id: r.querySelector(".s-sel").value,
-              nome: (services.find(s=>s.id===r.querySelector(".s-sel").value)||{}).nome || "",
-              preco: parseFloat(r.querySelector(".s-preco").value || "0") || 0,
-              duracao_min: parseInt(r.querySelector(".s-dur").value || "0", 10) || 0,
-            }));
-            if (!rows.length) { alert("Adicione pelo menos um serviço"); return; }
-            const total = rows.reduce((a,b)=>a+b.preco,0);
-            const dur = rows.reduce((a,b)=>a+b.duracao_min,0);
-            const fim = addMinutes(ini, dur);
-
-            const ag = getAgenda();
-            if (existingAppt && existingAppt.id) {
-              const idx = (ag.items || []).findIndex(x => String(x.id) === String(existingAppt.id));
-              const upd = {
-                ...existingAppt,
-                cliente: nome,
-                telefone: ($m("#agTel").value || "").trim(),
-                inicio: ini.toISOString(),
-                fim: fim.toISOString(),
-                servicos: rows,
-                total,
-                duracao_min: dur,
-                updated_at: new Date().toISOString(),
-              };
-              if (idx >= 0) ag.items[idx] = upd;
-              else ag.items.push(upd);
-            } else {
-              ag.items.push({
-                id: "ag-" + Date.now(),
-                cliente: nome,
-                telefone: ($m("#agTel").value || "").trim(),
-                inicio: ini.toISOString(),
-                fim: fim.toISOString(),
-                servicos: rows,
-                total,
-                duracao_min: dur,
-                status: "scheduled",
-                created_at: new Date().toISOString(),
-              });
-            }
-            setAgenda(ag);
-            modals.style.display = "none";
-            if (typeof renderAgendaList === "function") renderAgendaList();
+            setStore(store); modals.style.display = "none"; render();
           });
-
-          modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
         }
 
-        // Intercepta o botão padrão e abre o modal integrado
-        page.querySelectorAll("[data-open='agendamento']").forEach((btn) => {
-          btn.addEventListener("click", (e) => {
-            e.preventDefault(); e.stopImmediatePropagation();
-            showAgendamentoModal();
+        function showDepModal(existing){
+          const modals = $("#modals"); const modal = modals.querySelector(".modal");
+          const it = existing ? { ...existing } : { id: "dep-" + Date.now(), descricao:"", valor:0, origem:"caixa" };
+          modal.innerHTML = `
+            <h3>${existing ? "Editar Despesa" : "Nova Despesa"}</h3>
+            <div class="field"><label>Descrição</label><input id="dDesc" value="${it.descricao||""}" placeholder="Ex.: Compra de produtos"></div>
+            <div class="field"><label>Valor</label><input id="dVal" type="number" step="0.01" min="0" value="${Number(it.valor||0).toFixed(2)}"></div>
+            <div class="field">
+              <label>Origem</label>
+              <select id="dOri">
+                <option value="caixa" ${it.origem==="caixa"?"selected":""}>Retirar do caixa</option>
+                <option value="outro" ${it.origem==="outro"?"selected":""}>Outro</option>
+              </select>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+              <button class="btn" data-close>Cancelar</button>
+              <button class="btn primary" id="dSave">Salvar</button>
+            </div>
+          `;
+          modals.style.display = "flex";
+          modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; }, { once:true });
+          modal.querySelector("#dSave").addEventListener("click", ()=>{
+            const store = getStore(); const day = getDay(store, selectedDate);
+            const descricao = modal.querySelector("#dDesc").value.trim();
+            const valor = parseFloat(modal.querySelector("#dVal").value||"0")||0;
+            const origem = modal.querySelector("#dOri").value || "caixa";
+            if (existing){
+              const idx = (day.despesas||[]).findIndex(a=>String(a.id)===String(it.id));
+              if (idx>=0) day.despesas[idx] = { ...it, descricao, valor, origem }; else day.despesas.push({ ...it, descricao, valor, origem });
+            } else {
+              day.despesas.push({ id: it.id, data: selectedDate, descricao, valor, origem });
+            }
+            setStore(store); modals.style.display = "none"; render();
           });
-        });
+        }
 
-        // Se veio de /servicos com ?addservice=ID, abre direto com o serviço pré-selecionado
-        try {
-          const p = new URLSearchParams(location.hash.split("?")[1] || "");
-          const id = p.get("addservice");
-          if (id) showAgendamentoModal([id]);
-        } catch {}
+        render();
+      }
+    }
 
-        // ========= Agenda funcional =========
-        const AG_SEL_KEY = "bella_agenda_selected_date";
-        const todayYMD_ag = (() => { const t = new Date(); const y=t.getFullYear(); const m=String(t.getMonth()+1).padStart(2,"0"); const d=String(t.getDate()).padStart(2,"0"); return `${y}-${m}-${d}`; })();
+    window.addEventListener("hashchange", renderRoute);
+    renderRoute();
+  };
+})();
         let agSelected = localStorage.getItem(AG_SEL_KEY) || todayYMD_ag;
 
         function ymdFromISO(iso) { try { const d = new Date(iso); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const dd=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${dd}`; } catch { return ""; } }
