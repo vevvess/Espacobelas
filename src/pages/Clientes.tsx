@@ -20,6 +20,7 @@ import { useClientes } from "../hooks/useClientes";
 import { Cliente } from "../lib/neon";
 import NotionClienteSync from "../components/NotionClienteSync";
 import ClienteImportManager from "../components/ClienteImportManager";
+import NotionConnect from "../components/NotionConnect";
 import {
   formatarAniversario,
   aniversarioParaData,
@@ -252,9 +253,12 @@ export default function Clientes() {
         </div>
       </div>
 
-      {/* Sincronização com Notion - Apenas para Admins */}
+      {/* Integração real com Notion (OAuth) - Apenas Admin */}
       {!isReadOnly && (
-        <NotionClienteSync />
+        <>
+          <NotionConnect />
+          <NotionClienteSync />
+        </>
       )}
 
       {/* Importação de Lista de Clientes - Apenas para Admins */}

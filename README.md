@@ -50,11 +50,29 @@ Se preferir, você também pode usar:
 O projeto já traz `vercel.json` preparado:
 - buildCommand: `npm run build`
 - outputDirectory: `dist`
-- rewrites para SPA (React Router)
+- rewrites para SPA (React Router) com exceção de `/api/**` (funções serverless)
 
 Passos:
 1) Configure as variáveis no painel da Vercel (VITE_DATABASE_URL, etc.).
 2) Faça o deploy pelo Git ou via CLI.
+
+### Integração OAuth com Notion (real)
+As rotas serverless para conectar com o Notion já estão incluídas em `api/notion/*`.
+
+Variáveis necessárias (defina no Vercel):
+- `NOTION_CLIENT_ID`
+- `NOTION_CLIENT_SECRET`
+- `NOTION_REDIRECT_URI` (opcional; se vazio, será inferido como `https://<seu-dominio>/api/notion/callback`)
+
+No painel da integração do Notion (https://www.notion.so/my-integrations):
+- Crie/edite sua integração “Public”.
+- Cadastre o Redirect URI exatamente como `https://<seu-dominio>/api/notion/callback`.
+
+Fluxo de uso no app (Clientes › seção “Conectar ao Notion”):
+1) Clique em “Conectar” e autorize no Notion.
+2) Escolha a base (database) que contém seus clientes.
+3) Mapeie os campos (Nome, Telefone, Aniversário).
+4) Pré-visualize e importe/atualize os clientes no app.
 
 ## Observações importantes de desenvolvimento
 
