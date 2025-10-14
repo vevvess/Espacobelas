@@ -1170,23 +1170,112 @@
           const modals = document.getElementById("modals");
           const modal = modals.querySelector(".modal");
           const cfg = getNotionCfg();
+
           modal.innerHTML = `
-            <h3>Importar do Notion</h3>
-            <div class="field"><label>Integration Secret *</label><input id="ntSecret" placeholder="secret_..." value="${cfg.secret || ""}"></div>
-            <div class="field"><label>Database ID *</label><input id="ntDb" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="${cfg.dbid || ""}"></div>
-            <div class="field"><label>Campo — Nome (Title)</label><input id="ntMapName" value="${(cfg.map && cfg.map.name) || "Name"}"></div>
-            <div class="field"><label>Campo — Telefone (Phone ou Rich text)</label><input id="ntMapPhone" value="${(cfg.map && cfg.map.phone) || "Phone"}"></div>
-            <div class="field"><label>Campo — Aniversário (Date)</label><input id="ntMapBirth" value="${(cfg.map && cfg.map.birth) || "Birthday"}"></div>
-            <div class="muted" style="font-size:12px;">Dica: no Notion, compartilhe sua base com a integração e use um campo do tipo "Date" para o aniversário.</div>
-            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-              <button class="btn-outline" data-close>Cancelar</button>
-              <button class="btn-primary" id="ntImport">Importar</button>
+            <style>
+              .nt-grid { display:grid; grid-template-columns: 1fr; gap:10px; }
+              .nt-row { display:grid; gap:6px; }
+              .nt-actions { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+              .nt-right { display:flex; gap:8px; }
+              .nt-muted { color:#64748b; font-size:12px; font-weight:700; }
+              .nt-select { border:1px solid #e5e7eb; border-radius:10px; padding:10px; font-family:inherit; }
+              .nt-preview { border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; max-height:180px; overflow:auto; }
+              .nt-small { font-size:12px; color:#475569; }
+              .btn { border:1px solid #f1e6ee; border-radius:10px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .btn.primary { background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+            </style>
+            <h3>Importar do Notion (Preview Estático)</h3>
+            <div class="nt-grid">
+              <div class="nt-row">
+                <label>Integration Secret *</label>
+                <input id="ntSecret" placeholder="secret_..." value="${cfg.secret || ""}">
+                <div class="nt-muted">Cole o secret da sua integração (Notion › My integrations) e compartilhe sua base com ela.</div>
+              </div>
+
+              <div class="nt-row">
+                <label>Selecionar Database</label>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <select id="ntDbSel" class="nt-select" style="min-width:260px;">
+                    <option value="">— Listar bases do seu Notion —</option>
+                  </select>
+                  <button class="btn" id="ntListDb">Listar bases</button>
+                </div>
+                <div class="nt-small">Database ID selecionado</div>
+                <input id="ntDb" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="${cfg.dbid || ""}">
+              </div>
+
+              <div class="nt-row">
+                <label>Mapeamento de Campos</label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+                  <div>
+                    <div class="nt-small">Nome (Title)</div>
+                    <select id="ntMapNameSel" class="nt-select"><option value="">—</option></select>
+                  </div>
+                  <div>
+                    <div class="nt-small">Telefone (Phone/Rich Text)</div>
+                    <select id="ntMapPhoneSel" class="nt-select"><option value="">—</option></select>
+                  </div>
+                  <div>
+                    <div class="nt-small">Aniversário (Date)</div>
+                    <select id="ntMapBirthSel" class="nt-select"><option value="">—</option></select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="nt-actions">
+                <div class="nt-muted">Dica: após selecionar a base, carregamos as propriedades para você escolher o mapeamento.</div>
+                <div class="nt-right">
+                  <button class="btn" id="ntPreview">Pré-visualizar</button>
+                  <button class="btn primary" id="ntImport">Importar</button>
+                  <button class="btn" data-close>Cancelar</button>
+                </div>
+              </div>
+
+              <div class="nt-row">
+                <label>Pré-visualização</label>
+                <div id="ntPreviewArea" class="nt-preview nt-small">Sem dados. Clique em “Pré-visualizar”.</div>
+              </div>
             </div>
           `;
+
           modals.style.display = "flex";
           const $m = (sel) => modal.querySelector(sel);
           modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
 
+          // Helpers Notion
+          async function notionSearchDatabases(secret) {
+            const r = await fetch("https://api.notion.com/v1/search", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${secret}`,
+                "Content-Type": "application/json",
+                "Notion-Version": "2022-06-28",
+              },
+              body: JSON.stringify({
+                page_size: 100,
+                sort: { direction: "ascending", timestamp: "last_edited_time" },
+                filter: { value: "database", property: "object" }
+              }),
+            });
+            if (!r.ok) throw new Error("Falha ao buscar bases. Verifique o Secret e permissões da integração.");
+            const j = await r.json();
+            return (j.results || []).filter(x => x.object === "database").map(db => ({
+              id: db.id,
+              title: ((db.title || []).map(t => t.plain_text).join("") || "(Sem título)").trim(),
+            }));
+          }
+          async function notionGetDatabase(secret, dbid) {
+            const r = await fetch(`https://api.notion.com/v1/databases/${dbid}`, {
+              headers: {
+                "Authorization": `Bearer ${secret}`,
+                "Notion-Version": "2022-06-28",
+              },
+            });
+            if (!r.ok) throw new Error("Falha ao carregar propriedades do Database. Verifique compartilhamento com a integração.");
+            const j = await r.json();
+            const props = j.properties || {};
+            return Object.keys(props).map((name) => ({ name, type: props[name]?.type || "" }));
+          }
           async function notionQueryAll(secret, dbid) {
             let cursor = undefined;
             let all = [];
@@ -1220,38 +1309,172 @@
           }
           function getDate(prop){ try { return (prop?.date?.start || "").slice(0,10); } catch { return ""; } }
 
-          $m("#ntImport").addEventListener("click", async () => {
+          function fillMappingSelects(properties) {
+            const nameSel = $m("#ntMapNameSel");
+            const phoneSel = $m("#ntMapPhoneSel");
+            const birthSel = $m("#ntMapBirthSel");
+            const makeOpts = (filterFn) => {
+              const frags = ['<option value=""></option>'];
+              (properties || []).forEach(p => {
+                if (!filterFn || filterFn(p)) frags.push(`<option value="${p.name}">${p.name} (${p.type})</option>`);
+              });
+              return frags.join("");
+            };
+            nameSel.innerHTML = makeOpts(p => p.type === "title");
+            phoneSel.innerHTML = makeOpts(p => p.type === "phone_number" || p.type === "rich_text");
+            birthSel.innerHTML = makeOpts(p => p.type === "date");
+
+            // Defaults/restore from cfg.map
+            if (cfg.map?.name) nameSel.value = cfg.map.name;
+            if (cfg.map?.phone) phoneSel.value = cfg.map.phone;
+            if (cfg.map?.birth) birthSel.value = cfg.map.birth;
+            // Fallback guesses
+            if (!nameSel.value) {
+              const firstTitle = (properties || []).find(p => p.type === "title");
+              if (firstTitle) nameSel.value = firstTitle.name;
+            }
+            if (!phoneSel.value) {
+              const firstPhone = (properties || []).find(p => p.type === "phone_number") ||
+                                 (properties || []).find(p => p.type === "rich_text");
+              if (firstPhone) phoneSel.value = firstPhone.name;
+            }
+            if (!birthSel.value) {
+              const firstDate = (properties || []).find(p => p.type === "date");
+              if (firstDate) birthSel.value = firstDate.name;
+            }
+          }
+
+          async function loadDatabases() {
+            const secret = ($m("#ntSecret").value || "").trim();
+            if (!secret) { alert("Informe o Secret primeiro."); return; }
             try {
-              const secret = ($m("#ntSecret").value || "").trim();
-              const dbid = ($m("#ntDb").value || "").trim();
-              const map = {
-                name: ($m("#ntMapName").value || "Name").trim(),
-                phone: ($m("#ntMapPhone").value || "Phone").trim(),
-                birth: ($m("#ntMapBirth").value || "Birthday").trim(),
-              };
-              if (!secret || !dbid) { alert("Informe o Secret e o Database ID."); return; }
-              setNotionCfg({ secret, dbid, map });
+              $m("#ntListDb").disabled = true;
+              const items = await notionSearchDatabases(secret);
+              const sel = $m("#ntDbSel");
+              sel.innerHTML = `<option value="">— Selecione —</option>` + items.map(d => `<option value="${d.id}">${d.title} — ${d.id.slice(0,8)}</option>`).join("");
+              if (cfg.dbid) {
+                const found = items.find(d => d.id === cfg.dbid);
+                if (found) sel.value = cfg.dbid;
+              }
+            } catch (e) {
+              alert(e.message || "Falha ao listar bases do Notion.");
+            } finally {
+              $m("#ntListDb").disabled = false;
+            }
+          }
+
+          async function onSelectDb() {
+            const id = $m("#ntDbSel").value || "";
+            $m("#ntDb").value = id;
+            if (!id) return;
+            const secret = ($m("#ntSecret").value || "").trim();
+            if (!secret) return;
+            try {
+              const props = await notionGetDatabase(secret, id);
+              fillMappingSelects(props);
+            } catch (e) {
+              alert(e.message || "Falha ao obter propriedades da base.");
+            }
+          }
+
+          async function doPreview() {
+            const secret = ($m("#ntSecret").value || "").trim();
+            const dbid = ($m("#ntDb").value || "").trim();
+            if (!secret || !dbid) { alert("Informe o Secret e selecione o Database."); return; }
+            // Infer map from selects
+            const map = {
+              name: ($m("#ntMapNameSel").value || "").trim(),
+              phone: ($m("#ntMapPhoneSel").value || "").trim(),
+              birth: ($m("#ntMapBirthSel").value || "").trim(),
+            };
+            if (!map.name) { alert("Selecione o campo de Nome (title)."); return; }
+            try {
               const pages = await notionQueryAll(secret, dbid);
-              const clients = [];
+              const items = [];
               pages.forEach(p => {
                 const props = p.properties || {};
                 const nameProp = props[map.name];
-                const phoneProp = props[map.phone];
-                const birthProp = props[map.birth];
+                const phoneProp = map.phone ? props[map.phone] : null;
+                const birthProp = map.birth ? props[map.birth] : null;
                 const name = nameProp ? (getTitle(nameProp) || getText(nameProp)) : "";
                 if (!name) return;
                 const phone = phoneProp ? getText(phoneProp) : "";
                 const birthdate = birthProp ? getDate(birthProp) : "";
-                clients.push({ id: p.id, name, phone, birthdate });
+                items.push({ id: p.id, name, phone, birthdate });
               });
-              setClientsStore({ clients });
+              const prev = $m("#ntPreviewArea");
+              prev.innerHTML = items.slice(0, 50).map(c => `
+                <div style="padding:4px 0; border-bottom:1px solid #f1f5f9;">
+                  <strong>${c.name}</strong>
+                  <div>${c.phone ? `Tel: ${c.phone}` : "Tel: —"} • ${c.birthdate ? `Aniv.: ${new Date(c.birthdate).toLocaleDateString("pt-BR")}` : "Aniv.: —"}</div>
+                </div>
+              `).join("") + (items.length > 50 ? `<div class="nt-muted">... e mais ${items.length - 50} registros</div>` : (items.length ? "" : "<div class='nt-muted'>Nenhum registro legível encontrado</div>"));
+              // Save temp in dataset for import
+              prev.setAttribute("data-count", String(items.length));
+              // Cache last preview set in memory
+              modal.__lastPreviewItems = items;
+              alert(`Pré-visualização pronta: ${items.length} registros.`);
+            } catch (e) {
+              alert(e.message || "Falha na pré-visualização.");
+            }
+          }
+
+          async function doImport() {
+            const secret = ($m("#ntSecret").value || "").trim();
+            const dbid = ($m("#ntDb").value || "").trim();
+            const name = ($m("#ntMapNameSel").value || "").trim();
+            const phone = ($m("#ntMapPhoneSel").value || "").trim();
+            const birth = ($m("#ntMapBirthSel").value || "").trim();
+            if (!secret || !dbid || !name) { alert("Informe Secret, Database e campo de Nome."); return; }
+            const map = { name, phone, birth };
+            // Persist cfg
+            setNotionCfg({ secret, dbid, map });
+            try {
+              // If we have preview cached, reuse; else query
+              const items = Array.isArray(modal.__lastPreviewItems)
+                ? modal.__lastPreviewItems
+                : (await (async () => {
+                    const pages = await notionQueryAll(secret, dbid);
+                    const out = [];
+                    pages.forEach(p => {
+                      const props = p.properties || {};
+                      const nameProp = props[name];
+                      const phoneProp = phone ? props[phone] : null;
+                      const birthProp = birth ? props[birth] : null;
+                      const nm = nameProp ? (getTitle(nameProp) || getText(nameProp)) : "";
+                      if (!nm) return;
+                      const ph = phoneProp ? getText(phoneProp) : "";
+                      const bd = birthProp ? getDate(birthProp) : "";
+                      out.push({ id: p.id, name: nm, phone: ph, birthdate: bd });
+                    });
+                    return out;
+                  })());
+              setClientsStore({ clients: items });
               modals.style.display = "none";
               renderClientsList();
-              alert(`Importados ${clients.length} clientes do Notion.`);
+              alert(`Importados ${items.length} clientes do Notion.`);
             } catch (e) {
               alert(e.message || "Erro ao importar do Notion.");
             }
-          });
+          }
+
+          // Wire buttons
+          $m("#ntListDb").addEventListener("click", loadDatabases);
+          $m("#ntDbSel").addEventListener("change", onSelectDb);
+          $m("#ntPreview").addEventListener("click", doPreview);
+          $m("#ntImport").addEventListener("click", doImport);
+
+          // Se já havia Secret/DBID salvos, tenta preencher props automaticamente
+          (async () => {
+            try {
+              if (cfg.secret && cfg.dbid) {
+                $m("#ntSecret").value = cfg.secret;
+                $m("#ntDb").value = cfg.dbid;
+                const props = await notionGetDatabase(cfg.secret, cfg.dbid);
+                fillMappingSelects(props);
+              }
+            } catch {}
+          })();
         }
 
         page.querySelector("#btnNotionImport")?.addEventListener("click", showNotionImportModal);
