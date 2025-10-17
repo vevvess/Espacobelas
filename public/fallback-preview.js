@@ -2848,6 +2848,43 @@
           return store.days[ymd];
         };
 
+        // Histórico de fechamentos de caixa (salvos)
+        const HISTORY_KEY = "bella_caixa_history_v1";
+        function getHistory() {
+          try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{"days":{}}'); } catch { return { days: {} }; }
+        }
+        function setHistory(h) {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+        }
+        function saveDayToHistory(ymd) {
+          try {
+            const h = getHistory();
+            const snap = snapshot(ymd);
+            const store = getStore();
+            const day = getDay(store, ymd);
+            h.days[ymd] = {
+              closedAt: new Date().toISOString(),
+              resumo: {
+                totalPix: snap.totalPix,
+                totalCartao: snap.totalCartao,
+                totalDinheiro: snap.totalDinheiro,
+                totalDebitos: snap.totalDebitos,
+                totalDespesas: snap.totalDespesas,
+                totalDespesasCaixa: snap.totalDespesasCaixa,
+                entradas: snap.entradas,
+                dinheiroInformado: snap.dinheiroInformado,
+                dinheiroCalculado: snap.dinheiroCalculado,
+              },
+              atendimentos: (day.atendimentos || []).slice(),
+              despesas: (day.despesas || []).slice(),
+            };
+            setHistory(h);
+            return true;
+          } catch {
+            return false;
+          }
+        }
+
         const snapshot = (ymd) => {
           const store = getStore();
           const day = getDay(store, ymd);
