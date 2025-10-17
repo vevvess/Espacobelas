@@ -1538,7 +1538,1772 @@
           })();
         }
 
+        // Importador em massa (colar texto)
+        function showBulkImportModal() {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+
+          modal.innerHTML = `
+            <style>
+              .bmodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .bmodal .field { display:grid; gap:6px; }
+              .bmodal label { color:#a1125b; font-weight:900; font-size:13px; }
+              .bmodal textarea, .bmodal input, .bmodal select {
+                border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
+              }
+              .bmodal .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+              .bmodal .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .bmodal .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              .bmodal .prev { max-height:200px; overflow:auto; border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; font-size:12px; }
+              .bmodal .muted { color:#64748b; font-weight:700; font-size:12px; }
+            </style>
+            <div class="bmodal">
+              <h3>Importar lista de clientes (colar texto)</h3>
+              <div class="field">
+                <label>Lista</label>
+                <textarea id="bulkText" rows="10" placeholder="Cole aqui a lista. Aceita formatos: 
+- 'Nome: X | Telefone: Y | Aniversário: DD/MM'
+- 'Nome DD/MM Telefone'
+- Tabela com colunas (Cliente, Data de Aniversário, Telefone)"></textarea>
+                <div class="muted">Somente Nome, Aniversário e Telefone serão importados. Duplicados serão ignorados (dedupe por nome).</div>
+              </div>
+              <div class="row" style="justify-content:space-between;">
+                <div class="muted" id="bulkStatus">Cole a lista e clique em Pré-visualizar.</div>
+                <div class="row">
+                  <button class="btn" id="bulkPreview">Pré-visualizar</button>
+                  <button class="btn primary" id="bulkImport">Importar</button>
+                  <button class="btn" data-close>Cancelar</button>
+                </div>
+              </div>
+              <div class="field" style="margin-top:8px;">
+                <label>Pré-visualização</label>
+                <div id="bulkPrev" class="prev">Sem dados.</div>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          function normalizeName(n) {
+            return String(n||"")
+              .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+              .replace(/\s+/g," ").trim().toLowerCase();
+          }
+          function bestPhone(a, b) {
+            const da = onlyDigitsLocal(a || "");
+            const db = onlyDigitsLocal(b || "");
+            if (!db) return da;
+            if (!da) return db;
+            return db.length > da.length ? db : da;
+          }
+          function toISOFromDDMM(ddmm) {
+            if (!ddmm) return "";
+            const s = String(ddmm).trim().toLowerCase();
+            const mmap = {
+              jan:"01", fev:"02", mar:"03", abr:"04", mai:"05", jun:"06",
+              jul:"07", ago:"08", set:"09", out:"10", nov:"11", dez:"12"
+            };
+            // ex: 19/12 or 19/12/2024
+            let m;
+            m = s.match(/^(\d{1,2})\s*\/\s*(\d{1,2})(?:\s*\/\s*\d{2,4})?$/);
+            if (m) {
+              const d = String(Math.max(1, Math.min(31, parseInt(m[1],10)))).padStart(2,"0");
+              const mo = String(Math.max(1, Math.min(12, parseInt(m[2],10)))).padStart(2,"0");
+              return `2000-${mo}-${d}`;
+            }
+            // ex: 19/dez
+            m = s.match(/^(\d{1,2})\s*\/\s*([a-zç]{3,})$/i);
+            if (m) {
+              const d = String(Math.max(1, Math.min(31, parseInt(m[1],10)))).padStart(2,"0");
+              const mon = (m[2]||"").slice(0,3);
+              const mo = mmap[mon] || "";
+              if (mo) return `2000-${mo}-${d}`;
+            }
+            return "";
+          }
+          function parseBlocksNome(txt) {
+            const items = [];
+            const re = /Nome:\s*([^|]+?)\s*\|\s*Telefone:\s*([^|]*?)\s*\|\s*Aniversário:\s*([^|\n]*)/gi;
+            let m;
+            while ((m = re.exec(txt)) !== null) {
+              const name = (m[1]||"").trim();
+              const phone = (m[2]||"").trim();
+              const ann = (m[3]||"").trim();
+              if (!name) continue;
+              const birth = toISOFromDDMM(ann);
+              items.push({ name, phone, birthdate: birth });
+            }
+            return items;
+          }
+          function parseSimpleLines(txt) {
+            const items = [];
+            const lines = String(txt||"").split(/\r?\n/);
+            const datePat = /(\d{1,2}\s*\/\s*(?:\d{1,2}|[A-Za-z]{3,}))/;
+            for (let raw of lines) {
+              let line = raw.trim();
+              if (!line) continue;
+              if (/^cliente/i.test(line)) continue; // header
+              if (/^url:/i.test(line)) continue;
+              if (/^user$/i.test(line)) continue;
+              // pattern: Name date phone?
+              const m = line.match(new RegExp(`^(.+?)\\s+${datePat.source}(?:\\s+(.*))?(function () {
+  window.__runFallbackPreview = function (root) {
+    const formatDateLong = () =>
+      new Date().toLocaleDateString("pt-BR", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+    const css = `
+      <style>
+        :root {
+          --bella-50:#fdf2f8; --bella-100:#fce7f3; --bella-200:#fbcfe8; --bella-300:#f9a8d4;
+          --bella-400:#f472b6; --bella-500:#ec4899; --bella-600:#db2777; --bella-700:#be185d;
+          --bella-800:#9d174d; --bella-900:#831843;
+          --surface:#ffffff; --line:#f3e6ee; --shadow: 0 10px 30px rgba(173,24,94,.08);
+        }
+        html, body, #root { height: 100%; margin: 0; }
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+          background:
+            radial-gradient(1200px 400px at -10% -5%, rgba(236,72,153,.08), transparent 60%),
+            radial-gradient(800px 300px at 110% 0%, rgba(236,72,153,.06), transparent 60%),
+            #fff;
+          color: #0f172a;
+          font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        }
+        .shell { max-width: 980px; margin: 0 auto; padding: 16px 14px 56px; }
+
+        /* Topbar mobile */
+        .topnav {
+          display: flex; align-items: center; justify-content: space-between;
+          position: sticky; top: 0; background: rgba(255,255,255,.7); backdrop-filter: blur(10px);
+          border-bottom: 1px solid #f1e6ee; padding: 12px 10px; z-index: 20;
+        }
+        .menu {
+          width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+          background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow);
+          color: var(--bella-700);
+        }
+        .titlebar {
+          display: flex; align-items: center; gap: 8px; color: var(--bella-800);
+          font-weight: 800; font-size: 18px; letter-spacing: .2px; position: relative;
+        }
+        .titlebar::after {
+          content:""; position:absolute; left:0; bottom:-8px; height:3px; width:120px;
+          background: linear-gradient(90deg, var(--bella-700), var(--bella-400)); border-radius: 999px;
+        }
+        .shield {
+          width: 36px; height: 36px; border-radius: 999px; display:grid; place-items:center;
+          background: radial-gradient(circle at 30% 30%, #ffc2d6, #f472b6);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 8px 22px rgba(236,72,153,.28);
+          border: 2px solid #fff;
+        }
+
+        /* Drawer */
+        .drawer { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: none; z-index: 30; }
+        .drawer .panel { position:absolute; top:0; left:0; bottom:0; width: 320px; background:#fff; border-right:1px solid #f1e6ee; box-shadow: var(--shadow); display:flex; flex-direction:column; }
+        .brandbar {
+          background: linear-gradient(90deg, var(--bella-500), var(--bella-400));
+          color: #fff; display:flex; align-items:center; justify-content:space-between;
+          padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.25);
+        }
+        .brandbar .left { display:flex; align-items:center; gap: 10px; font-weight: 900; font-size: 18px; }
+        .brandbar .heart {
+          width: 36px; height: 36px; border-radius: 999px; background: rgba(255,255,255,.25);
+          display:grid; place-items:center; box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+        }
+        .brandbar .close {
+          width: 40px; height: 40px; border-radius: 12px; display:grid; place-items:center;
+          background: rgba(255,255,255,.25); border: 1px solid rgba(255,255,255,.4);
+        }
+
+        .usercard {
+          display:flex; gap: 12px; align-items:center; padding: 14px; border-bottom:1px solid #f1e6ee;
+          background: linear-gradient(180deg, #fff, #fff9fb);
+        }
+        .usercard .ava {
+          width: 52px; height: 52px; border-radius: 16px; display:grid; place-items:center;
+          background: radial-gradient(circle at 30% 30%, #ffc2d6, #f472b6);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 8px 22px rgba(236,72,153,.28);
+          border: 2px solid #fff;
+        }
+        .usercard .name { font-weight: 900; color: #8b1049; }
+        .chips { display:flex; gap: 6px; margin-top: 4px; align-items:center; }
+        .chip { font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: #fde7f2; color:#8b1049; }
+        .online { width: 8px; height: 8px; border-radius: 999px; background:#22c55e; display:inline-block; }
+
+        .navlist { padding: 12px; display:grid; gap: 8px; }
+        .section-divider { display:flex; align-items:center; gap: 12px; color:#9c1d5f; font-weight: 900; padding: 10px 14px; }
+        .section-divider::before, .section-divider::after { content:""; height:1px; background:#f3c6d9; flex:1; border-radius: 999px; }
+
+        .item {
+          display:flex; align-items:center; gap: 12px; text-decoration:none; color:#a1125b;
+          padding: 12px; border-radius: 14px; border:1px solid #f7d2e2; background:#fff;
+          box-shadow: 0 2px 10px rgba(173,24,94,.05);
+        }
+        .item .icon { width: 22px; height: 22px; display:grid; place-items:center; color:#a1125b; }
+        .item .label { font-weight: 800; }
+        .item.active {
+          background: linear-gradient(90deg, rgba(236,72,153,.10), rgba(236,72,153,.03));
+          border: 2px solid #f3a1c8;
+          box-shadow: 0 10px 26px rgba(173,24,94,.15);
+        }
+        .item.danger { color:#b91c1c; border-color:#fca5a5; }
+        .logout { margin-top: auto; padding: 12px; border-top:1px solid #f1e6ee; }
+
+        /* Hero */
+        .hero { padding: 18px 4px 10px; }
+        .hero h1 {
+          margin: 0 0 6px; font-size: 32px; line-height: 1.15;
+          color: var(--bella-800); font-weight: 900; letter-spacing: .2px;
+        }
+        .hero p { margin: 0; color: #9d3a69; font-weight: 600; }
+
+        /* Common surface */
+        .card, .datecard, .kpi, .section {
+          background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
+        }
+        .datecard { padding: 14px 16px; margin: 16px 0 14px; }
+        .dot { width: 10px; height: 10px; border-radius: 999px; background: #22c55e; display:inline-block; margin-right: 8px; }
+        .muted { color:#6b7280; }
+
+        /* KPI */
+        .kpi { padding: 16px; margin: 14px 0; }
+        .kpi .title { color:#c23475; font-weight:800; }
+        .kpi .value { font-size: 36px; font-weight: 900; color: var(--bella-800); margin: 4px 0; }
+        .kpi .note-ok { color:#16a34a; font-weight:700; }
+        .kpi .note { color:#6b7280; font-weight:700; }
+
+        /* Sections */
+        .section { padding: 14px; margin: 14px 0; }
+        .section h2 { margin: 0 0 8px; font-size: 18px; color: var(--bella-800); }
+        .badge { display:inline-block; background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; font-weight: 800; padding:6px 10px; border-radius: 999px; font-size: 12px; }
+        .empty { text-align:center; color:#9ca3af; padding: 22px 0; }
+
+        /* Birthdays */
+        .birth-head {
+          display:flex; align-items:center; justify-content:center; gap: 8px;
+          background: linear-gradient(90deg,#fde68a,#fecaca);
+          border: 2px solid #f59e0b; color:#7c2d12; border-radius: 14px; padding: 8px; font-weight:900;
+          margin-bottom: 10px;
+        }
+        .month-box { background:#eff6ff; border: 2px solid #93c5fd; padding: 10px; border-radius: 14px; }
+        .month-item { display:flex; align-items:center; justify-content:space-between; padding: 10px; border-radius: 12px; margin-bottom: 8px; background: #fff; border: 1px solid #e5e7eb; }
+        .circle { width:32px; height:32px; border-radius: 999px; display:grid; place-items:center; background:#93c5fd; color:#1e3a8a; font-weight: 900; }
+        .tel { color:#1e3a8a; text-decoration:none; font-weight:700; }
+
+        /* Lists */
+        .list { display:grid; gap: 10px; }
+        .row { display:flex; align-items:center; justify-content:space-between; gap: 10px; border: 1px solid #f1e6ee; background: #fff; border-radius: 12px; padding: 12px; }
+        .pill { display:inline-block; padding:6px 10px; border-radius:999px; background: var(--bella-50); color: var(--bella-900); font-weight:700; font-size:12px; }
+
+        /* Buttons */
+        .btn-primary { color:#fff; background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); border:0; border-radius: 10px; padding: 10px 14px; }
+        .btn-outline { border: 1px solid #e5e7eb; background:#fff; border-radius: 10px; padding: 10px 14px; }
+
+        /* Modals */
+        .modals { position: fixed; inset: 0; display:none; align-items:center; justify-content:center; background: rgba(15,23,42,.45); padding: 16px; z-index:40; }
+        .modal { width: min(92vw, 520px); max-width: 520px; background: #fff; border-radius: 16px; border:1px solid #e5e7eb; padding: 16px; max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; }
+        .modal h3 { margin: 0 0 12px; }
+        .field { display:grid; gap:6px; margin-bottom: 10px; }
+        .field label { font-size: 13px; color: #334155; font-weight: 600; }
+        .field input { border:1px solid #e5e7eb; border-radius: 10px; padding: 10px; font-family: inherit; }
+
+        @media (min-width: 980px) {
+          .hero h1 { font-size: 42px; }
+          .kpi-grid { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
+          .split { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        }
+      </style>
+    `;
+
+    // Pages
+    const Dashboard = () => `
+      <div class="hero">
+        <h1>Bem-vindo, Weslley<br/>Raphael! 👋</h1>
+        <p>Aqui está um resumo das suas atividades de hoje</p>
+      </div>
+      <div class="datecard">
+        <div style="font-size: 14px; font-weight:800;">${formatDateLong()}</div>
+        <div class="muted" style="margin-top: 4px;"><span class="dot"></span>Sistema online</div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="title">Agendamentos Hoje</div><div class="value">1</div><div class="note-ok">1 confirmados</div></div>
+        <div class="kpi"><div class="title">Receita do Mês</div><div class="value">R$ 0,00</div><div class="note">Até hoje</div></div>
+        <div class="kpi"><div class="title">Total de Clientes</div><div class="value">168</div><div class="note-ok">0 novos este mês</div></div>
+      </div>
+      <div class="split">
+        <section class="section">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <h2>Agendamentos de Hoje</h2>
+            <span class="badge">0 agendamentos</span>
+          </div>
+          <div class="empty">Nenhum agendamento para hoje</div>
+        </section>
+        <section class="section">
+          <h2>Próximos</h2>
+          <div class="empty">Nenhum agendamento próximo</div>
+        </section>
+      </div>
+      <section class="section" id="birthSection">
+        <div class="birth-head"><span>🎂</span><span>ANIVERSARIANTES</span><span>🎉</span></div>
+        <div class="month-box" id="birthBox">
+          <div class="empty">Sem dados de aniversariantes. Importe clientes do Notion em “Clientes › Importar do Notion”.</div>
+        </div>
+      </section>
+      <section class="section">
+        <h2>Ações Rápidas</h2>
+        <div class="list">
+          <button class="btn-primary" data-open="agendamento">Novo Agendamento</button>
+          <button class="btn-outline" data-open="cliente">Novo Cliente</button>
+          <button class="btn-outline" data-open="venda">Registrar Venda</button>
+        </div>
+      </section>
+    `;
+
+    const Agenda = () => `
+      <style>
+        .icon { width: 18px; height: 18px; vertical-align: -3px; }
+        .agenda-hero h1 { margin: 0 0 6px; font-size: 28px; color: var(--bella-800); font-weight: 900; letter-spacing: .2px; display:flex; align-items:center; gap:10px; }
+        .agenda-hero .chip-online { display:inline-flex; align-items:center; gap:6px; background:#eafff1; color:#15803d; font-weight:800; padding:6px 12px; border-radius:999px; font-size:12px; border:1px solid #bbf7d0; }
+        .agenda-hero p { margin: 0; color: #9d3a69; font-weight: 600; }
+        .btn-lg { display:inline-flex; align-items:center; gap:10px; background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; font-weight:900; border-radius:16px; padding:16px 22px; border:0; box-shadow: var(--shadow); }
+        .card-blue { background:#eff6ff; border:1px solid #bfdbfe; border-radius:18px; padding:14px; box-shadow: var(--shadow); }
+        .card-blue .grid { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+        .muted-strong { color:#334155; font-weight:800; }
+        .ok { color:#16a34a; font-weight:800; }
+        .row-info { display:flex; align-items:center; gap:16px; color:#6b7280; font-weight:700; flex-wrap: wrap; }
+        .row-info .chip { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; padding:6px 10px; border-radius:10px; }
+        .row-info .btn-refresh { display:inline-flex; align-items:center; gap:6px; background:#eef2ff; border:1px solid #c7d2fe; padding:8px 12px; border-radius:12px; color:#4338ca; font-weight:800; }
+
+        .kpi-mini { display:grid; gap:12px; margin:14px 0; }
+        .kpi-mini .item { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; display:flex; align-items:center; justify-content:space-between; box-shadow: var(--shadow); }
+        .kpi-mini .item.orange { background: #fff7ed; border-color:#fed7aa; }
+        .kpi-mini .item.purple { border-color:#e9d5ff; }
+        .kpi-mini .title { color:#a1125b; font-weight:900; }
+        .kpi-mini .val { font-size:32px; font-weight:900; color:#a1125b; }
+
+        .view-card { background:#fff; border:1px solid #f3c6d9; border-radius:18px; padding:14px; box-shadow: var(--shadow); display:grid; gap:12px; }
+        .view-switch { display:flex; gap:8px; }
+        .view-switch .btn { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
+        .view-switch .btn.active { background: linear-gradient(180deg,#fff,#ffe9f1); border:2px solid #f3a1c8; box-shadow: var(--shadow); }
+        .date-nav { display:flex; align-items:center; justify-content:space-between; }
+        .date-nav .arrow { width:40px; height:40px; display:grid; place-items:center; border-radius:12px; border:1px solid #f3c6d9; color:#a1125b; background:#fff; }
+        .date-nav .date { font-size:22px; font-weight:900; color:#a1125b; }
+        .date-nav .chip { border:1px solid #fde2f1; background:#fff4f9; padding:6px 12px; border-radius:999px; font-weight:800; color:#a1125b; }
+
+        .staff-card .top { display:flex; align-items:center; justify-content:space-between; }
+        .staff-card .badge { background:#fee2f2; color:#a1125b; border:1px solid #fbcfe8; padding:6px 10px; border-radius:999px; font-weight:800; }
+        .staff-item { display:flex; align-items:center; justify-content:space-between; gap: 10px; background:#fff7fb; border:1px solid #f3c6d9; border-radius:14px; padding:12px; }
+        .staff-item .left { display:flex; gap:10px; align-items:center; }
+        .staff-item .ava { width:34px; height:34px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
+        .staff-footer { display:flex; align-items:center; justify-content:space-between; color:#a1125b; font-weight:900; }
+
+        .filters .field { display:grid; gap:6px; margin:8px 0; }
+        .filters select { width:100%; border:1px solid #f3c6d9; padding:12px; border-radius:14px; background:#fff; font-weight:700; color:#a1125b; }
+        .filters .check { display:flex; align-items:center; gap:8px; font-weight:800; color:#a1125b; }
+
+        .title-row { display:flex; align-items:center; justify-content:space-between; }
+        .title-row .badge { background:#fee2f2; color:#a1125b; border:1px solid #fbcfe8; padding:8px 12px; border-radius:999px; font-weight:800; }
+
+        /* Appointment cards */
+        .appt { position:relative; border-radius:20px; padding:14px; background:#fff; box-shadow: var(--shadow); border:2px solid #f9c3a7; margin-bottom:16px; overflow:hidden; }
+        .appt.in-progress { border-color:#f59e0b; background: #fff7ed; }
+        .appt .progress-fill { position:absolute; left:0; top:0; bottom:0; width:0; background: linear-gradient(90deg, rgba(34,197,94,.3), rgba(34,197,94,.08)); }
+        .appt .inner { position:relative; display:grid; grid-template-columns: 1fr auto; gap: 10px; }
+        .appt .header { display:flex; align-items:center; gap:12px; }
+        .appt .ava { width:44px; height:44px; border-radius:999px; display:grid; place-items:center; background:#f472b6; color:#fff; font-weight:900; }
+        .appt .name { font-weight:900; color:#7a0f3f; font-size:20px; }
+        .appt .status { background:#fef3c7; color:#a16207; padding:6px 10px; border-radius:999px; font-weight:900; border:1px solid #fde68a; }
+        .appt .status.scheduled { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
+        .appt .actions { display:grid; gap:10px; color:#a1125b; }
+        .appt .row { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
+        .appt .section-title { color:#a1125b; font-weight:900; margin: 8px 0 6px; }
+        .chip-box { background:#e6f4ff; border:1px solid #cfe2ff; padding:10px 12px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; }
+        .chip-sub { display:flex; align-items:center; gap:8px; color:#a1125b; font-weight:700; }
+        .worker-pill { display:inline-flex; align-items:center; gap:8px; background:#def7ec; border:1px solid #a7f3d0; color:#065f46; padding:10px 12px; border-radius:14px; font-weight:800; }
+        .total { background:#fff; border:1px solid #f3c6d9; padding:12px 14px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
+        .total .label { color:#a1125b; font-weight:900; }
+        .total .value { color:#16a34a; font-weight:900; }
+
+        .appt.scheduled { border-color:#10b981; background:#ecfdf5; }
+        .appt.scheduled .ava { background:#10b981; }
+      </style>
+
+      <div class="agenda-hero">
+        <h1>Agenda <span class="chip-online"><span class="dot"></span>Online</span></h1>
+        <p>Gerencie os agendamentos do salão</p>
+      </div>
+
+      <button class="btn-lg" data-open="agendamento">
+        <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        Novo Agendamento
+      </button>
+
+      <div class="card-blue" style="margin-top:12px;">
+        <div class="grid">
+          <div><div class="muted">Status</div><div class="muted-strong">Automático</div></div>
+          <div><div class="muted">Tempo real por</div><div class="muted-strong">eventos</div></div>
+          <div><div class="muted">1</div><div class="muted-strong">em andamento</div></div>
+          <div><div class="muted">Eventos do</div><div class="muted-strong">sistema</div></div>
+        </div>
+        <div class="muted" style="margin-top:10px;">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4z" stroke="#334155" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 4v16M4 8h16" stroke="#334155" stroke-width="1.5"/></svg>
+          1 agendamentos hoje • Atualiza apenas quando algo muda
+        </div>
+      </div>
+
+      <div class="row-info" style="margin-top:10px;">
+        <span class="chip"><span class="dot"></span>Tempo real ativo</span>
+        <span class="chip">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#334155" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Atualizado: <span id="lastUpdate">Agora</span>
+        </span>
+        <button id="btnAtualizar" class="btn-refresh">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 1 1-2.34-5.66L20 8M20 8V4m0 4h-4" stroke="#4338ca" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Atualizar
+        </button>
+      </div>
+
+      <div class="kpi-mini">
+        <div class="item">
+          <div>
+            <div class="title">Hoje (01/10/2025)</div>
+            <div class="val">1</div>
+          </div>
+          <div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#a1125b" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+        <div class="item">
+          <div>
+            <div class="title">Pendentes</div>
+            <div class="val">1</div>
+          </div>
+          <div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div class="item orange">
+          <div>
+            <div class="title" style="color:#d97706;">Aguardando Confirmação</div>
+            <div class="val" style="color:#d97706;">0</div>
+          </div>
+          <div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 6v12M17 10c0-1.657-2.239-3-5-3s-5 1.343-5 3 2.239 3 5 3 5 1.343 5 3-2.239 3-5 3-5-1.343-5-3" stroke="#d97706" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+        <div class="item purple">
+          <div>
+            <div class="title" style="color:#a21caf;">Concluídos</div>
+            <div class="val" style="color:#a21caf;">0</div>
+          </div>
+          <div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#a21caf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="view-card">
+        <div class="view-switch">
+          <button class="btn active"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="#a1125b" stroke-width="2" stroke-linecap="round"/></svg></button>
+          <button class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" stroke="#a1125b" stroke-width="1.8"/></svg></button>
+          <button class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#a1125b" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </div>
+        <div class="date-nav">
+          <button class="arrow" aria-label="Anterior"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="#a1125b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div style="text-align:center;">
+            <div class="date">02/10/2025</div>
+            <div class="muted">02/10/2025 ▾</div>
+          </div>
+          <button class="arrow" aria-label="Próximo"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="#a1125b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div><span class="chip">Hoje</span></div>
+      </div>
+
+      <section class="section staff-card">
+        <div class="top">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0M12 7a4 4 0 110-8 4 4 0 010 8z" transform="translate(0,4)" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <h2 style="margin:0;">Funcionários</h2><span class="badge">1 ativo</span>
+          </div>
+          <div class="muted" style="display:flex; gap:14px; align-items:center;">
+            <a href="#" style="color:#a1125b; font-weight:900; text-decoration:none;">Ver Todos</a>
+            <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#64748b" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="#64748b"/></svg>
+          </div>
+        </div>
+
+        <div class="staff-item" style="margin:12px 0;">
+          <div class="left">
+            <div class="ava">K</div>
+            <div>
+              <div class="muted-strong">Kelly Monice</div>
+              <div class="muted">@Kelly</div>
+            </div>
+          </div>
+          <span class="badge">1 agend.</span>
+        </div>
+
+        <div class="staff-footer">
+          <div>1 Agendamentos</div>
+          <div>1 Funcionários</div>
+        </div>
+      </section>
+
+      <section class="section filters">
+        <div class="field">
+          <label class="muted-strong">Data</label>
+          <select>
+            <option>02/10/2025</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="muted-strong">Status</label>
+          <select>
+            <option>Todos os status</option>
+          </select>
+        </div>
+        <label class="check"><input type="checkbox"> Mostrar concluídos</label>
+      </section>
+
+      <section class="section">
+        <div class="title-row">
+          <h2 style="margin:0;">Agendamentos – 02/10/2025</h2>
+          <span class="badge">2 agendamentos</span>
+        </div>
+
+        <!-- Appointment 1 - Em andamento com progresso -->
+        <article class="appt in-progress" id="appt1">
+          <div class="progress-fill" style="width:64%"></div>
+          <div class="inner">
+            <div>
+              <div class="header">
+                <div class="ava">A</div>
+                <div style="flex:1;">
+                  <div class="name">Adriane Lima</div>
+                </div>
+                <span class="status">Em Andamento</span>
+              </div>
+
+              <div class="row">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                02/10/2025, 09:00
+              </div>
+              <div class="row">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                (81) 98886-1850
+              </div>
+
+              <div class="section-title">Serviços:</div>
+              <div class="chip-box">
+                <div class="chip-sub">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 7l-8 8M14 7l-8 8" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Chapinha<br/><span class="muted">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>
+                    Kelly Monice
+                  </span>
+                </div>
+                <strong>R$ 50,00</strong>
+              </div>
+
+              <div class="section-title">Funcionários:</div>
+              <div class="worker-pill">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#065f46" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#065f46"/></svg>
+                Kelly Monice
+              </div>
+
+              <div class="total">
+                <div class="label">Valor Total:</div>
+                <div class="value">R$ 50,00</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn-outline" title="Visualizar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#a1125b" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="#a1125b"/></svg></button>
+              <button class="btn-outline" title="Editar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#a1125b" stroke-width="1.6"/></svg></button>
+              <button class="btn-outline" title="Cobrar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 6v12M17 10c0-1.657-2.239-3-5-3s-5 1.343-5 3 2.239 3 5 3 5 1.343 5 3-2.239 3-5 3-5-1.343-5-3" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+              <button class="btn-outline" title="Excluir"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Appointment 2 - Agendado -->
+        <article class="appt scheduled">
+          <div class="inner">
+            <div>
+              <div class="header">
+                <div class="ava">A</div>
+                <div style="flex:1;">
+                  <div class="name">Adriane Lima</div>
+                </div>
+                <span class="status scheduled">Agendado</span>
+              </div>
+
+              <div class="row">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.8"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                02/10/2025, 11:25
+              </div>
+              <div class="row">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013 5.18 2 2 0 015 3h3l2 5-3 2a16 16 0 008 8l2-3 5 2z" stroke="#a1125b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                (81) 98886-1850
+              </div>
+
+              <div class="section-title">Serviços:</div>
+              <div class="chip-box" style="background:#d1fae5; border-color:#a7f3d0;">
+                <div class="chip-sub">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M20 7l-8 8M14 7l-8 8" stroke="#065f46" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Chapinha<br/><span class="muted">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#64748b"/></svg>
+                    Simone Barboza
+                  </span>
+                </div>
+                <strong>R$ 20,00</strong>
+              </div>
+
+              <div class="section-title">Funcionários:</div>
+              <div class="worker-pill">
+                <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M16 14a4 4 0 10-8 0" stroke="#065f46" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="8" r="3" fill="#065f46"/></svg>
+                Simone Barboza
+              </div>
+
+              <div class="total">
+                <div class="label">Valor Total:</div>
+                <div class="value">R$ 20,00</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn-outline" title="Visualizar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#a1125b" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="#a1125b"/></svg></button>
+              <button class="btn-outline" title="Editar"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#a1125b" stroke-width="1.6"/></svg></button>
+              <button class="btn-outline" title="Agendar"><svg class="icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#a1125b" stroke-width="1.6"/><path d="M12 8v5l3 2" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button class="btn-outline" title="Excluir"><svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="#a1125b" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+            </div>
+          </div>
+        </article>
+      </section>
+    `;
+
+    const Clientes = () => `
+      <div class="hero"><h1>Clientes</h1><p>Integração e cadastro</p></div>
+      <section class="section">
+        <div class="list">
+          <div class="row" style="justify-content:space-between; gap:8px;">
+            <div>
+              <strong>Integração com Notion</strong>
+              <div class="muted">Importe clientes e datas de aniversário a partir de uma base do Notion</div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn-primary" id="btnNotionImport">Importar do Notion</button>
+              <button class="btn-outline" id="btnNewClient">+ Novo Cliente</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Lista de clientes</h2>
+        <div class="list" id="clientsList"></div>
+      </section>
+    `;
+
+    const FichaCliente = () => `
+      <div class="hero"><h1>Ficha Cliente</h1><p>Histórico e informações do cliente</p></div>
+      <section class="section list">
+        <div class="row"><div><strong>Nome</strong><div class="muted">Claudia Maria</div></div><span class="pill">Ativa</span></div>
+        <div class="row"><div><strong>Último atendimento</strong><div class="muted">há 15 dias</div></div><span class="pill">Coloração</span></div>
+        <div class="row"><div><strong>Observações</strong><div class="muted">Prefere sábado à tarde</div></div></div>
+      </section>
+    `;
+
+    const ClientesMensais = () => `
+      <div class="hero"><h1>Clientes Mensais</h1><p>Gestão de débitos mensais e pagamentos</p></div>
+      <section class="section" id="mensalRoot"></section>
+    `;
+
+    const Servicos = () => `
+      <style>
+        .svc-hero h1 { margin:0 0 6px; font-size:28px; color:var(--bella-800); font-weight:900; letter-spacing:.2px; }
+        .svc-hero p { margin:0; color:#9d3a69; font-weight:600; }
+        .svc-actions { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+        .btn { border-radius:12px; padding:10px 14px; border:1px solid #f1e6ee; background:#fff; font-weight:900; color:#a1125b; box-shadow: var(--shadow); }
+        .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+        .svc-filters { display:grid; gap:10px; margin:12px 0; }
+        .svc-filters .field { display:grid; gap:6px; }
+        .svc-filters input, .svc-filters select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+        .tabs { display:flex; gap:8px; overflow:auto; padding-bottom:2px; }
+        .tab { white-space:nowrap; padding:8px 12px; border-radius:999px; border:1px solid #f3c6d9; color:#a1125b; font-weight:800; background:#fff; }
+        .tab.active { background:#fff4f9; border:2px solid #f3a1c8; }
+        .svc-list { display:grid; gap:12px; }
+        .svc-card { display:grid; grid-template-columns: 108px 1fr; gap:12px; background:#fff; border:1px solid #f1e6ee; border-radius:18px; padding:12px; box-shadow: var(--shadow); }
+        .svc-photo { width:100%; height:100%; max-height:92px; border-radius:14px; object-fit:cover; border:1px solid #f1e6ee; background:#fff7fb; }
+        .svc-title { font-weight:900; color:#9d174d; text-transform:uppercase; letter-spacing:.2px; }
+        .svc-desc { color:#6b7280; font-weight:600; font-size:13px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .svc-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; }
+        .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-weight:900; }
+        .chip.time { background:#eef2ff; border:1px solid #c7d2fe; color:#4338ca; }
+        .chip.price { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; }
+        .svc-actions-inline { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+        @media(max-width:520px){ .svc-card { grid-template-columns: 1fr; } .svc-photo { max-height:160px; } }
+      </style>
+
+      <div class="svc-hero">
+        <h1>Serviços</h1>
+        <p>Catálogo, preços e duração (usado nos agendamentos)</p>
+      </div>
+
+      <div class="svc-actions">
+        <button class="btn primary" id="svcNovo">+ Novo Serviço</button>
+        <button class="btn" id="svcCat">Gerenciar Categorias</button>
+      </div>
+
+      <section class="section svc-filters">
+        <div class="field">
+          <label class="muted">Pesquisar</label>
+          <input id="svcQ" placeholder="Nome ou descrição">
+        </div>
+        <div class="field">
+          <label class="muted">Categorias</label>
+          <div class="tabs" id="svcTabs"></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Lista</h2>
+        <div class="svc-list" id="svcList"></div>
+      </section>
+    `;
+
+    const Caixa = () => `
+      <div id="caixa-root"></div>
+    `;
+
+    const Estoque = () => `
+      <div id="estoque-root"></div>
+    `;
+
+    const Usuarios = () => `
+      <div class="hero"><h1>Usuários</h1><p>Funcionários (usados na Agenda e preferências dos Clientes)</p></div>
+      <section class="section">
+        <div class="list">
+          <div class="row" style="justify-content:space-between;gap:8px;">
+            <div>
+              <strong>Funcionários</strong>
+              <div class="muted">Cadastre e edite usuários. Cada usuário tem uma cor usada nos cartões da Agenda.</div>
+            </div>
+            <button class="btn-outline" id="btnNewUser">+ Novo Usuário</button>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <h2 style="margin:0 0 8px;">Lista de usuários</h2>
+        <div class="list" id="usersList"></div>
+      </section>
+    `;
+
+    const Configuracoes = () => `
+      <div class="hero"><h1>Configurações</h1><p>Preferências do sistema</p></div>
+      <section class="section list">
+        <div class="row"><div><strong>Tema</strong><div class="muted">Claro</div></div><button class="btn-outline">Alterar</button></div>
+        <div class="row"><div><strong>Notificações</strong><div class="muted">Ativadas</div></div><button class="btn-outline">Editar</button></div>
+      </section>
+      <section class="section list">
+        <div class="row">
+          <div><strong>Exportar Build/Dist</strong><div class="muted">Gera um snapshot ZIP do preview estático</div></div>
+          <button class="btn-outline" id="btnDistZip">Gerar ZIP</button>
+        </div>
+      </section>
+    `;
+
+    // Novas páginas
+    const HistoricoCaixa = () => `
+      <div class="hero"><h1>Histórico do Caixa</h1><p>Dias de caixa fechados e salvos</p></div>
+      <section class="section">
+        <div id="histRoot"></div>
+      </section>
+    `;
+
+    const Relatorios = () => `
+      <div class="hero"><h1>Relatórios</h1><p>Semanal e mensal com base nos fechamentos do Caixa</p></div>
+      <section class="section">
+        <style>
+          .rep-grid { display:grid; gap:14px; }
+          .rep-card { border:1px solid #f1e6ee; border-radius:16px; padding:12px; background:#fff; box-shadow: var(--shadow); }
+          .rep-row { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:10px; }
+          .rep-kpi { border:1px solid #e5e7eb; border-radius:12px; padding:10px; }
+          .rep-kpi .t { color:#334155; font-weight:900; font-size:12px; }
+          .rep-kpi .v { color:#0f172a; font-weight:900; font-size:22px; }
+          .rep-table { width:100%; border-collapse:separate; border-spacing:0 8px; }
+          .rep-table th { text-align:left; color:#a1125b; font-size:12px; }
+          .rep-table td { background:#fff; border:1px solid #f1e6ee; padding:10px; border-radius:10px; }
+          .num { text-align:right; font-weight:900; }
+          @media(max-width: 980px){ .rep-row { grid-template-columns: 1fr; } }
+        </style>
+        <div class="rep-grid">
+          <div class="rep-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <div style="font-weight:900; color:#a1125b;">Relatório Semanal</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input id="repWeekRef" type="date">
+                <button id="repWeekImg" class="btn-outline">Exportar Imagem</button>
+                <button id="repWeekPdf" class="btn-outline">Exportar PDF</button>
+              </div>
+            </div>
+            <div id="repWeek"></div>
+          </div>
+          <div class="rep-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <div style="font-weight:900; color:#a1125b;">Relatório Mensal</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input id="repMonthRef" type="month">
+                <button id="repMonthImg" class="btn-outline">Exportar Imagem</button>
+                <button id="repMonthPdf" class="btn-outline">Exportar PDF</button>
+              </div>
+            </div>
+            <div id="repMonth"></div>
+          </div>
+        </div>
+      </section>
+    `;
+
+    // Rotas da aplicação (preview estático)
+    const routes = {
+      "/dashboard": { title: "Dashboard", view: Dashboard },
+      "/agenda": { title: "Agenda", view: Agenda },
+      "/clientes": { title: "Clientes", view: Clientes },
+      "/ficha-cliente": { title: "Ficha Cliente", view: FichaCliente },
+      "/clientes-mensais": { title: "Clientes Mensais", view: ClientesMensais },
+      "/servicos": { title: "Serviços", view: Servicos },
+      "/caixa": { title: "Caixa", view: Caixa },
+      "/historico-caixa": { title: "Histórico do Caixa", view: HistoricoCaixa },
+      "/relatorios": { title: "Relatórios", view: Relatorios },
+      "/estoque": { title: "Estoque", view: Estoque },
+      "/usuarios": { title: "Usuários", view: Usuarios },
+      "/configuracoes": { title: "Configurações", view: Configuracoes },
+    };
+
+    const layout = `
+      ${css}
+      <div class="topnav">
+        <button class="menu" id="menuBtn" aria-label="menu" title="Menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <div class="titlebar" id="titlebar">Dashboard</div>
+        <div class="shield" title="Conta"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 5-3.5 9-7 9s-7-4-7-9V7l7-4z" fill="white" fill-opacity=".85"/></svg></div>
+      </div>
+
+      <div class="drawer" id="drawer">
+        <div class="panel">
+          <div class="brandbar">
+            <div class="left">
+              <div class="heart"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 21s-6.4-3.7-9.2-8C.8 10.1 1.3 6.7 4.2 5.3A5 5 0 0 1 12 7a5 5 0 0 1 7.8-1.7c2.9 1.4 3.4 4.8 1.4 7.7C18.4 17.3 12 21 12 21z" fill="white" fill-opacity=".9"/></svg></div>
+              <div>Bella's</div>
+            </div>
+            <button class="close" id="drawerClose" aria-label="Fechar">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+
+          <div class="usercard">
+            <div class="ava"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 5-3.5 9-7 9s-7-4-7-9V7l7-4z" fill="white" fill-opacity=".85"/></svg></div>
+            <div style="flex:1;">
+              <div class="name">Weslley Raphael</div>
+              <div class="chips">
+                <span class="online"></span>
+                <span class="chip">Admin</span>
+                <span class="chip">Admin</span>
+              </div>
+            </div>
+          </div>
+
+          <nav class="navlist">
+            <a class="item" href="#/dashboard" data-link="/dashboard"><span class="icon">🏠</span><span class="label">Dashboard</span></a>
+            <a class="item" href="#/agenda" data-link="/agenda"><span class="icon">📅</span><span class="label">Agenda</span></a>
+            <a class="item" href="#/clientes" data-link="/clientes"><span class="icon">👥</span><span class="label">Clientes</span></a>
+            <a class="item" href="#/ficha-cliente" data-link="/ficha-cliente"><span class="icon">📄</span><span class="label">Ficha Cliente</span></a>
+            <a class="item" href="#/clientes-mensais" data-link="/clientes-mensais"><span class="icon">🗓️</span><span class="label">Clientes Mensais</span></a>
+            <a class="item" href="#/servicos" data-link="/servicos"><span class="icon">⚙️</span><span class="label">Serviços</span></a>
+            <a class="item" href="#/caixa" data-link="/caixa"><span class="icon">💵</span><span class="label">Caixa</span></a>
+            <a class="item" href="#/historico-caixa" data-link="/historico-caixa"><span class="icon">🗂️</span><span class="label">Histórico do Caixa</span></a>
+            <a class="item" href="#/relatorios" data-link="/relatorios"><span class="icon">📊</span><span class="label">Relatórios</span></a>
+            <a class="item" href="#/estoque" data-link="/estoque"><span class="icon">📦</span><span class="label">Estoque</span></a>
+          </nav>
+
+          <div class="section-divider"><span>ADMINISTRAÇÃO</span></div>
+
+          <nav class="navlist" style="padding-top: 0;">
+            <a class="item" href="#/usuarios" data-link="/usuarios"><span class="icon">🛡️</span><span class="label">Usuários</span></a>
+            <a class="item" href="#/configuracoes" data-link="/configuracoes"><span class="icon">🔧</span><span class="label">Configurações</span></a>
+          </nav>
+
+          <div class="logout">
+            <a class="item danger" href="#" id="logoutBtn"><span class="icon">↪️</span><span class="label">Sair</span></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="shell"><div id="page"></div></div>
+
+      <!-- Modal shell -->
+      <div class="modals" id="modals">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <h3 id="modal-title">Novo Agendamento</h3>
+          <div class="field"><label>Cliente</label><input placeholder="Nome do cliente"></div>
+          <div class="field"><label>Serviço</label><input placeholder="Ex.: Corte, Coloração..."></div>
+          <div class="field"><label>Data e hora</label><input type="datetime-local"></div>
+          <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <button class="btn-outline" data-close>Cancelar</button>
+            <button class="btn-primary" data-close>Salvar</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Monta layout
+    root.innerHTML = layout;
+
+    // Helpers
+    const $ = (sel) => document.querySelector(sel);
+    const page = $("#page");
+    const titlebar = $("#titlebar");
+    const drawer = $("#drawer");
+    $("#menuBtn").addEventListener("click", () => (drawer.style.display = "block"));
+    $("#drawerClose").addEventListener("click", () => (drawer.style.display = "none"));
+    drawer.addEventListener("click", (e) => {
+      if (e.target === drawer) drawer.style.display = "none";
+    });
+    $("#logoutBtn").addEventListener("click", (e) => {
+      e.preventDefault();
+      alert("Sessão encerrada (simulação).");
+      drawer.style.display = "none";
+    });
+
+    function renderRoute() {
+      const hash = location.hash.replace("#", "") || "/dashboard";
+      const route = routes[hash] || routes["/dashboard"];
+      titlebar.textContent = route.title;
+      page.innerHTML = route.view();
+
+      // destacar item ativo
+      drawer.querySelectorAll("a[data-link]").forEach((a) => {
+        const active = a.getAttribute("data-link") === hash;
+        a.classList.toggle("active", active);
+      });
+
+      // Modais simples
+      const modals = $("#modals");
+      function openModal(title) {
+        $("#modal-title").textContent = title;
+        modals.style.display = "flex";
+      }
+      function closeModal() {
+        modals.style.display = "none";
+      }
+      page.querySelectorAll("[data-open='agendamento']").forEach((b) =>
+        b.addEventListener("click", () => openModal("Novo Agendamento"))
+      );
+      page.querySelectorAll("[data-open='cliente']").forEach((b) =>
+        b.addEventListener("click", () => openModal("Novo Cliente"))
+      );
+      page.querySelectorAll("[data-open='venda']").forEach((b) =>
+        b.addEventListener("click", () => openModal("Registrar Venda"))
+      );
+      modals.addEventListener("click", (e) => {
+        if (e.target === modals || e.target.hasAttribute("data-close")) closeModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+      });
+
+      // ==== Histórico do Caixa (helpers globais para múltiplas rotas) ====
+      const HISTORY_KEY = "bella_caixa_history_v1";
+      function getHistory() {
+        try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{"days":{}}'); } catch { return { days: {} }; }
+      }
+      function setHistory(h) {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+      }
+
+      // Configurações: gerar ZIP do dist (snapshot)
+      async function ensureJSZip() {
+        // @ts-ignore
+        if (!window.__loadedScripts) window.__loadedScripts = {};
+        const src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+        if (!window.__loadedScripts[src]) {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+          window.__loadedScripts[src] = true;
+        }
+      }
+      async function generateDistZip() {
+        try {
+          await ensureJSZip();
+          const JSZip = window.JSZip;
+          const zip = new JSZip();
+          const fetchText = async (path) => {
+            try {
+              const res = await fetch(path);
+              return res.ok ? await res.text() : "";
+            } catch {
+              return "";
+            }
+          };
+          const fetchBlob = async (path) => {
+            try {
+              const res = await fetch(path);
+              return res.ok ? await res.blob() : new Blob([]);
+            } catch {
+              return new Blob([]);
+            }
+          };
+
+          const idx = await fetchText("/index.html");
+          if (idx) zip.file("index.html", idx);
+          const fb = await fetchText("/public/fallback-preview.js");
+          if (fb) zip.file("public/fallback-preview.js", fb);
+          const manRoot = await fetchText("/cosine-manifest.json");
+          if (manRoot) zip.file("cosine-manifest.json", manRoot);
+          const manPub = await fetchText("/public/cosine-manifest.json");
+          if (manPub) zip.file("public/cosine-manifest.json", manPub);
+
+          const assets = [
+            { path: "/public/favicon.ico", name: "public/favicon.ico", binary: true },
+            { path: "/public/robots.txt", name: "public/robots.txt" },
+            { path: "/public/placeholder.svg", name: "public/placeholder.svg" },
+          ];
+          for (const a of assets) {
+            if (a.binary) {
+              const blob = await fetchBlob(a.path);
+              if (blob.size) zip.file(a.name, blob);
+            } else {
+              const txt = await fetchText(a.path);
+              if (txt) zip.file(a.name, txt);
+            }
+          }
+
+          const content = await zip.generateAsync({ type: "blob" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(content);
+          a.download = `bella-app-dist-snapshot_${new Date().toISOString().slice(0,10)}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          URL.revokeObjectURL(a.href);
+          a.remove();
+        } catch (e) {
+          console.warn("Falha ao gerar dist snapshot:", e);
+        }
+      }
+      if (hash === "/configuracoes") {
+        const btn = page.querySelector("#btnDistZip");
+        btn && btn.addEventListener("click", generateDistZip);
+      }
+
+      // ==== Clientes: armazenamento e integração com Notion ====
+      const CLIENTS_KEY = "bella_clients_v1";
+      function getClientsStore() {
+        try {
+          return JSON.parse(localStorage.getItem(CLIENTS_KEY) || '{"clients":[]}');
+        } catch {
+          return { clients: [] };
+        }
+      }
+      function setClientsStore(s) {
+        localStorage.setItem(CLIENTS_KEY, JSON.stringify(s));
+      }
+      function onlyDigitsLocal(s) { return String(s || "").replace(/\D+/g, ""); }
+      function fmtDDMMLocal(iso) {
+        if (!iso) return "";
+        try { const [y,m,d] = iso.slice(0,10).split("-"); return `${d}/${m}`; } catch { return ""; }
+      }
+      function monthDayLocal(iso) {
+        try { const [y,m,d] = iso.slice(0,10).split("-").map(Number); return { m, d }; } catch { return { m:null, d:null }; }
+      }
+      const NOTION_CFG_KEY = "bella_notion_cfg";
+      function getNotionCfg() {
+        try {
+          return JSON.parse(localStorage.getItem(NOTION_CFG_KEY) || '{"secret":"","dbid":"","map":{"name":"Name","phone":"Phone","birth":"Birthday"}}');
+        } catch {
+          return { secret:"", dbid:"", map:{ name:"Name", phone:"Phone", birth:"Birthday" } };
+        }
+      }
+      function setNotionCfg(cfg) {
+        localStorage.setItem(NOTION_CFG_KEY, JSON.stringify(cfg));
+      }
+
+      // ==== Usuários (Funcionários) ====
+      const USERS_KEY = "bella_users_v1";
+      function getUsersStore() {
+        try {
+          return JSON.parse(localStorage.getItem(USERS_KEY) || '{"users":[]}');
+        } catch {
+          return { users: [] };
+        }
+      }
+      function setUsersStore(s) {
+        localStorage.setItem(USERS_KEY, JSON.stringify(s));
+      }
+      function ensureUsersDefaults() {
+        const s = getUsersStore();
+        if (!Array.isArray(s.users)) s.users = [];
+        const palette = ["#10b981", "#ec4899", "#6366f1", "#f59e0b", "#06b6d4", "#84cc16", "#ef4444", "#14b8a6"];
+        // Initialize defaults if empty
+        if ((s.users || []).length === 0) {
+          s.users = [
+            { id: "u-kelly", nome: "Kelly Monice", handle: "@Kelly", telefone: "", color: "#10b981" }, // verde
+            { id: "u-simone", nome: "Simone Barboza", handle: "@Simone", telefone: "", color: "#ec4899" }, // rosa
+          ];
+          setUsersStore(s);
+          return;
+        }
+        // Ensure each user has a color
+        let changed = false;
+        s.users = (s.users || []).map((u, i) => {
+          if (!u.color) { changed = true; return { ...u, color: palette[i % palette.length] }; }
+          return u;
+        });
+        if (changed) setUsersStore(s);
+      }
+      function userColorByName(name) {
+        try {
+          const nm = String(name || "").toLowerCase();
+          const u = (getUsersStore().users || []).find(x => String(x.nome || "").toLowerCase() === nm);
+          return u && u.color ? u.color : "#9d174d";
+        } catch { return "#9d174d"; }
+      }
+
+      // ==== Serviços: armazenamento local (catálogo usado nos agendamentos) ====
+      const SVC_KEY = "bella_services_v1";
+      function svcUid(p) { return `${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
+      function getSvcStore() {
+        try { return JSON.parse(localStorage.getItem(SVC_KEY) || '{"cats":[],"items":[]}'); } catch { return { cats:[], items:[] }; }
+      }
+      function setSvcStore(s) { localStorage.setItem(SVC_KEY, JSON.stringify(s)); }
+      function moneyBR(n) { return (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" }); }
+      function minsTxt(min) {
+        min = Number(min)||0;
+        if (min < 60) return `${min}min`;
+        const h = Math.floor(min/60); const m = min%60;
+        return m ? `${h}h ${m}min` : `${h}h`;
+      }
+      function ensureSvcDefaults() {
+        const s = getSvcStore();
+        if ((s.items||[]).length) return;
+        s.cats = [
+          { id: svcUid("cat"), nome: "Unhas" },
+          { id: svcUid("cat"), nome: "Cabelos" },
+          { id: svcUid("cat"), nome: "Sobrancelha" },
+          { id: svcUid("cat"), nome: "Depilação" },
+        ];
+        const cat = (name) => s.cats.find(c=>c.nome===name)?.id || s.cats[0].id;
+        s.items = [
+          { id: svcUid("svc"), nome: "Alongamento em Acrigel", cat_id: cat("Unhas"), preco: 150, duracao_min: 150, desc:"O que está incluso no serviço e principais benefícios. Tempo médio e objetivos.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Alongamento em Gel", cat_id: cat("Unhas"), preco: 150, duracao_min: 150, desc:"Descrição breve e objetiva do procedimento.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Alongamento Fibra de Vidro", cat_id: cat("Unhas"), preco: 180, duracao_min: 165, desc:"Durável e leve. Inclui manutenção básica.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Corte Feminino", cat_id: cat("Cabelos"), preco: 40, duracao_min: 40, desc:"Corte com acabamento escova simples.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Coloração", cat_id: cat("Cabelos"), preco: 120, duracao_min: 90, desc:"Coloração completa com tonalização.", foto: "/public/placeholder.svg" },
+          { id: svcUid("svc"), nome: "Design de Sobrancelhas", cat_id: cat("Sobrancelha"), preco: 35, duracao_min: 30, desc:"Medição, marcação e alinhamento.", foto: "/public/placeholder.svg" },
+        ];
+        setSvcStore(s);
+      }
+      if (hash === "/dashboard") {
+        const box = page.querySelector("#birthBox");
+        if (box) {
+          const s = getClientsStore();
+          const list = (s.clients || []).filter(c => !!c.birthdate);
+          const now = new Date();
+          const cm = now.getMonth() + 1;
+          const cd = now.getDate();
+          const curr = list.filter(c => monthDayLocal(c.birthdate).m === cm)
+                           .sort((a,b) => monthDayLocal(a.birthdate).d - monthDayLocal(b.birthdate).d);
+          const today = curr.filter(c => monthDayLocal(c.birthdate).d === cd);
+          const past = curr.filter(c => monthDayLocal(c.birthdate).d < cd);
+          const upcoming = curr.filter(c => monthDayLocal(c.birthdate).d > cd);
+
+          function item(c, tag) {
+            const ch = (c.name || "?").slice(0,1).toUpperCase();
+            const tel = onlyDigitsLocal(c.phone || "");
+            const badge = tag ? `<span class="pill" style="background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca;">${tag}</span>` : "";
+            return `
+              <div class="month-item">
+                <div style="display:flex; gap:10px; align-items:center;">
+                  <div class="circle">${ch}</div>
+                  <div>
+                    <div style="font-weight:900;">${c.name || "-"}</div>
+                    <div class="muted"><span>📅</span> ${fmtDDMMLocal(c.birthdate)} ${badge}</div>
+                  </div>
+                </div>
+                ${tel ? `<a class="tel" href="tel:+55${tel}" title="Ligar para o cliente">Ligar</a>` : `<span></span>`}
+              </div>
+            `;
+          }
+
+          if (!curr.length) {
+            box.innerHTML = `<div class="empty">Nenhum aniversariante deste mês. Importe clientes do Notion em “Clientes › Importar do Notion”.</div>`;
+          } else {
+            const parts = [];
+            parts.push(`<h3 style="margin:0 0 10px; display:flex; align-items:center; gap:8px;"><span>📅</span><span>Todos deste mês (${curr.length})</span></h3>`);
+            if (today.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Hoje</div>`);
+              parts.push(today.map(c => item(c, "hoje")).join(""));
+            }
+            if (upcoming.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Próximos</div>`);
+              parts.push(upcoming.map(c => item(c, "")).join(""));
+            }
+            if (past.length) {
+              parts.push(`<div class="muted" style="font-weight:800;margin:6px 0;">Já passaram</div>`);
+              parts.push(past.map(c => item(c, "passou")).join(""));
+            }
+            box.innerHTML = parts.join("");
+          }
+        }
+      }
+
+      // Clientes: listar e importar do Notion
+      if (hash === "/clientes") {
+        const listEl = page.querySelector("#clientsList");
+        function renderClientsList() {
+          if (!listEl) return;
+          const s = getClientsStore();
+          const arr = (s.clients || []).slice().sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+          if (!arr.length) {
+            listEl.innerHTML = `<div class="muted" style="padding:12px;">Nenhum cliente cadastrado. Clique em “Novo Cliente” para adicionar ou importe do Notion.</div>`;
+            return;
+          }
+          listEl.innerHTML = arr.map(c => `
+            <div class="row" data-id="${c.id}">
+              <div>
+                <strong>${c.name || "-"}</strong>
+                <div class="muted">
+                  ${[
+                    c.phone || "",
+                    c.prefUserName ? ("Prefere: " + c.prefUserName) : ""
+                  ].filter(Boolean).join(" • ")}
+                </div>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <span class="pill">${fmtDDMMLocal(c.birthdate) || "—"}</span>
+                <button class="btn-outline" data-act="edit">Editar</button>
+                <button class="btn-outline" data-act="del">Excluir</button>
+              </div>
+            </div>
+          `).join("");
+        }
+
+        function showClientModal(existing = null) {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const users = (getUsersStore().users || []);
+          const it = existing ? { ...existing } : {
+            id: "cl-" + Date.now(),
+            name: "",
+            phone: "",
+            birthdate: "",
+            prefUserId: "",
+            prefUserName: ""
+          };
+          modal.innerHTML = `
+            <style>
+              .cmodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .cmodal .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+              .cmodal .field { display:grid; gap:6px; }
+              .cmodal label { color:#a1125b; font-weight:900; font-size:13px; }
+              .cmodal input, .cmodal select {
+                border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
+              }
+              .cmodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+              @media(max-width:640px){ .cmodal .grid2 { grid-template-columns: 1fr; } }
+            </style>
+            <div class="cmodal">
+              <h3>${existing ? "Editar Cliente" : "Novo Cliente"}</h3>
+              <div class="grid2">
+                <div class="field">
+                  <label>Nome *</label>
+                  <input id="cNome" value="${(it.name || "").replace(/"/g,"&quot;")}" placeholder="Nome completo">
+                </div>
+                <div class="field">
+                  <label>Telefone</label>
+                  <input id="cTel" value="${(it.phone || "").replace(/"/g,"&quot;")}" placeholder="(DDD) 9xxxx-xxxx">
+                </div>
+                <div class="field">
+                  <label>Aniversário</label>
+                  <input id="cBirth" type="date" value="${it.birthdate || ""}">
+                </div>
+                <div class="field">
+                  <label>Profissional preferido</label>
+                  <select id="cPref">
+                    <option value="">Selecionar</option>
+                    ${users.map(u => `<option value="${u.id}" ${it.prefUserId===u.id?"selected":""}>${u.nome || ""}</option>`).join("")}
+                  </select>
+                </div>
+              </div>
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="cSalvar">${existing ? "Salvar" : "Criar"}</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          $m("#cSalvar").addEventListener("click", () => {
+            const name = ($m("#cNome").value || "").trim();
+            if (!name) { alert("Informe o nome"); return; }
+            const phone = ($m("#cTel").value || "").trim();
+            const birthdate = $m("#cBirth").value || "";
+            const prefUserId = $m("#cPref").value || "";
+            const users = (getUsersStore().users || []);
+            const prefUserName = prefUserId ? (users.find(u=>String(u.id)===String(prefUserId))?.nome || "") : "";
+
+            const s = getClientsStore();
+            const payload = { ...it, name, phone, birthdate, prefUserId, prefUserName };
+            const idx = (s.clients || []).findIndex(c => String(c.id) === String(it.id));
+            if (idx >= 0) s.clients[idx] = payload; else s.clients = (s.clients || []).concat(payload);
+            setClientsStore(s);
+            modals.style.display = "none";
+            renderClientsList();
+          });
+
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
+        function showNotionImportModal() {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          const cfg = getNotionCfg();
+
+          modal.innerHTML = `
+            <style>
+              .nt-grid { display:grid; grid-template-columns: 1fr; gap:10px; }
+              .nt-row { display:grid; gap:6px; }
+              .nt-actions { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+              .nt-right { display:flex; gap:8px; }
+              .nt-muted { color:#64748b; font-size:12px; font-weight:700; }
+              .nt-select { border:1px solid #e5e7eb; border-radius:10px; padding:10px; font-family:inherit; }
+              .nt-preview { border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; max-height:180px; overflow:auto; }
+              .nt-small { font-size:12px; color:#475569; }
+              .btn { border:1px solid #f1e6ee; border-radius:10px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .btn.primary { background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+            </style>
+            <h3>Importar do Notion (Preview Estático)</h3>
+            <div class="nt-grid">
+              <div class="nt-row">
+                <label>Integration Secret *</label>
+                <input id="ntSecret" placeholder="secret_..." value="${cfg.secret || ""}">
+                <div class="nt-muted">Cole o secret da sua integração (Notion › My integrations) e compartilhe sua base com ela.</div>
+              </div>
+
+              <div class="nt-row">
+                <label>Selecionar Database</label>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <select id="ntDbSel" class="nt-select" style="min-width:260px;">
+                    <option value="">— Listar bases do seu Notion —</option>
+                  </select>
+                  <button class="btn" id="ntListDb">Listar bases</button>
+                </div>
+                <div class="nt-small">Database ID selecionado</div>
+                <input id="ntDb" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="${cfg.dbid || ""}">
+              </div>
+
+              <div class="nt-row">
+                <label>Mapeamento de Campos</label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+                  <div>
+                    <div class="nt-small">Nome (Title)</div>
+                    <select id="ntMapNameSel" class="nt-select"><option value="">—</option></select>
+                  </div>
+                  <div>
+                    <div class="nt-small">Telefone (Phone/Rich Text)</div>
+                    <select id="ntMapPhoneSel" class="nt-select"><option value="">—</option></select>
+                  </div>
+                  <div>
+                    <div class="nt-small">Aniversário (Date)</div>
+                    <select id="ntMapBirthSel" class="nt-select"><option value="">—</option></select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="nt-actions">
+                <div class="nt-muted">Dica: após selecionar a base, carregamos as propriedades para você escolher o mapeamento.</div>
+                <div class="nt-right">
+                  <button class="btn" id="ntPreview">Pré-visualizar</button>
+                  <button class="btn primary" id="ntImport">Importar</button>
+                  <button class="btn" data-close>Cancelar</button>
+                </div>
+              </div>
+
+              <div class="nt-row">
+                <label>Pré-visualização</label>
+                <div id="ntPreviewArea" class="nt-preview nt-small">Sem dados. Clique em “Pré-visualizar”.</div>
+              </div>
+            </div>
+          `;
+
+          modals.style.display = "flex";
+          const $m = (sel) => modal.querySelector(sel);
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+
+          // Helpers Notion
+          async function notionSearchDatabases(secret) {
+            const r = await fetch("https://api.notion.com/v1/search", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${secret}`,
+                "Content-Type": "application/json",
+                "Notion-Version": "2022-06-28",
+              },
+              body: JSON.stringify({
+                page_size: 100,
+                sort: { direction: "ascending", timestamp: "last_edited_time" },
+                filter: { value: "database", property: "object" }
+              }),
+            });
+            if (!r.ok) throw new Error("Falha ao buscar bases. Verifique o Secret e permissões da integração.");
+            const j = await r.json();
+            return (j.results || []).filter(x => x.object === "database").map(db => ({
+              id: db.id,
+              title: ((db.title || []).map(t => t.plain_text).join("") || "(Sem título)").trim(),
+            }));
+          }
+          async function notionGetDatabase(secret, dbid) {
+            const r = await fetch(`https://api.notion.com/v1/databases/${dbid}`, {
+              headers: {
+                "Authorization": `Bearer ${secret}`,
+                "Notion-Version": "2022-06-28",
+              },
+            });
+            if (!r.ok) throw new Error("Falha ao carregar propriedades do Database. Verifique compartilhamento com a integração.");
+            const j = await r.json();
+            const props = j.properties || {};
+            return Object.keys(props).map((name) => ({ name, type: props[name]?.type || "" }));
+          }
+          async function notionQueryAll(secret, dbid) {
+            let cursor = undefined;
+            let all = [];
+            for (let i = 0; i < 20; i++) {
+              const body = cursor ? { start_cursor: cursor, page_size: 100 } : { page_size: 100 };
+              const r = await fetch(`https://api.notion.com/v1/databases/${dbid}/query`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${secret}`,
+                  "Content-Type": "application/json",
+                  "Notion-Version": "2022-06-28",
+                },
+                body: JSON.stringify(body),
+              });
+              if (!r.ok) throw new Error("Falha ao consultar a base do Notion. Verifique o Secret, o Database ID e o compartilhamento.");
+              const j = await r.json();
+              all = all.concat(j.results || []);
+              if (j.has_more && j.next_cursor) cursor = j.next_cursor; else break;
+            }
+            return all;
+          }
+          function getTitle(prop){ try { return (prop?.title || []).map(t=>t.plain_text).join("").trim(); } catch { return ""; } }
+          function getText(prop){
+            try {
+              if (!prop) return "";
+              if (prop.type === "phone_number") return prop.phone_number || "";
+              if (prop.type === "rich_text") return (prop.rich_text || []).map(t=>t.plain_text).join(" ").trim();
+              if (prop.type === "title") return getTitle(prop);
+              return "";
+            } catch { return ""; }
+          }
+          function getDate(prop){ try { return (prop?.date?.start || "").slice(0,10); } catch { return ""; } }
+
+          function fillMappingSelects(properties) {
+            const nameSel = $m("#ntMapNameSel");
+            const phoneSel = $m("#ntMapPhoneSel");
+            const birthSel = $m("#ntMapBirthSel");
+            const makeOpts = (filterFn) => {
+              const frags = ['<option value=""></option>'];
+              (properties || []).forEach(p => {
+                if (!filterFn || filterFn(p)) frags.push(`<option value="${p.name}">${p.name} (${p.type})</option>`);
+              });
+              return frags.join("");
+            };
+            nameSel.innerHTML = makeOpts(p => p.type === "title");
+            phoneSel.innerHTML = makeOpts(p => p.type === "phone_number" || p.type === "rich_text");
+            birthSel.innerHTML = makeOpts(p => p.type === "date");
+
+            // Defaults/restore from cfg.map
+            if (cfg.map?.name) nameSel.value = cfg.map.name;
+            if (cfg.map?.phone) phoneSel.value = cfg.map.phone;
+            if (cfg.map?.birth) birthSel.value = cfg.map.birth;
+            // Fallback guesses
+            if (!nameSel.value) {
+              const firstTitle = (properties || []).find(p => p.type === "title");
+              if (firstTitle) nameSel.value = firstTitle.name;
+            }
+            if (!phoneSel.value) {
+              const firstPhone = (properties || []).find(p => p.type === "phone_number") ||
+                                 (properties || []).find(p => p.type === "rich_text");
+              if (firstPhone) phoneSel.value = firstPhone.name;
+            }
+            if (!birthSel.value) {
+              const firstDate = (properties || []).find(p => p.type === "date");
+              if (firstDate) birthSel.value = firstDate.name;
+            }
+          }
+
+          async function loadDatabases() {
+            const secret = ($m("#ntSecret").value || "").trim();
+            if (!secret) { alert("Informe o Secret primeiro."); return; }
+            try {
+              $m("#ntListDb").disabled = true;
+              const items = await notionSearchDatabases(secret);
+              const sel = $m("#ntDbSel");
+              sel.innerHTML = `<option value="">— Selecione —</option>` + items.map(d => `<option value="${d.id}">${d.title} — ${d.id.slice(0,8)}</option>`).join("");
+              if (cfg.dbid) {
+                const found = items.find(d => d.id === cfg.dbid);
+                if (found) sel.value = cfg.dbid;
+              }
+            } catch (e) {
+              alert(e.message || "Falha ao listar bases do Notion.");
+            } finally {
+              $m("#ntListDb").disabled = false;
+            }
+          }
+
+          async function onSelectDb() {
+            const id = $m("#ntDbSel").value || "";
+            $m("#ntDb").value = id;
+            if (!id) return;
+            const secret = ($m("#ntSecret").value || "").trim();
+            if (!secret) return;
+            try {
+              const props = await notionGetDatabase(secret, id);
+              fillMappingSelects(props);
+            } catch (e) {
+              alert(e.message || "Falha ao obter propriedades da base.");
+            }
+          }
+
+          async function doPreview() {
+            const secret = ($m("#ntSecret").value || "").trim();
+            const dbid = ($m("#ntDb").value || "").trim();
+            if (!secret || !dbid) { alert("Informe o Secret e selecione o Database."); return; }
+            // Infer map from selects
+            const map = {
+              name: ($m("#ntMapNameSel").value || "").trim(),
+              phone: ($m("#ntMapPhoneSel").value || "").trim(),
+              birth: ($m("#ntMapBirthSel").value || "").trim(),
+            };
+            if (!map.name) { alert("Selecione o campo de Nome (title)."); return; }
+            try {
+              const pages = await notionQueryAll(secret, dbid);
+              const items = [];
+              pages.forEach(p => {
+                const props = p.properties || {};
+                const nameProp = props[map.name];
+                const phoneProp = map.phone ? props[map.phone] : null;
+                const birthProp = map.birth ? props[map.birth] : null;
+                const name = nameProp ? (getTitle(nameProp) || getText(nameProp)) : "";
+                if (!name) return;
+                const phone = phoneProp ? getText(phoneProp) : "";
+                const birthdate = birthProp ? getDate(birthProp) : "";
+                items.push({ id: p.id, name, phone, birthdate });
+              });
+              const prev = $m("#ntPreviewArea");
+              prev.innerHTML = items.slice(0, 50).map(c => `
+                <div style="padding:4px 0; border-bottom:1px solid #f1f5f9;">
+                  <strong>${c.name}</strong>
+                  <div>${c.phone ? `Tel: ${c.phone}` : "Tel: —"} • ${c.birthdate ? `Aniv.: ${new Date(c.birthdate).toLocaleDateString("pt-BR")}` : "Aniv.: —"}</div>
+                </div>
+              `).join("") + (items.length > 50 ? `<div class="nt-muted">... e mais ${items.length - 50} registros</div>` : (items.length ? "" : "<div class='nt-muted'>Nenhum registro legível encontrado</div>"));
+              // Save temp in dataset for import
+              prev.setAttribute("data-count", String(items.length));
+              // Cache last preview set in memory
+              modal.__lastPreviewItems = items;
+              alert(`Pré-visualização pronta: ${items.length} registros.`);
+            } catch (e) {
+              alert(e.message || "Falha na pré-visualização.");
+            }
+          }
+
+          async function doImport() {
+            const secret = ($m("#ntSecret").value || "").trim();
+            const dbid = ($m("#ntDb").value || "").trim();
+            const name = ($m("#ntMapNameSel").value || "").trim();
+            const phone = ($m("#ntMapPhoneSel").value || "").trim();
+            const birth = ($m("#ntMapBirthSel").value || "").trim();
+            if (!secret || !dbid || !name) { alert("Informe Secret, Database e campo de Nome."); return; }
+            const map = { name, phone, birth };
+            // Persist cfg
+            setNotionCfg({ secret, dbid, map });
+            try {
+              // If we have preview cached, reuse; else query
+              const items = Array.isArray(modal.__lastPreviewItems)
+                ? modal.__lastPreviewItems
+                : (await (async () => {
+                    const pages = await notionQueryAll(secret, dbid);
+                    const out = [];
+                    pages.forEach(p => {
+                      const props = p.properties || {};
+                      const nameProp = props[name];
+                      const phoneProp = phone ? props[phone] : null;
+                      const birthProp = birth ? props[birth] : null;
+                      const nm = nameProp ? (getTitle(nameProp) || getText(nameProp)) : "";
+                      if (!nm) return;
+                      const ph = phoneProp ? getText(phoneProp) : "";
+                      const bd = birthProp ? getDate(birthProp) : "";
+                      out.push({ id: p.id, name: nm, phone: ph, birthdate: bd });
+                    });
+                    return out;
+                  })());
+              setClientsStore({ clients: items });
+              modals.style.display = "none";
+              renderClientsList();
+              alert(`Importados ${items.length} clientes do Notion.`);
+            } catch (e) {
+              alert(e.message || "Erro ao importar do Notion.");
+            }
+          }
+
+          // Wire buttons
+          $m("#ntListDb").addEventListener("click", loadDatabases);
+          $m("#ntDbSel").addEventListener("change", onSelectDb);
+          $m("#ntPreview").addEventListener("click", doPreview);
+          $m("#ntImport").addEventListener("click", doImport);
+
+          // Se já havia Secret/DBID salvos, tenta preencher props automaticamente
+          (async () => {
+            try {
+              if (cfg.secret && cfg.dbid) {
+                $m("#ntSecret").value = cfg.secret;
+                $m("#ntDb").value = cfg.dbid;
+                const props = await notionGetDatabase(cfg.secret, cfg.dbid);
+                fillMappingSelects(props);
+              }
+            } catch {}
+          })();
+        }
+
+        , "i"));
+              if (m) {
+                const name = (m[1]||"").replace(/\s{2,}/g," ").trim();
+                const dateStr = (m[2]||"").trim();
+                const phone = (m[3]||"").trim();
+                if (name) {
+                  const birth = toISOFromDDMM(dateStr);
+                  items.push({ name, phone, birthdate: birth });
+                }
+                continue;
+              }
+              // pattern: only name (no date/phone) - skip
+            }
+            return items;
+          }
+          function cleanItem(it) {
+            const name = (it.name || "").replace(/\s{2,}/g," ").trim();
+            let phone = onlyDigitsLocal(it.phone || "");
+            if (phone.length < 8) phone = ""; // ignora muito curto
+            const birth = it.birthdate || "";
+            return { name, phone, birthdate: birth };
+          }
+          function mergeDedup(baseArr) {
+            const map = new Map();
+            baseArr.forEach(raw => {
+              const it = cleanItem(raw);
+              if (!it.name) return;
+              const key = normalizeName(it.name);
+              if (!key) return;
+              const cur = map.get(key);
+              if (!cur) {
+                map.set(key, it);
+              } else {
+                // merge: keep best phone (longer), keep birthdate if missing
+                const phone = bestPhone(cur.phone, it.phone);
+                const birthdate = cur.birthdate || it.birthdate || "";
+                map.set(key, { name: cur.name || it.name, phone, birthdate });
+              }
+            });
+            return Array.from(map.values());
+          }
+
+          function parseAll(txt) {
+            const a = parseBlocksNome(txt);
+            const b = parseSimpleLines(txt);
+            return mergeDedup(a.concat(b));
+          }
+
+          function renderPreview(items) {
+            const prev = $m("#bulkPrev");
+            if (!items.length) {
+              prev.innerHTML = "<div class='muted'>Nenhum item legível encontrado.</div>";
+              return;
+            }
+            const rows = items.slice(0, 80).map(c => {
+              const phone = c.phone || "—";
+              const birth = c.birthdate ? c.birthdate.slice(8,10)+"/"+c.birthdate.slice(5,7) : "—";
+              return `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid #f1f5f9; padding:4px 0;">
+                <div><strong>${c.name}</strong></div>
+                <div class="muted">Aniv.: ${birth}</div>
+                <div class="muted">Tel: ${phone}</div>
+              </div>`;
+            }).join("");
+            prev.innerHTML = rows + (items.length > 80 ? `<div class="muted">... e mais ${items.length - 80} registros</div>` : "");
+          }
+
+          $m("#bulkPreview").addEventListener("click", () => {
+            const txt = ($m("#bulkText").value || "").trim();
+            const items = parseAll(txt);
+            $m("#bulkStatus").textContent = `Pré-visualização: ${items.length} únicos (após dedupe por nome).`;
+            renderPreview(items);
+            modal.__bulkItems = items;
+          });
+
+          $m("#bulkImport").addEventListener("click", () => {
+            const items = Array.isArray(modal.__bulkItems) ? modal.__bulkItems : parseAll(($m("#bulkText").value || "").trim());
+            if (!items.length) { alert("Nada para importar."); return; }
+            const s = getClientsStore();
+            if (!Array.isArray(s.clients)) s.clients = [];
+            const byKey = (arr) => {
+              const map = new Map();
+              arr.forEach(c => map.set(normalizeName(c.name || ""), c));
+              return map;
+            };
+            const currentMap = byKey(s.clients || []);
+            let added = 0, updated = 0;
+            items.forEach(it => {
+              const key = normalizeName(it.name);
+              if (!key) return;
+              const existing = currentMap.get(key);
+              if (existing) {
+                let ch = false;
+                // phone
+                const newPhone = bestPhone(existing.phone, it.phone);
+                if ((existing.phone || "") !== newPhone) { existing.phone = newPhone; ch = true; }
+                // birthdate
+                if (!existing.birthdate && it.birthdate) { existing.birthdate = it.birthdate; ch = true; }
+                if (ch) updated++;
+              } else {
+                const id = "cl-" + Date.now() + "-" + Math.random().toString(36).slice(2,7);
+                s.clients.push({ id, name: it.name, phone: it.phone, birthdate: it.birthdate });
+                currentMap.set(key, s.clients[s.clients.length-1]);
+                added++;
+              }
+            });
+            // Ordena por nome
+            s.clients = (s.clients || []).slice().sort((a,b) => (a.name||"").localeCompare(b.name||""));
+            setClientsStore(s);
+            modals.style.display = "none";
+            renderClientsList();
+            alert(`Importação concluída: ${added} novos, ${updated} atualizados, ${items.length - (added + updated)} mantidos.`);
+          });
+
+          modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
         page.querySelector("#btnNotionImport")?.addEventListener("click", showNotionImportModal);
+        page.querySelector("#btnBulkImport")?.addEventListener("click", showBulkImportModal);
         ensureUsersDefaults();
         page.querySelector("#btnNewClient")?.addEventListener("click", () => showClientModal());
         if (listEl) {
