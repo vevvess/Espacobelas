@@ -570,11 +570,8 @@
     `;
 
     const ClientesMensais = () => `
-      <div class="hero"><h1>Clientes Mensais</h1><p>Assinaturas e recorrência</p></div>
-      <section class="section list">
-        <div class="row"><div><strong>Rafael</strong><div class="muted">Plano: Mensal</div></div><span class="pill">Ativo</span></div>
-        <div class="row"><div><strong>Mari</strong><div class="muted">Plano: Mensal</div></div><span class="pill">Ativo</span></div>
-      </section>
+      <div class="hero"><h1>Clientes Mensais</h1><p>Gestão de débitos mensais e pagamentos</p></div>
+      <section class="section" id="mensalRoot"></section>
     `;
 
     const Servicos = () => `
@@ -1505,6 +1502,313 @@
           });
         }
         renderClientsList();
+      }
+
+      // Clientes Mensais: gestão de débitos, pagamentos e exportação
+      if (hash === "/clientes-mensais") {
+        ensureSvcDefaults();
+        const root = page.querySelector("#mensalRoot");
+
+        // Helpers stores
+        const MONTHLY_KEY = "bella_monthly_v1";
+        function getMonthlyStore() {
+          try { return JSON.parse(localStorage.getItem(MONTHLY_KEY) || '{"clients":{}}'); } catch { return { clients: {} }; }
+        }
+        function setMonthlyStore(s) { localStorage.setItem(MONTHLY_KEY, JSON.stringify(s)); }
+        const moneyBR = (n) => (Number(n)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+        const today = new Date();
+        const thisYM = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}`;
+        const CL_SEL_KEY = "bella_mensal_selected_client";
+        const YM_SEL_KEY = "bella_mensal_selected_month";
+        const svcStore = getSvcStore();
+
+        function getClients() {
+          const s = getClientsStore();
+          return (s.clients || []).slice().sort((a,b)=> (a.name||"").localeCompare(b.name||""));
+        }
+        function setClientMonthlyFlag(id, flag) {
+          const s = getClientsStore();
+          const idx = (s.clients||[]).findIndex(c => String(c.id) === String(id));
+          if (idx>=0) {
+            const it = s.clients[idx];
+            it.isMonthly = !!flag;
+            s.clients[idx] = it;
+            setClientsStore(s);
+          }
+        }
+        function getLedger(clientId, ym) {
+          const st = getMonthlyStore();
+          return (st.clients?.[clientId]?.[ym]) || { items: [], payments: [], closed: false };
+        }
+        function setLedger(clientId, ym, ledger) {
+          const st = getMonthlyStore();
+          if (!st.clients[clientId]) st.clients[clientId] = {};
+          st.clients[clientId][ym] = ledger;
+          setMonthlyStore(st);
+        }
+        function addPayment(clientId, ym, amount, note="") {
+          const d = new Date();
+          const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+          const led = getLedger(clientId, ym);
+          led.payments.push({ id: "mp-"+Date.now(), date: ymd, amount: Number(amount)||0, note });
+          setLedger(clientId, ym, led);
+        }
+        function totals(ledger) {
+          const ts = (ledger.items||[]).reduce((a,b)=>a+(Number(b.value)||0),0);
+          const tp = (ledger.payments||[]).reduce((a,b)=>a+(Number(b.amount)||0),0);
+          return { totalServ: ts, totalPay: tp, outstanding: ts - tp };
+        }
+
+        async function ensureHtml2Canvas() {
+          if (!window.html2canvas) {
+            await new Promise((resolve, reject) => {
+              const s = document.createElement("script");
+              s.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+              s.onload = resolve;
+              s.onerror = reject;
+              document.head.appendChild(s);
+            });
+          }
+        }
+
+        function renderUI() {
+          const clients = getClients();
+          let selectedClient = null;
+          const savedId = localStorage.getItem(CL_SEL_KEY);
+          if (savedId) selectedClient = clients.find(c => String(c.id) === String(savedId));
+          if (!selectedClient) selectedClient = clients[0] || null;
+          const savedYM = localStorage.getItem(YM_SEL_KEY) || thisYM;
+
+          const ledger = selectedClient ? getLedger(selectedClient.id, savedYM) : { items:[], payments:[], closed:false };
+          const t = totals(ledger);
+
+          root.innerHTML = `
+            <style>
+              .mrow { display:grid; grid-template-columns: 1fr 180px 180px; gap:10px; }
+              .field { display:grid; gap:6px; }
+              .field label { color:#334155; font-weight:800; font-size:13px; }
+              select, input { border:1px solid #e5e7eb; border-radius:12px; padding:10px; font-weight:700; color:#0f172a; background:#fff; }
+              .btn { border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; font-weight:900; color:#0f172a; background:#fff; }
+              .btn.primary { background:linear-gradient(90deg,#0ea5a1,#4f46e5); color:#fff; border:0; }
+              .grid3 { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0; }
+              .k { border:2px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; }
+              .k .t { color:#334155; font-weight:900; font-size:12px; }
+              .k .v { color:#0f172a; font-weight:900; font-size:22px; margin-top:4px; }
+              .list { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; }
+              table { width:100%; border-collapse:separate; border-spacing:0 8px; }
+              th { text-align:left; color:#0f172a; font-weight:900; }
+              td, th { padding:10px 12px; background:#fff; }
+              tr td { border:1px solid #e5e7eb; }
+              .num { text-align:right; font-weight:900; }
+              .svcimg { width:56px; height:56px; border-radius:10px; border:1px solid #e5e7eb; object-fit:cover; background:#fff; }
+              .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
+              .muted { color:#64748b; }
+            </style>
+
+            <div class="mrow">
+              <div class="field">
+                <label>Cliente</label>
+                <select id="mnCli">
+                  ${clients.map(c => `<option value="${c.id}" ${selectedClient && c.id===selectedClient.id?"selected":""}>${c.name || ""}${c.isMonthly ? " • Mensal" : ""}</option>`).join("")}
+                </select>
+              </div>
+              <div class="field">
+                <label>Mês</label>
+                <input id="mnMonth" type="month" value="${savedYM}">
+              </div>
+              <div class="field">
+                <label>Ações</label>
+                <div class="row-actions">
+                  ${selectedClient && !selectedClient.isMonthly ? `<button id="mnAtivar" class="btn">Ativar como Mensal</button>` : `<button id="mnDesativar" class="btn">Desativar Mensal</button>`}
+                </div>
+              </div>
+            </div>
+
+            <div class="grid3">
+              <div class="k"><div class="t">Serviços no mês</div><div class="v">${moneyBR(t.totalServ)}</div></div>
+              <div class="k"><div class="t">Pagamentos</div><div class="v">${moneyBR(t.totalPay)}</div></div>
+              <div class="k"><div class="t">Débito atual</div><div class="v">${moneyBR(t.outstanding)}</div></div>
+            </div>
+
+            <div class="row-actions" style="margin:8px 0;">
+              <input id="mnPayVal" type="number" step="0.01" min="0" placeholder="Valor do pagamento" style="max-width:200px;">
+              <input id="mnPayNote" placeholder="Observação (opcional)" style="max-width:260px;">
+              <button id="mnAddPay" class="btn">Registrar pagamento</button>
+              <button id="mnQuitar" class="btn primary">Quitar tudo</button>
+              <button id="mnExport" class="btn">Exportar imagem p/ cliente</button>
+            </div>
+
+            <section class="list" style="margin-top:10px;">
+              <h3 style="margin:10px;">Serviços do mês</h3>
+              ${(ledger.items||[]).length ? `
+                <table>
+                  <thead><tr><th>Data</th><th>Foto</th><th>Serviço</th><th>Profissional</th><th class="num">Valor</th></tr></thead>
+                  <tbody>
+                    ${(ledger.items||[]).map(it => {
+                      const dbr = new Date(it.date + "T00:00:00").toLocaleDateString("pt-BR");
+                      const img = it.image || (svcStore.items||[]).find(s => s.id === it.serviceId)?.foto || "/public/placeholder.svg";
+                      return `<tr>
+                        <td>${dbr}</td>
+                        <td><img class="svcimg" src="${img}"></td>
+                        <td>${it.serviceName || "-"}</td>
+                        <td>${it.professional || "-"}</td>
+                        <td class="num">${moneyBR(it.value)}</td>
+                      </tr>`;
+                    }).join("")}
+                  </tbody>
+                </table>
+              ` : `<div class="muted" style="padding:12px;">Sem serviços anotados neste mês.</div>`}
+            </section>
+
+            <section class="list" style="margin-top:10px;">
+              <h3 style="margin:10px;">Pagamentos</h3>
+              ${(ledger.payments||[]).length ? `
+                <table>
+                  <thead><tr><th>Data</th><th>Obs.</th><th class="num">Valor</th></tr></thead>
+                  <tbody>
+                    ${(ledger.payments||[]).map(p => {
+                      const dbr = new Date(p.date + "T00:00:00").toLocaleDateString("pt-BR");
+                      return `<tr><td>${dbr}</td><td>${p.note || "-"}</td><td class="num">${moneyBR(p.amount)}</td></tr>`;
+                    }).join("")}
+                  </tbody>
+                </table>
+              ` : `<div class="muted" style="padding:12px;">Sem pagamentos registrados.</div>`}
+            </section>
+          `;
+
+          // Wire
+          const cliSel = root.querySelector("#mnCli");
+          const ymInp = root.querySelector("#mnMonth");
+          cliSel && cliSel.addEventListener("change", () => { localStorage.setItem(CL_SEL_KEY, cliSel.value || ""); renderUI(); });
+          ymInp && ymInp.addEventListener("change", () => { localStorage.setItem(YM_SEL_KEY, ymInp.value || thisYM); renderUI(); });
+
+          const selectedId = cliSel ? cliSel.value : null;
+          root.querySelector("#mnAtivar")?.addEventListener("click", () => { if (selectedId) { setClientMonthlyFlag(selectedId, true); renderUI(); } });
+          root.querySelector("#mnDesativar")?.addEventListener("click", () => { if (selectedId) { setClientMonthlyFlag(selectedId, false); renderUI(); } });
+
+          root.querySelector("#mnAddPay")?.addEventListener("click", () => {
+            const v = parseFloat(root.querySelector("#mnPayVal").value || "0") || 0;
+            const note = (root.querySelector("#mnPayNote").value || "").trim();
+            if (!selectedId) { alert("Selecione o cliente."); return; }
+            if (v <= 0) { alert("Informe o valor do pagamento."); return; }
+            addPayment(selectedId, ymInp.value || thisYM, v, note);
+            renderUI();
+          });
+          root.querySelector("#mnQuitar")?.addEventListener("click", () => {
+            if (!selectedId) return;
+            const led = getLedger(selectedId, ymInp.value || thisYM);
+            const t2 = totals(led);
+            const rest = t2.outstanding;
+            if (rest <= 0) { alert("Não há débito a quitar."); return; }
+            addPayment(selectedId, ymInp.value || thisYM, rest, "Quitar tudo");
+            // marca como fechado logicamente
+            const led2 = getLedger(selectedId, ymInp.value || thisYM);
+            led2.closed = true;
+            setLedger(selectedId, ymInp.value || thisYM, led2);
+            renderUI();
+          });
+
+          root.querySelector("#mnExport")?.addEventListener("click", async () => {
+            if (!selectedId) return;
+            await ensureHtml2Canvas();
+            const client = getClients().find(c => String(c.id) === String(selectedId));
+            const ym = ymInp.value || thisYM;
+            const led = getLedger(selectedId, ym);
+            const t3 = totals(led);
+            // Build DOM
+            const c = document.createElement("div");
+            c.style.position = "fixed";
+            c.style.left = "-10000px";
+            c.style.top = "0";
+            c.style.width = "960px";
+            c.style.background = "#fff";
+            c.style.color = "#0f172a";
+            c.style.padding = "20px";
+            c.style.fontFamily = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+            const monthBr = ym.split("-").reverse().join("/");
+            const genStr = new Date().toLocaleString("pt-BR");
+            const rows = (led.items||[]).map(it => {
+              const dbr = new Date(it.date + "T00:00:00").toLocaleDateString("pt-BR");
+              const img = it.image || (svcStore.items||[]).find(s => s.id === it.serviceId)?.foto || "/public/placeholder.svg";
+              return `
+                <tr>
+                  <td>${dbr}</td>
+                  <td><img class="simg" src="${img}"></td>
+                  <td>${it.serviceName || "-"}</td>
+                  <td>${it.professional || "-"}</td>
+                  <td class="num">${moneyBR(it.value)}</td>
+                </tr>
+              `;
+            }).join("");
+            const pays = (led.payments||[]).map(p => {
+              const dbr = new Date(p.date + "T00:00:00").toLocaleDateString("pt-BR");
+              return `<tr><td>${dbr}</td><td>${p.note || "-"}</td><td class="num">${moneyBR(p.amount)}</td></tr>`;
+            }).join("");
+            c.innerHTML = `
+              <style>
+                .brand { height:6px; background:linear-gradient(90deg,#0ea5a1,#4f46e5); border-radius:999px; margin-bottom:10px; }
+                .head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; padding-bottom:8px; border-bottom:2px solid #e5e7eb; }
+                .title { font-size:28px; font-weight:900; }
+                .meta { color:#475569; font-weight:800; }
+                .cards { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:10px; margin:10px 0 12px; }
+                .card { border:2px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; }
+                .card .t { color:#334155; font-weight:900; font-size:12px; }
+                .card .v { color:#0f172a; font-weight:900; font-size:22px; margin-top:4px; }
+                h3 { margin: 12px 0 8px; color:#0f172a; }
+                table { width:100%; border-collapse:separate; border-spacing:0 8px; font-size:15px; }
+                th { text-align:left; color:#0f172a; font-weight:900; }
+                td, th { padding:10px 12px; border:1px solid #e5e7eb; background:#fff; }
+                .simg { width:56px; height:56px; border-radius:10px; border:1px solid #e5e7eb; object-fit:cover; background:#fff; }
+                .num { text-align:right; font-weight:900; }
+                .foot { margin-top:10px; color:#64748b; font-size:12px; }
+              </style>
+              <div class="brand"></div>
+              <div class="head">
+                <div>
+                  <div class="title">Extrato Mensal — Espaço Bella's</div>
+                  <div><strong>Cliente:</strong> ${client?.name || "-"} • <strong>Mês:</strong> ${monthBr}</div>
+                </div>
+                <div class="meta">Gerado em: ${genStr}</div>
+              </div>
+
+              <div class="cards">
+                <div class="card"><div class="t">Serviços no mês</div><div class="v">${moneyBR(t3.totalServ)}</div></div>
+                <div class="card"><div class="t">Pagamentos</div><div class="v">${moneyBR(t3.totalPay)}</div></div>
+                <div class="card"><div class="t">Saldo a pagar</div><div class="v">${moneyBR(t3.outstanding)}</div></div>
+              </div>
+
+              <h3>Serviços</h3>
+              ${(led.items||[]).length ? `
+                <table>
+                  <thead><tr><th>Data</th><th>Foto</th><th>Serviço</th><th>Profissional</th><th class="num">Valor</th></tr></thead>
+                  <tbody>${rows}</tbody>
+                </table>` : `<div class="meta">Sem serviços neste mês.</div>`}
+
+              <h3>Pagamentos</h3>
+              ${(led.payments||[]).length ? `
+                <table>
+                  <thead><tr><th>Data</th><th>Obs.</th><th class="num">Valor</th></tr></thead>
+                  <tbody>${pays}</tbody>
+                </table>` : `<div class="meta">Sem pagamentos registrados.</div>`}
+
+              <div class="foot">
+                CNPJ: 30.504.701/0001-29 • Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 • Tel: (81) 98628-8749
+              </div>
+            `;
+            document.body.appendChild(c);
+            const canvas = await html2canvas(c, { backgroundColor: "#ffffff", scale: 2, windowWidth: 960, windowHeight: c.scrollHeight });
+            const dataUrl = canvas.toDataURL("image/png");
+            const a = document.createElement("a");
+            a.href = dataUrl;
+            a.download = `extrato-mensal_${client?.name ? client.name.normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").replace(/[^a-z0-9_\\-\\.]+/gi,"-"):"cliente"}_${ym}.png`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            c.remove();
+          });
+        }
+
+        renderUI();
       }
 
       // Usuários: CRUD simples (funcionários) com cor utilizada na Agenda
@@ -2875,7 +3179,7 @@
           }
 
           // Ações
-          byId("btnAtendimento").addEventListener("click", () => showAtendimentoModal());
+          byId("btnAtendimento").addEventListener("click", () => showAtendimentoModalV2());
           byId("btnDespesa").addEventListener("click", () => showDespesaModal());
           const recBtn = byId("btnRecibo");
           if (recBtn) recBtn.addEventListener("click", () => showReciboModal());
@@ -2901,7 +3205,7 @@
               const store = getStore();
               const day = getDay(store, selectedDate);
               const att = (day.atendimentos || []).find((a) => String(a.id) === String(id));
-              showAtendimentoModal(att);
+              showAtendimentoModalV2(att);
             })
           );
 
