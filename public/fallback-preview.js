@@ -668,7 +668,7 @@
       </section>
     `;
 
-    // Rotas (sem Relatórios, conforme pedido)
+    // Rotas da aplicação (preview estático)
     const routes = {
       "/dashboard": { title: "Dashboard", view: Dashboard },
       "/agenda": { title: "Agenda", view: Agenda },
@@ -2190,6 +2190,131 @@
             } catch {}
             ev.target.value = "";
           });
+
+          // ===== IA: Gerar imagem para o serviço (fluxo humano-assistido) =====
+          function buildServicePrompt(nome, catNome) {
+            const n = (nome || "serviço de beleza").trim();
+            const c = (catNome || "").trim();
+            // Prompt em PT focado em foto realista para card
+            return [
+              `foto realista em alta qualidade (4k) do serviço "${n}" ${c ? `da categoria ${c}` : ""},`,
+              "composição de produto/resultado do salão sobre fundo neutro elegante, iluminação suave,",
+              "tons claros, estética moderna, foco nítido, sem texto, sem marcas d'água,",
+              "estilo fotografia de catálogo, aspecto limpo, cores harmoniosas, proporção 1:1"
+            ].join(" ");
+          }
+          async function copyToClipboard(text) {
+            try {
+              await navigator.clipboard.writeText(text);
+              return true;
+            } catch {
+              try {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                ta.remove();
+                return true;
+              } catch { return false; }
+            }
+          }
+          async function fetchImageAsDataUrl(url) {
+            try {
+              // Suporta data URLs diretamente
+              if ((url || "").startsWith("data:")) return url;
+              const res = await fetch(url, { mode: "cors" });
+              if (!res.ok) throw new Error("Falha ao baixar a imagem (HTTP " + res.status + ")");
+              const blob = await res.blob();
+              const file = new File([blob], "img." + ((blob.type || "").split("/")[1] || "jpg"), { type: blob.type || "image/jpeg" });
+              return await compressImageToDataUrl(file);
+            } catch (e) {
+              throw e;
+            }
+          }
+
+          const btnIA = $m("#btnFotoIA");
+          if (btnIA) {
+            btnIA.addEventListener("click", () => {
+              // Cria painel IA se ainda não existir
+              let box = $m("#sAIPanel");
+              if (!box) {
+                // onde inserir: abaixo da linha de imagem
+                const imgField = $m("#sThumb")?.closest(".row")?.parentElement || $m("#sThumb")?.parentElement || $m("#sThumb");
+                box = document.createElement("div");
+                box.id = "sAIPanel";
+                box.innerHTML = `
+                  <style>
+                    .ai-box { margin-top: 10px; border:1px solid #f3c6d9; border-radius: 12px; padding: 10px; background:#fff7fb; }
+                    .ai-box .field { display:grid; gap:6px; margin-bottom: 8px; }
+                    .ai-box label { color:#a1125b; font-weight:900; font-size:13px; }
+                    .ai-box textarea, .ai-box input {
+                      border:1.5px solid #f3c6d9; border-radius: 10px; padding: 10px; font-family: inherit; color:#a1125b; width: 100%; min-width: 0;
+                    }
+                    .ai-row { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+                    .ai-btn { border:1px solid #f3c6d9; border-radius: 10px; padding: 8px 10px; font-weight: 900; color:#a1125b; background:#fff; }
+                    .ai-btn.primary { background: linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+                    .ai-muted { color:#64748b; font-size:12px; font-weight:700; }
+                  </style>
+                  <div class="ai-box">
+                    <div class="field">
+                      <label>Prompt sugerido</label>
+                      <textarea id="sAIPrompt" rows="3"></textarea>
+                      <div class="ai-row">
+                        <button class="ai-btn" id="sAICopy" type="button">Copiar prompt</button>
+                        <a class="ai-btn" id="sAIOpen" target="_blank" rel="noopener">Abrir gerador</a>
+                        <span class="ai-muted">Dica: cole o prompt no gerador, gere a imagem e copie a URL do resultado.</span>
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label>URL da imagem gerada</label>
+                      <input id="sAIUrl" placeholder="https://... (cole aqui a URL final da imagem)">
+                      <div class="ai-row">
+                        <button class="ai-btn primary" id="sAIBuscar" type="button">Buscar e aplicar</button>
+                        <span class="ai-muted" id="sAIStatus"></span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+                imgField && imgField.appendChild(box);
+              }
+              // Preenche prompt e link do gerador
+              const nome = ($m("#sNome")?.value || "").trim();
+              const catIdVal = $m("#sCat")?.value || "";
+              const catObj = (getSvcStore().cats || []).find(c => String(c.id)===String(catIdVal));
+              const prompt = buildServicePrompt(nome, catObj?.nome || "");
+              const ta = $m("#sAIPrompt");
+              if (ta) ta.value = prompt;
+              const genLink = "https://clipdrop.co/stable-diffusion"; // gerador público (cole o prompt)
+              const aOpen = $m("#sAIOpen");
+              if (aOpen) aOpen.href = genLink;
+
+              $m("#sAICopy")?.addEventListener("click", async () => {
+                const ok = await copyToClipboard(($m("#sAIPrompt")?.value || "").trim());
+                const s = $m("#sAIStatus"); if (s) { s.textContent = ok ? "Prompt copiado." : "Não foi possível copiar automaticamente."; setTimeout(()=>s.textContent="", 2500); }
+              }, { once: true });
+
+              $m("#sAIBuscar")?.addEventListener("click", async () => {
+                const url = ($m("#sAIUrl")?.value || "").trim();
+                const s = $m("#sAIStatus");
+                if (!url) { if (s) s.textContent = "Informe a URL da imagem gerada."; return; }
+                const btn = $m("#sAIBuscar");
+                if (btn) { btn.disabled = true; btn.textContent = "Buscando..."; }
+                if (s) s.textContent = "Baixando imagem...";
+                try {
+                  const dataUrl = await fetchImageAsDataUrl(url);
+                  $m("#sThumb").innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+                  it.foto = dataUrl;
+                  if (s) s.textContent = "Imagem aplicada com sucesso.";
+                  setTimeout(()=>{ if (s) s.textContent = ""; }, 2500);
+                } catch (e) {
+                  if (s) s.textContent = "Falha ao baixar. A imagem pode bloquear CORS. Baixe a imagem e use 'Tirar/Escolher foto'.";
+                } finally {
+                  if (btn) { btn.disabled = false; btn.textContent = "Buscar e aplicar"; }
+                }
+              }, { once: true });
+            });
+          }
 
           $m("#saveSvc").addEventListener("click", () => {
             it.nome = $m("#sNome").value.trim();
