@@ -3302,6 +3302,116 @@
           modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
         }
 
+        // Importação em massa (colar lista)
+        function showBulkImportModal() {
+          const modals = document.getElementById("modals");
+          const modal = modals.querySelector(".modal");
+          modal.innerHTML = `
+            <style>
+              .bmodal h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+              .bmodal .field { display:grid; gap:6px; }
+              .bmodal textarea { width:100%; min-height:160px; border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; }
+              .bmodal .hint { color:#475569; font-size:12px; font-weight:700; }
+              .bmodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+              .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+              .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+            </style>
+            <div class="bmodal">
+              <h3>Importar Lista de Clientes</h3>
+              <div class="field">
+                <label>Colar dados</label>
+                <textarea id="bulkText" placeholder="Exemplos:
+Maria Silva; (81) 99999-8888; 1992-05-10
+João Souza - 81988887777 - 10/05
+Carla"></textarea>
+                <div class="hint">Formato livre: nome; telefone; aniversário. Aceita separadores ; , - e espaços. Data em DD/MM ou YYYY-MM-DD.</div>
+              </div>
+              <div class="footer">
+                <button class="btn" data-close>Cancelar</button>
+                <button class="btn primary" id="bulkImportGo">Importar</button>
+              </div>
+            </div>
+          `;
+          modals.style.display = "flex";
+          const $m = (sel)=>modal.querySelector(sel);
+
+          function onlyDigits(s){ return String(s||"").replace(/\D+/g,""); }
+          function parseDateToken(tok) {
+            tok = (tok||"").trim();
+            if (!tok) return "";
+            // Try YYYY-MM-DD
+            if (/^\d{4}-\d{2}-\d{2}$/.test(tok)) return tok;
+            // Try DD/MM or D/M
+            const m = tok.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);
+            if (m) {
+              const d = String(m[1]).padStart(2,"0");
+              const mo = String(m[2]).padStart(2,"0");
+              const y = m[3] ? (String(m[3]).length===2 ? ("20"+m[3]) : m[3]) : new Date().getFullYear();
+              return `${y}-${mo}-${d}`;
+            }
+            return "";
+          }
+
+          $m("#bulkImportGo").addEventListener("click", () => {
+            const raw = ($m("#bulkText").value || "").trim();
+            if (!raw) { alert("Cole algum texto primeiro."); return; }
+            const lines = raw.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+            if (!lines.length) { alert("Nenhuma linha válida encontrada."); return; }
+
+            const store = getClientsStore();
+            store.clients = Array.isArray(store.clients) ? store.clients : [];
+
+            let created = 0, updated = 0;
+            lines.forEach(line => {
+              // split by common separators
+              const parts = line.split(/[;,|\-]+/).map(p=>p.trim()).filter(Boolean);
+              // First token is name
+              const name = parts[0] || line;
+              // Try to find phone and date in remaining
+              let phone = "";
+              let birthdate = "";
+              parts.slice(1).forEach(tok => {
+                const digits = onlyDigits(tok);
+                if (!phone && digits.length >= 8) phone = tok; // accepts with formatting
+                if (!birthdate) {
+                  const pd = parseDateToken(tok);
+                  if (pd) birthdate = pd;
+                }
+              });
+              // normalize name key
+              const key = String(name).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim();
+              if (!key) return;
+
+              // find by normalized name
+              const idx = store.clients.findIndex(c => String((c.name||"").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim()) === key);
+              if (idx >= 0) {
+                const it = store.clients[idx];
+                const newPhone = phone || it.phone || "";
+                const newBirth = birthdate || it.birthdate || "";
+                store.clients[idx] = { ...it, name, phone: newPhone, birthdate: newBirth };
+                updated++;
+              } else {
+                store.clients.push({
+                  id: "cl-" + Date.now() + "-" + Math.random().toString(36).slice(2,6),
+                  name,
+                  phone,
+                  birthdate,
+                  prefUserId: "",
+                  prefUserName: ""
+                });
+                created++;
+              }
+            });
+
+            setClientsStore(store);
+            modals.style.display = "none";
+            renderClientsList();
+            alert(`Importados: ${created} novos • ${updated} atualizados.`);
+          });
+
+          modal.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+        }
+
         page.querySelector("#btnNotionImport")?.addEventListener("click", showNotionImportModal);
         page.querySelector("#btnBulkImport")?.addEventListener("click", showBulkImportModal);
         ensureUsersDefaults();
@@ -3326,6 +3436,12 @@
                   setClientsStore(s);
                   renderClientsList();
                 }
+              }
+            }
+          });
+        }
+        renderClientsList();
+      }
               }
             }
           });
@@ -6094,7 +6210,33 @@
             $m("#cxSalvar").addEventListener("click", () => {
               const nome = ($m("#cxCliNome").value || "").trim();
               if (!nome) { alert("Informe o nome do cliente."); return; }
-              const cliId = ($m("#cxCliSel").value || "").trim();
+              let cliId = ($m("#cxCliSel").value || "").trim();
+
+              // Se cliente não selecionado, cria automaticamente um novo cadastro básico
+              if (!cliId) {
+                const cs = getClientsStore();
+                const newId = "cl-" + Date.now();
+                const payload = { id: newId, name: nome, phone: "", birthdate: "", prefUserId: "", prefUserName: "" };
+                cs.clients = Array.isArray(cs.clients) ? cs.clients : [];
+                // evita duplicidade por nome exato
+                const exists = cs.clients.find(c => String((c.name||"").toLowerCase()) === nome.toLowerCase());
+                if (exists) {
+                  cliId = exists.id;
+                } else {
+                  cs.clients.push(payload);
+                  setClientsStore(cs);
+                  cliId = newId;
+                }
+                // Reflete no select do modal
+                const sel = $m("#cxCliSel");
+                if (sel) {
+                  const opt = document.createElement("option");
+                  opt.value = cliId;
+                  opt.textContent = nome;
+                  sel.appendChild(opt);
+                  sel.value = cliId;
+                }
+              }
 
               const rows = Array.from($m("#cxRows").children).map(r => {
                 const svcId = r.querySelector(".svc").value;
@@ -6109,7 +6251,8 @@
                   profissional,
                   pagamento
                 };
-              });
+             _code }new)</;
+  });
               if (!rows.length) { alert("Adicione pelo menos um serviço."); return; }
 
               // Se existe alguma linha mensal, força cliente existente selecionado
