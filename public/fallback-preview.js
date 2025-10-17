@@ -668,6 +668,57 @@
       </section>
     `;
 
+    // Novas páginas
+    const HistoricoCaixa = () => `
+      <div class="hero"><h1>Histórico do Caixa</h1><p>Dias de caixa fechados e salvos</p></div>
+      <section class="section">
+        <div id="histRoot"></div>
+      </section>
+    `;
+
+    const Relatorios = () => `
+      <div class="hero"><h1>Relatórios</h1><p>Semanal e mensal com base nos fechamentos do Caixa</p></div>
+      <section class="section">
+        <style>
+          .rep-grid { display:grid; gap:14px; }
+          .rep-card { border:1px solid #f1e6ee; border-radius:16px; padding:12px; background:#fff; box-shadow: var(--shadow); }
+          .rep-row { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:10px; }
+          .rep-kpi { border:1px solid #e5e7eb; border-radius:12px; padding:10px; }
+          .rep-kpi .t { color:#334155; font-weight:900; font-size:12px; }
+          .rep-kpi .v { color:#0f172a; font-weight:900; font-size:22px; }
+          .rep-table { width:100%; border-collapse:separate; border-spacing:0 8px; }
+          .rep-table th { text-align:left; color:#a1125b; font-size:12px; }
+          .rep-table td { background:#fff; border:1px solid #f1e6ee; padding:10px; border-radius:10px; }
+          .num { text-align:right; font-weight:900; }
+          @media(max-width: 980px){ .rep-row { grid-template-columns: 1fr; } }
+        </style>
+        <div class="rep-grid">
+          <div class="rep-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <div style="font-weight:900; color:#a1125b;">Relatório Semanal</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input id="repWeekRef" type="date">
+                <button id="repWeekImg" class="btn-outline">Exportar Imagem</button>
+                <button id="repWeekPdf" class="btn-outline">Exportar PDF</button>
+              </div>
+            </div>
+            <div id="repWeek"></div>
+          </div>
+          <div class="rep-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <div style="font-weight:900; color:#a1125b;">Relatório Mensal</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input id="repMonthRef" type="month">
+                <button id="repMonthImg" class="btn-outline">Exportar Imagem</button>
+                <button id="repMonthPdf" class="btn-outline">Exportar PDF</button>
+              </div>
+            </div>
+            <div id="repMonth"></div>
+          </div>
+        </div>
+      </section>
+    `;
+
     // Rotas da aplicação (preview estático)
     const routes = {
       "/dashboard": { title: "Dashboard", view: Dashboard },
@@ -677,6 +728,8 @@
       "/clientes-mensais": { title: "Clientes Mensais", view: ClientesMensais },
       "/servicos": { title: "Serviços", view: Servicos },
       "/caixa": { title: "Caixa", view: Caixa },
+      "/historico-caixa": { title: "Histórico do Caixa", view: HistoricoCaixa },
+      "/relatorios": { title: "Relatórios", view: Relatorios },
       "/estoque": { title: "Estoque", view: Estoque },
       "/usuarios": { title: "Usuários", view: Usuarios },
       "/configuracoes": { title: "Configurações", view: Configuracoes },
@@ -724,6 +777,8 @@
             <a class="item" href="#/clientes-mensais" data-link="/clientes-mensais"><span class="icon">🗓️</span><span class="label">Clientes Mensais</span></a>
             <a class="item" href="#/servicos" data-link="/servicos"><span class="icon">⚙️</span><span class="label">Serviços</span></a>
             <a class="item" href="#/caixa" data-link="/caixa"><span class="icon">💵</span><span class="label">Caixa</span></a>
+            <a class="item" href="#/historico-caixa" data-link="/historico-caixa"><span class="icon">🗂️</span><span class="label">Histórico do Caixa</span></a>
+            <a class="item" href="#/relatorios" data-link="/relatorios"><span class="icon">📊</span><span class="label">Relatórios</span></a>
             <a class="item" href="#/estoque" data-link="/estoque"><span class="icon">📦</span><span class="label">Estoque</span></a>
           </nav>
 
@@ -812,6 +867,15 @@
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeModal();
       });
+
+      // ==== Histórico do Caixa (helpers globais para múltiplas rotas) ====
+      const HISTORY_KEY = "bella_caixa_history_v1";
+      function getHistory() {
+        try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{"days":{}}'); } catch { return { days: {} }; }
+      }
+      function setHistory(h) {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+      }
 
       // Configurações: gerar ZIP do dist (snapshot)
       async function ensureJSZip() {
@@ -1811,6 +1875,302 @@
         renderUI();
       }
 
+      // Histórico do Caixa
+      if (hash === "/historico-caixa") {
+        const root = page.querySelector("#histRoot");
+        const money = (n) => (Number(n)||0).toLocaleString("pt-BR",{style:"currency", currency:"BRL"});
+        const h = getHistory();
+        const keys = Object.keys(h.days || {}).sort((a,b) => b.localeCompare(a));
+        if (!keys.length) {
+          root.innerHTML = `<div class="empty">Nenhum fechamento salvo. Volte ao Caixa e clique em "Fechar caixa do dia".</div>`;
+        } else {
+          root.innerHTML = `
+            <div class="list" id="histList">
+              ${keys.map(ymd => {
+                const d = h.days[ymd];
+                const br = (() => { const [y,m,dd]=ymd.split("-"); return `${dd}/${m}/${y}`;})();
+                const closed = new Date(d.closedAt || Date.now()).toLocaleString("pt-BR");
+                const entradas = d?.resumo?.entradas || 0;
+                const despesas = d?.resumo?.totalDespesas || 0;
+                const saldo = (d?.resumo?.dinheiroCalculado || 0);
+                return `
+                  <div class="row" data-ymd="${ymd}">
+                    <div>
+                      <div style="font-weight:900;">${br}</div>
+                      <div class="muted">Fechado em: ${closed}</div>
+                    </div>
+                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                      <span class="pill">Entradas ${money(entradas)}</span>
+                      <span class="pill">Despesas ${money(despesas)}</span>
+                      <span class="pill">Dinheiro Calc. ${money(saldo)}</span>
+                      <button class="btn-outline" data-act="open">Ver</button>
+                      <button class="btn-outline" data-act="del">Excluir</button>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          `;
+          const list = root.querySelector("#histList");
+          list.addEventListener("click", (e) => {
+            const btn = e.target.closest("[data-act]");
+            if (!btn) return;
+            const row = e.target.closest(".row[data-ymd]");
+            const ymd = row?.getAttribute("data-ymd");
+            if (!ymd) return;
+            const act = btn.getAttribute("data-act");
+            if (act === "open") {
+              localStorage.setItem("bella_caixa_selected_date", ymd);
+              location.hash = "/caixa";
+            } else if (act === "del") {
+              if (!confirm("Remover este fechamento do histórico? Os dados do dia no Caixa não serão apagados.")) return;
+              const hh = getHistory();
+              if (hh.days) delete hh.days[ymd];
+              setHistory(hh);
+              // Re-render
+              location.reload();
+            }
+          });
+        }
+      }
+
+      // Relatórios (Semanal e Mensal) com base no histórico salvo
+      if (hash === "/relatorios") {
+        const weekRef = page.querySelector("#repWeekRef");
+        const monthRef = page.querySelector("#repMonthRef");
+        const weekBox = page.querySelector("#repWeek");
+        const monthBox = page.querySelector("#repMonth");
+
+        function ymdFromDate(d) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth()+1).padStart(2,"0");
+          const dd = String(d.getDate()).padStart(2,"0");
+          return `${y}-${m}-${dd}`;
+        }
+        const today = new Date();
+        weekRef.value = ymdFromDate(today);
+        monthRef.value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}`;
+
+        function br(ymd) { const [y,m,d]=ymd.split("-"); return `${d}/${m}/${y}`; }
+
+        function weekRangeFrom(refYmd) {
+          const [y,m,d] = refYmd.split("-").map(Number);
+          const dt = new Date(y, m-1, d);
+          const dow = (dt.getDay() + 6) % 7; // 0 = Monday
+          const start = new Date(dt); start.setDate(dt.getDate() - dow);
+          const end = new Date(start); end.setDate(start.getDate() + 6);
+          return { start: ymdFromDate(start), end: ymdFromDate(end) };
+        }
+
+        function daysBetween(a, b) {
+          const [ya,ma,da] = a.split("-").map(Number);
+          const [yb,mb,db] = b.split("-").map(Number);
+          const s = new Date(ya,ma-1,da);
+          const e = new Date(yb,mb-1,db);
+          const out = [];
+          for (let dt=new Date(s); dt<=e; dt.setDate(dt.getDate()+1)) {
+            out.push(ymdFromDate(dt));
+          }
+          return out;
+        }
+
+        function aggregateDays(ymdList) {
+          const h = getHistory();
+          const src = (h.days || {});
+          let totalPix=0,totalCartao=0,totalDinheiro=0,totalDebitos=0,totalDespesas=0, entradas=0;
+          const svcCount = {}; // name -> count
+          const svcRevenue = {}; // name -> sum
+          const staffRevenue = {}; // name -> {valor,count}
+          const usedDays = [];
+          ymdList.forEach(ymd => {
+            const d = src[ymd];
+            if (!d) return;
+            usedDays.push(ymd);
+            const r = d.resumo || {};
+            totalPix += r.totalPix || 0;
+            totalCartao += r.totalCartao || 0;
+            totalDinheiro += r.totalDinheiro || 0;
+            totalDebitos += r.totalDebitos || 0;
+            totalDespesas += r.totalDespesas || 0;
+            entradas += r.entradas || 0;
+
+            (d.atendimentos || []).forEach(a => {
+              const list = Array.isArray(a.servicos) && a.servicos.length
+                ? a.servicos
+                : [{ nome: a.servico || "-", profissional: a.profissional || "-", valor: a.valor || 0 }];
+              list.forEach(sv => {
+                const name = sv.nome || "-";
+                const val = Number(sv.valor)||0;
+                svcCount[name] = (svcCount[name] || 0) + 1;
+                svcRevenue[name] = (svcRevenue[name] || 0) + val;
+                const pro = sv.profissional || "-";
+                if (!staffRevenue[pro]) staffRevenue[pro] = { valor: 0, count: 0 };
+                staffRevenue[pro].valor += val;
+                staffRevenue[pro].count += 1;
+              });
+            });
+          });
+
+          function topN(map, n, byValue=false) {
+            const arr = Object.keys(map).map(k => [k, map[k]]);
+            arr.sort((a,b) => (b[1] - a[1]));
+            return arr.slice(0, n);
+          }
+          const topByCount = topN(svcCount, 5);
+          const topByRevenue = topN(svcRevenue, 5);
+          const staffArr = Object.keys(staffRevenue).map(k => [k, staffRevenue[k].valor, staffRevenue[k].count]).sort((a,b) => b[1]-a[1]);
+
+          return {
+            usedDays, totalPix, totalCartao, totalDinheiro, totalDebitos, totalDespesas, entradas,
+            saldo: entradas - totalDespesas,
+            topByCount, topByRevenue, staffArr
+          };
+        }
+
+        function kpiRowHTML(agg) {
+          const money = (n) => (Number(n)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+          return `
+            <div class="rep-row">
+              <div class="rep-kpi"><div class="t">Entradas (Pix+Cartão+Dinheiro)</div><div class="v">${money(agg.entradas)}</div></div>
+              <div class="rep-kpi"><div class="t">Despesas</div><div class="v">${money(agg.totalDespesas)}</div></div>
+              <div class="rep-kpi"><div class="t">Saldo</div><div class="v">${money(agg.saldo)}</div></div>
+            </div>
+            <div class="rep-row">
+              <div class="rep-kpi"><div class="t">PIX</div><div class="v">${money(agg.totalPix)}</div></div>
+              <div class="rep-kpi"><div class="t">Cartão</div><div class="v">${money(agg.totalCartao)}</div></div>
+              <div class="rep-kpi"><div class="t">Dinheiro</div><div class="v">${money(agg.totalDinheiro)}</div></div>
+            </div>
+          `;
+        }
+
+        function listHTML(title, rows, cols, fmtLastRight=false) {
+          if (!rows.length) return `<div class="muted">Sem dados</div>`;
+          const head = `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead>`;
+          const body = `<tbody>${
+            rows.map(r => `<tr>${
+              r.map((v,i) => `<td${fmtLastRight && i===r.length-1 ? ' class="num"':''}>${v}</td>`).join("")
+            }</tr>`).join("")
+          }</tbody>`;
+          return `
+            <h3 style="margin:10px 0 6px;">${title}</h3>
+            <table class="rep-table">${head}${body}</table>
+          `;
+        }
+
+        function renderWeek() {
+          const ref = weekRef.value || ymdFromDate(new Date());
+          const range = weekRangeFrom(ref);
+          const days = daysBetween(range.start, range.end);
+          const agg = aggregateDays(days);
+          weekBox.innerHTML = `
+            <div id="repWeekWrap">
+              <div class="rep-kpi">${kpiRowHTML(agg)}</div>
+              ${listHTML("Top serviços (mais saídos)", agg.topByCount.map(([n,c])=>[n, c]), ["Serviço","Qtd."])}
+              ${listHTML("Top serviços por faturamento", agg.topByRevenue.map(([n,v])=>[n, (Number(v)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})]), ["Serviço","Valor"], true)}
+              ${listHTML("Totais por profissional", agg.staffArr.map(([n,v,c])=>[n, c, (Number(v)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})]), ["Profissional","Qtd.","Valor"], true)}
+              ${listHTML("Dias considerados", agg.usedDays.map(d=>[br(d)]), ["Dia"])}
+            </div>
+          `;
+        }
+
+        function renderMonth() {
+          const ym = monthRef.value || `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}`;
+          const h = getHistory();
+          const keys = Object.keys(h.days || {}).filter(k => k.startsWith(ym + "-"));
+          const agg = aggregateDays(keys);
+          monthBox.innerHTML = `
+            <div id="repMonthWrap">
+              <div class="rep-kpi">${kpiRowHTML(agg)}</div>
+              ${listHTML("Top serviços (mais saídos)", agg.topByCount.map(([n,c])=>[n, c]), ["Serviço","Qtd."])}
+              ${listHTML("Top serviços por faturamento", agg.topByRevenue.map(([n,v])=>[n, (Number(v)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})]), ["Serviço","Valor"], true)}
+              ${listHTML("Totais por profissional", agg.staffArr.map(([n,v,c])=>[n, c, (Number(v)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})]), ["Profissional","Qtd.","Valor"], true)}
+              ${listHTML("Dias considerados", agg.usedDays.map(d=>[br(d)]), ["Dia"])}
+            </div>
+          `;
+        }
+
+        // Export helpers
+        async function ensureHtml2CanvasLocal() {
+          if (!window.html2canvas) {
+            await new Promise((resolve,reject)=>{
+              const s=document.createElement("script");
+              s.src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+              s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
+            });
+          }
+        }
+        async function ensureJsPDFLocal() {
+          if (!(window.jspdf && window.jspdf.jsPDF)) {
+            await new Promise((resolve,reject)=>{
+              const s=document.createElement("script");
+              s.src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+              s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
+            });
+          }
+        }
+        async function exportContainerAsImage(containerId, filename) {
+          await ensureHtml2CanvasLocal();
+          const el = page.querySelector("#"+containerId);
+          const wrap = document.createElement("div");
+          wrap.style.position="fixed"; wrap.style.left="-10000px"; wrap.style.top="0";
+          wrap.style.width="960px"; wrap.style.background="#fff"; wrap.style.padding="16px";
+          wrap.style.fontFamily="Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+          wrap.innerHTML = el.outerHTML;
+          document.body.appendChild(wrap);
+          const canvas = await html2canvas(wrap, { backgroundColor:"#fff", scale:2, windowWidth:960, windowHeight: wrap.scrollHeight });
+          const dataUrl = canvas.toDataURL("image/png");
+          const a = document.createElement("a");
+          a.href = dataUrl; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+          wrap.remove();
+        }
+        async function exportContainerAsPDF(containerId, filename) {
+          // simples: escala para caber em uma página A4 (pode reduzir caso muito alto)
+          await ensureHtml2CanvasLocal(); await ensureJsPDFLocal();
+          const { jsPDF } = window.jspdf || {};
+          const el = page.querySelector("#"+containerId);
+          const wrap = document.createElement("div");
+          wrap.style.position="fixed"; wrap.style.left="-10000px"; wrap.style.top="0";
+          wrap.style.width="960px"; wrap.style.background="#fff"; wrap.style.padding="16px";
+          wrap.style.fontFamily="Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+          wrap.innerHTML = el.outerHTML;
+          document.body.appendChild(wrap);
+          const canvas = await html2canvas(wrap, { backgroundColor:"#fff", scale:2, windowWidth:960, windowHeight: wrap.scrollHeight });
+          const imgData = canvas.toDataURL("image/jpeg", 0.92);
+          wrap.remove();
+
+          const doc = new jsPDF({ unit:"mm", format:"a4" });
+          const pageW = 210, pageH = 297;
+          const margin = 8;
+          const imgW = pageW - margin*2;
+          const imgH = canvas.height * imgW / canvas.width;
+          const y = margin;
+          if (imgH <= pageH - margin*2) {
+            doc.addImage(imgData, "JPEG", margin, y, imgW, imgH);
+          } else {
+            // Se muito alto, escala para caber em uma página
+            const scale = (pageH - margin*2) / imgH;
+            const w2 = imgW * scale;
+            const x = (pageW - w2)/2;
+            const h2 = imgH * scale;
+            doc.addImage(imgData, "JPEG", x, y, w2, h2);
+          }
+          doc.save(filename);
+        }
+
+        function bindExports() {
+          page.querySelector("#repWeekImg")?.addEventListener("click", ()=> exportContainerAsImage("repWeekWrap", `relatorio-semanal_${weekRef.value}.png`));
+          page.querySelector("#repWeekPdf")?.addEventListener("click", ()=> exportContainerAsPDF("repWeekWrap", `relatorio-semanal_${weekRef.value}.pdf`));
+          page.querySelector("#repMonthImg")?.addEventListener("click", ()=> exportContainerAsImage("repMonthWrap", `relatorio-mensal_${monthRef.value}.png`));
+          page.querySelector("#repMonthPdf")?.addEventListener("click", ()=> exportContainerAsPDF("repMonthWrap", `relatorio-mensal_${monthRef.value}.pdf`));
+        }
+
+        weekRef.addEventListener("change", renderWeek);
+        monthRef.addEventListener("change", renderMonth);
+        renderWeek();
+        renderMonth();
+        bindExports();
+      }
+
       // Usuários: CRUD simples (funcionários) com cor utilizada na Agenda
       if (hash === "/usuarios") {
         ensureUsersDefaults();
@@ -2213,6 +2573,38 @@
             } catch {}
             ev.target.value = "";
           });
+
+          // IA: painel incorporado (mostrar/gerar/aplicar)
+          const aiPanel = $m("#aiPanel");
+          const btnAI = $m("#btnAI");
+          if (btnAI && aiPanel) {
+            btnAI.addEventListener("click", () => {
+              aiPanel.style.display = aiPanel.style.display === "none" ? "block" : "none";
+              const nomeVal = ($m("#sNome")?.value || "").trim();
+              const catIdVal = $m("#sCat")?.value || "";
+              const catObj = (getSvcStore().cats || []).find(c => String(c.id)===String(catIdVal));
+              const prompt = buildServicePrompt(nomeVal, catObj?.nome || "");
+              const ta = $m("#aiPrompt");
+              if (ta) ta.value = prompt;
+            });
+            $m("#copyPrompt")?.addEventListener("click", async () => {
+              await copyToClipboard(($m("#aiPrompt")?.value || "").trim());
+            });
+            $m("#openGen")?.addEventListener("click", () => {
+              window.open("https://clipdrop.co/stable-diffusion", "_blank", "noopener");
+            });
+            $m("#aiFetch")?.addEventListener("click", async () => {
+              const url = ($m("#aiUrl")?.value || "").trim();
+              if (!url) { alert("Informe a URL final da imagem gerada."); return; }
+              try {
+                const dataUrl = await fetchImageAsDataUrl(url);
+                $m("#sThumb").innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+                it.foto = dataUrl;
+              } catch (e) {
+                alert("Falha ao baixar a imagem. Caso haja bloqueio CORS, baixe a imagem e use 'Tirar/Escolher foto'.");
+              }
+            });
+          }
 
           // ===== IA: Gerar imagem para o serviço (fluxo humano-assistido) =====
           function buildServicePrompt(nome, catNome) {
@@ -2997,41 +3389,34 @@
         };
 
         // Histórico de fechamentos de caixa (salvos)
-        const HISTORY_KEY = "bella_caixa_history_v1";
-        function getHistory() {
-          try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{"days":{}}'); } catch { return { days: {} }; }
-        }
-        function setHistory(h) {
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
-        }
-        function saveDayToHistory(ymd) {
-          try {
-            const h = getHistory();
-            const snap = snapshot(ymd);
-            const store = getStore();
-            const day = getDay(store, ymd);
-            h.days[ymd] = {
-              closedAt: new Date().toISOString(),
-              resumo: {
-                totalPix: snap.totalPix,
-                totalCartao: snap.totalCartao,
-                totalDinheiro: snap.totalDinheiro,
-                totalDebitos: snap.totalDebitos,
-                totalDespesas: snap.totalDespesas,
-                totalDespesasCaixa: snap.totalDespesasCaixa,
-                entradas: snap.entradas,
-                dinheiroInformado: snap.dinheiroInformado,
-                dinheiroCalculado: snap.dinheiroCalculado,
-              },
-              atendimentos: (day.atendimentos || []).slice(),
-              despesas: (day.despesas || []).slice(),
-            };
-            setHistory(h);
-            return true;
-          } catch {
-            return false;
+          function saveDayToHistory(ymd) {
+            try {
+              const h = getHistory();
+              const snap = snapshot(ymd);
+              const store = getStore();
+              const day = getDay(store, ymd);
+              h.days[ymd] = {
+                closedAt: new Date().toISOString(),
+                resumo: {
+                  totalPix: snap.totalPix,
+                  totalCartao: snap.totalCartao,
+                  totalDinheiro: snap.totalDinheiro,
+                  totalDebitos: snap.totalDebitos,
+                  totalDespesas: snap.totalDespesas,
+                  totalDespesasCaixa: snap.totalDespesasCaixa,
+                  entradas: snap.entradas,
+                  dinheiroInformado: snap.dinheiroInformado,
+                  dinheiroCalculado: snap.dinheiroCalculado,
+                },
+                atendimentos: (day.atendimentos || []).slice(),
+                despesas: (day.despesas || []).slice(),
+              };
+              setHistory(h);
+              return true;
+            } catch {
+              return false;
+            }
           }
-        }
 
         const snapshot = (ymd) => {
           const store = getStore();
@@ -3091,7 +3476,9 @@
         function renderCaixa() {
           const s = snapshot(selectedDate);
           const brDate = fmtBR(selectedDate);
-
+          const hist = getHistory();
+          const closed = !!(hist.days && hist.days[selectedDate]);
+         
           function payBadge(att) {
             const pays = (att.servicos || []).map(s => s.pagamento).filter(Boolean);
             let lab = att.pagamento || "";
@@ -3149,6 +3536,9 @@
               <button class="btn" id="btnRecibo">Recibo Semanal</button>
               <button class="btn" id="btnPdf">Exportar PDF</button>
               <button class="btn" id="btnImg">Exportar Imagem</button>
+              <button class="btn" id="btnFechar">${closed ? "Atualizar fechamento" : "Fechar caixa do dia"}</button>
+              <button class="btn" id="btnHistorico">Histórico</button>
+              <button class="btn" id="btnRelatorios">Relatórios</button>
             </div>
 
             <div class="grid-cards">
@@ -3372,6 +3762,18 @@
           if (pdfBtn) pdfBtn.addEventListener("click", () => exportPDF());
           const imgBtn = byId("btnImg");
           if (imgBtn) imgBtn.addEventListener("click", () => exportImage());
+
+          const fecharBtn = byId("btnFechar");
+          if (fecharBtn) fecharBtn.addEventListener("click", () => {
+            const had = !!(getHistory().days && getHistory().days[selectedDate]);
+            const ok = saveDayToHistory(selectedDate);
+            if (ok) {
+              alert(had ? "Fechamento atualizado no histórico." : "Fechamento salvo no histórico.");
+            } else {
+              alert("Falha ao salvar no histórico.");
+            }
+            renderCaixa();
+          });
 
           // Atendimentos - editar/excluir
           page.querySelectorAll("[data-del-att]").forEach((b) =>
