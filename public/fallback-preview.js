@@ -4285,96 +4285,87 @@
 
             // Build a brand-new LEGIBLE layout (full redesign) when enabled
             function buildLegibleHTML() {
+              // Determine compact mode for legible (from localStorage, fallback)
+              let useCompact = false;
+              try {
+                const a = localStorage.getItem("bella_export_legible_compact");
+                if (a === "1" || a === "true") useCompact = true;
+              } catch {}
               const grouped = groupAttsByClient(s2.atts || []);
               const entries = Object.entries(grouped);
-              const gridClass = useCompact ? "lg-grid two" : "lg-grid";
-              const diffVal = s2.dinheiroCalculado - s2.dinheiroInformado;
+              const diffVal = (Number(s2.dinheiroCalculado) || 0) - (Number(s2.dinheiroInformado) || 0);
 
-              // Compose client cards
+              // Aggregates
+              const pix = Number((payAgg && payAgg.sums && payAgg.sums.pix) || 0);
+              const cartao = Number((payAgg && payAgg.sums && payAgg.sums.cartao) || 0);
+              const dinheiro = Number((payAgg && payAgg.sums && payAgg.sums.dinheiro) || 0);
+              const mensal = Number((payAgg && payAgg.sums && payAgg.sums.mensal) || 0);
+              const receitaDia = pix + cartao + dinheiro;
+              const despesas = (s2.deps || []).reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
+              const saldoDia = receitaDia - despesas;
+              const attsCount = (s2.atts || []).length;
+              const servicosCount = entries.reduce((acc, [,data]) => acc + (((data && data.items) || []).length), 0);
+
+              const chipForPay = (p) => {
+                const k = (p || "").toLowerCase();
+                if (k === "pix") return `<span class="nx-chip pix">PIX</span>`;
+                if (k === "cartao" || k === "cartão") return `<span class="nx-chip cartao">CARTÃO</span>`;
+                if (k === "dinheiro") return `<span class="nx-chip dinheiro">DINHEIRO</span>`;
+                if (k === "mensal") return `<span class="nx-chip mensal">MENSAL</span>`;
+                return "";
+              };
+
+              // Clients
               const clientCards = entries.map(([cliente, data]) => {
                 const items = (data && data.items) || [];
                 if (!items.length) return "";
                 const total = items.reduce((acc, it) => acc + (Number(it.valor) || 0), 0);
-                // Payment summary (uniform/misto)
+
+                // payment summary
                 const pays = {};
-                items.forEach(it => { const p = (it.pagamento || "").toLowerCase(); pays[p] = (pays[p] || 0) + 1; });
-                const usedPays = Object.entries(pays).filter(([,v]) => v>0).map(([k,v]) => k.toUpperCase() + (v>1?` ${v}`:"")).join(" • ");
+                items.forEach(it => { const p = (it.pagamento || "").toLowerCase(); if (!pays[p]) pays[p] = 0; pays[p]++; });
+                const usedPays = Object.entries(pays)
+                  .filter(([,v]) => v > 0)
+                  .map(([k,v]) => k.toUpperCase() + (v>1?` ${v}`:""))
+                  .join(" • ");
+
                 const obsLine = (data && data.obs && data.obs.length)
-                  ? `<div class="lg-obs">🧾 ${data.obs.map(String).join(" • ")}</div>`
+                  ? `<div class="nx-obs">🧾 ${data.obs.map(String).join(" • ")}</div>`
                   : "";
 
                 const rows = items.map(it => `
-                  <div class="lg-row">
-                    <div class="svc">
-                      <div class="svc-name">${it.servico || "-"}</div>
-                      <div class="svc-meta">
-                        ${it.profissional ? `<span class="pill">${it.profissional}</span>` : ``}
-                        ${it.pagamento ? `<span class="chip">${(it.pagamento || "").toUpperCase()}</span>` : ``}
+                  <div class="nx-row">
+                    <div class="left">
+                      <div class="svc">${it.servico || "-"}</div>
+                      <div class="meta">
+                        ${it.profissional ? `<span class="nx-pill">${it.profissional}</span>` : ``}
+                        ${chipForPay(it.pagamento)}
                       </div>
                     </div>
-                    <div class="val">${money(it.valor)}</div>
+                    <div class="right val">${money(it.valor)}</div>
                   </div>
                 `).join("");
 
                 return `
-                  <article class="lg-client">
-                    <header class="lg-head">
-                      <div class="bar"></div>
+                  <article class="nx-client">
+                    <header class="nx-head">
+                      <div class="stripe"></div>
                       <div class="title">${cliente}</div>
                       <div class="badges">
-                        <span class="badge">Total ${money(total)}</span>
-                        <span class="badge">${items.length} serviços</span>
-                        ${usedPays ? `<span class="badge">${usedPays}</span>` : ``}
+                        <span class="nx-badge">${items.length} serviços</span>
+                        <span class="nx-badge">Total ${money(total)}</span>
+                        ${usedPays ? `<span class="nx-badge">${usedPays}</span>` : ``}
                       </div>
                     </header>
                     ${obsLine}
-                    <section class="lg-body">
+                    <section class="nx-body">
                       ${rows}
                     </section>
                   </article>
                 `;
               }).join("");
 
-              // Monthly debit groups (only mensal)
-              const mensalFiltered = (s2.atts || [])
-                .map(a => ({ ...a, servicos: (a.servicos || []).filter(sv => (sv.pagamento || a.pagamento) === "mensal") }))
-                .filter(a => (a.servicos || []).length);
-              const mensalGroups = groupAttsByClient(mensalFiltered);
-              const mensalCards = Object.entries(mensalGroups).map(([cliente, data]) => {
-                const items = (data && data.items) || [];
-                if (!items.length) return "";
-                const total = items.reduce((acc, it) => acc + (Number(it.valor) || 0), 0);
-                const rows = items.map(it => `
-                  <div class="lg-row">
-                    <div class="svc">
-                      <div class="svc-name">${it.servico || "-"}</div>
-                      <div class="svc-meta">
-                        ${it.profissional ? `<span class="pill">${it.profissional}</span>` : ``}
-                        <span class="chip">MENSAL</span>
-                      </div>
-                    </div>
-                    <div class="val">${money(it.valor)}</div>
-                  </div>
-                `).join("");
-                return `
-                  <article class="lg-client">
-                    <header class="lg-head">
-                      <div class="bar bar-amber"></div>
-                      <div class="title">${cliente}</div>
-                      <div class="badges">
-                        <span class="badge">Total ${money(total)}</span>
-                        <span class="badge">${items.length} serviços</span>
-                        <span class="badge">MENSAL</span>
-                      </div>
-                    </header>
-                    <section class="lg-body">
-                      ${rows}
-                    </section>
-                  </article>
-                `;
-              }).join("");
-
-              // Expenses table
+              // Expenses rows
               const depRows = (s2.deps || []).map(d => {
                 const proof = d.qr_text ? `<img class="qrimg" src="${qrImgFor(d.qr_text)}" alt="QR da nota">` : `<span class="muted">—</span>`;
                 return `
@@ -4387,131 +4378,167 @@
                 `;
               }).join("");
 
-              // Payment sums/cards
-              const pay = `
-                <div class="lg-cards four">
-                  <div class="card blue">
+              // Payment by method cards
+              const payCards = `
+                <div class="nx-cards four">
+                  <div class="nx-card teals">
                     <div class="t">PIX</div>
-                    <div class="v">${money(payAgg.sums.pix)}</div>
-                    <div class="s">(${payAgg.cnt.pix} itens)</div>
+                    <div class="v">${money(pix)}</div>
+                    <div class="s">(${(payAgg && payAgg.cnt && payAgg.cnt.pix) || 0} itens)</div>
                   </div>
-                  <div class="card purple">
+                  <div class="nx-card indigo">
                     <div class="t">Cartão</div>
-                    <div class="v">${money(payAgg.sums.cartao)}</div>
-                    <div class="s">(${payAgg.cnt.cartao} itens)</div>
+                    <div class="v">${money(cartao)}</div>
+                    <div class="s">(${(payAgg && payAgg.cnt && payAgg.cnt.cartao) || 0} itens)</div>
                   </div>
-                  <div class="card green">
+                  <div class="nx-card emerald">
                     <div class="t">Dinheiro</div>
-                    <div class="v">${money(payAgg.sums.dinheiro)}</div>
-                    <div class="s">(${payAgg.cnt.dinheiro} itens)</div>
+                    <div class="v">${money(dinheiro)}</div>
+                    <div class="s">(${(payAgg && payAgg.cnt && payAgg.cnt.dinheiro) || 0} itens)</div>
                   </div>
-                  <div class="card amber">
+                  <div class="nx-card amber">
                     <div class="t">Mensal (Débito)</div>
-                    <div class="v">${money(payAgg.sums.mensal)}</div>
-                    <div class="s">(${payAgg.cnt.mensal} itens)</div>
+                    <div class="v">${money(mensal)}</div>
+                    <div class="s">(${(payAgg && payAgg.cnt && payAgg.cnt.mensal) || 0} itens)</div>
                   </div>
                 </div>
               `;
 
-              // Header + Hero + Clients + Expenses + Footer
+              // Full HTML
               return `
                 <style>
-                  .lg-wrap { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#0f172a; }
-                  .lg-top { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; border-bottom:2px solid #e5e7eb; padding-bottom:8px; margin-bottom:8px; }
-                  .lg-title { font-size:28px; font-weight:900; letter-spacing:.2px; }
-                  .lg-day { font-size:22px; font-weight:900; color:#111827; }
-                  .lg-meta { text-align:right; color:#475569; font-weight:800; }
+                  .nx-wrap { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#0f172a; }
+                  .nx-brand { height:6px; background:linear-gradient(90deg,#10b981,#6366f1); border-radius:8px; margin-bottom:10px; }
+                  .nx-headline { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; padding-bottom:8px; border-bottom:2px solid #e5e7eb; }
+                  .nx-title { font-size:30px; font-weight:900; letter-spacing:.2px; }
+                  .nx-day { font-size:22px; font-weight:900; color:#111827; }
+                  .nx-meta { text-align:right; color:#475569; font-weight:800; }
 
-                  .lg-hero { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:12px; margin:12px 0; }
-                  .lg-hero .card { border:2px solid #e5e7eb; border-radius:14px; padding:12px; background:#fff; }
-                  .lg-hero .t { color:#334155; font-weight:900; font-size:13px; }
-                  .lg-hero .v { color:#0f172a; font-weight:900; font-size:36px; margin-top:4px; }
-                  .lg-hero .card.calc { border-color:#059669; }
-                  .lg-hero .card.info { border-color:#334155; }
-                  .lg-hero .card.diff.ok { border-color:#16a34a; }
-                  .lg-hero .card.diff.pos { border-color:#16a34a; }
-                  .lg-hero .card.diff.neg { border-color:#dc2626; }
+                  /* HERO PANELS — Caixa visível já de cara */
+                  .nx-hero { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:12px; margin:14px 0; }
+                  .nx-card.hero { border:2px solid #e5e7eb; border-radius:14px; padding:12px; background:#fff; }
+                  .nx-card.hero .t { color:#334155; font-weight:900; font-size:13px; }
+                  .nx-card.hero .v { color:#0f172a; font-weight:900; font-size:38px; margin-top:6px; }
+                  .nx-card.hero.calc { border-color:#0ea5a1; }
+                  .nx-card.hero.info { border-color:#475569; }
+                  .nx-card.hero.diff.ok { border-color:#16a34a; }
+                  .nx-card.hero.diff.pos { border-color:#16a34a; }
+                  .nx-card.hero.diff.neg { border-color:#dc2626; }
 
-                  .lg-cards.four { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap:10px; margin:12px 0; }
-                  .lg-cards .card { border:2px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; }
-                  .lg-cards .t { color:#334155; font-weight:900; font-size:13px; }
-                  .lg-cards .v { color:#0f172a; font-weight:900; font-size:22px; margin-top:4px; }
-                  .lg-cards .s { color:#64748b; font-weight:700; font-size:12px; }
-                  .lg-cards .blue { border-color:#2563eb; }
-                  .lg-cards .purple { border-color:#7c3aed; }
-                  .lg-cards .green { border-color:#059669; }
-                  .lg-cards .amber { border-color:#d97706; }
+                  /* SECOND ROW PANELS — Resumo financeiro do dia */
+                  .nx-summary { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:12px; margin:8px 0 14px; }
+                  .nx-card.sum { border:2px solid #e5e7eb; border-radius:14px; padding:12px; background:#fff; }
+                  .nx-card.sum .t { color:#334155; font-weight:900; font-size:13px; }
+                  .nx-card.sum .v { color:#0f172a; font-weight:900; font-size:32px; margin-top:6px; }
+                  .nx-card.sum.in { border-color:#0284c7; }  /* Entradas */
+                  .nx-card.sum.out { border-color:#ef4444; } /* Despesas */
+                  .nx-card.sum.balance { border-color:#10b981; } /* Saldo */
 
-                  .lg-section { margin-top:14px; }
-                  .lg-section h3 { margin:0 0 6px; color:#0f172a; font-size:18px; font-weight:900; }
+                  /* Payment cards */
+                  .nx-cards.four { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap:10px; margin:10px 0 16px; }
+                  .nx-card { border:2px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; }
+                  .nx-card .t { color:#334155; font-weight:900; font-size:13px; }
+                  .nx-card .v { color:#0f172a; font-weight:900; font-size:22px; margin-top:4px; }
+                  .nx-card .s { color:#64748b; font-weight:700; font-size:12px; }
+                  .nx-card.teals { border-color:#0ea5a1; }
+                  .nx-card.indigo { border-color:#4f46e5; }
+                  .nx-card.emerald { border-color:#10b981; }
+                  .nx-card.amber { border-color:#d97706; }
 
-                  .lg-grid { display:block; }
-                  .lg-grid.two { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:10px; }
+                  .nx-section { margin-top:16px; }
+                  .nx-section h3 { margin:0 0 8px; color:#0f172a; font-size:20px; font-weight:900; }
 
-                  .lg-client { border:2px solid #e5e7eb; border-radius:16px; overflow:hidden; background:#fff; }
-                  .lg-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 14px; border-bottom:1px solid #e5e7eb; }
-                  .lg-head .bar { width:6px; height:24px; background:#2563eb; border-radius:999px; }
-                  .lg-head .bar-amber { background:#d97706; }
-                  .lg-head .title { font-weight:900; font-size:20px; color:#0f172a; flex:1; }
-                  .lg-head .badges { display:flex; gap:8px; flex-wrap:wrap; }
-                  .badge { display:inline-flex; align-items:center; gap:8px; background:#f1f5f9; border:1px solid #e2e8f0; color:#0f172a; padding:6px 10px; border-radius:999px; font-weight:900; }
+                  .nx-grid { display:block; }
+                  .nx-grid.two { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
 
-                  .lg-obs { padding:10px 14px; background:#fffbea; border-bottom:1px solid #fde68a; color:#111827; font-weight:900; }
+                  /* Client card */
+                  .nx-client { border:2px solid #e5e7eb; border-radius:16px; overflow:hidden; background:#fff; }
+                  .nx-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 14px; border-bottom:1px solid #e5e7eb; }
+                  .nx-head .stripe { width:6px; height:26px; background:#10b981; border-radius:999px; }
+                  .nx-head .title { font-weight:900; font-size:22px; color:#0f172a; flex:1; }
+                  .nx-head .badges { display:flex; gap:8px; flex-wrap:wrap; }
+                  .nx-badge { display:inline-flex; align-items:center; gap:8px; background:#f1f5f9; border:1px solid #e2e8f0; color:#0f172a; padding:6px 10px; border-radius:999px; font-weight:900; }
 
-                  .lg-body { padding:12px; display:grid; gap:8px; }
-                  .lg-row { display:grid; grid-template-columns: 1fr 180px; gap:10px; align-items:center; }
-                  .svc-name { font-weight:900; font-size:14px; color:#0f172a; }
-                  .svc-meta { margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; }
-                  .pill { display:inline-flex; align-items:center; gap:6px; background:#ecfeff; border:1px solid #a5f3fc; color:#155e75; padding:4px 8px; border-radius:999px; font-weight:800; font-size:12px; }
-                  .chip { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; color:#0f172a; padding:4px 8px; border-radius:999px; font-weight:800; font-size:12px; }
-                  .val { text-align:right; font-weight:900; font-size:16px; color:#0f172a; }
+                  .nx-obs { padding:10px 14px; background:#f3f4f6; border-bottom:1px solid #e5e7eb; color:#0f172a; font-weight:900; }
 
-                  table { width:100%; border-collapse:separate; border-spacing:0 6px; font-size:15px; }
+                  .nx-body { padding:12px; display:grid; gap:10px; }
+                  .nx-row { display:grid; grid-template-columns: 1fr 220px; gap:12px; align-items:center; }
+                  .nx-row .svc { font-weight:900; font-size:16px; color:#0f172a; }
+                  .nx-row .meta { margin-top:6px; display:flex; gap:8px; flex-wrap:wrap; }
+                  .nx-pill { display:inline-flex; align-items:center; gap:6px; background:#e5e7eb; border:1px solid #cbd5e1; color:#0f172a; padding:5px 10px; border-radius:999px; font-weight:800; font-size:12px; }
+                  .nx-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-weight:900; font-size:12px; border:1px solid transparent; }
+                  .nx-chip.pix { background:#ecfeff; border-color:#a5f3fc; color:#155e75; }
+                  .nx-chip.cartao { background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+                  .nx-chip.dinheiro { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+                  .nx-chip.mensal { background:#fffbeb; border-color:#fde68a; color:#92400e; }
+                  .nx-row .val { text-align:right; font-weight:900; font-size:18px; color:#0f172a; }
+
+                  /* Tables */
+                  table { width:100%; border-collapse:separate; border-spacing:0 8px; font-size:16px; }
                   th { text-align:left; color:#0f172a; font-weight:900; }
-                  td, th { padding:8px 10px; border:1px solid #e5e7eb; background:#fff; }
+                  td, th { padding:10px 12px; border:1px solid #e5e7eb; background:#fff; }
                   td.num { text-align:right; font-weight:900; }
                   .qrimg { width:${useCompact ? 105 : 120}px; height:${useCompact ? 105 : 120}px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
                   .qr-cell { text-align:center; }
 
-                  .foot { margin-top: 8px; color:#64748b; font-size:12px; }
+                  .nx-foot { margin-top: 10px; color:#64748b; font-size:12px; }
                 </style>
 
-                <div class="lg-wrap">
-                  <div class="lg-top">
+                <div class="nx-wrap">
+                  <div class="nx-brand"></div>
+                  <div class="nx-headline">
                     <div>
-                      <div class="lg-title">Fechamento de Caixa — Espaço Bella's</div>
-                      <div class="lg-day">Dia: <strong>${brDate}</strong></div>
+                      <div class="nx-title">Relatório do Caixa — Espaço Bella's</div>
+                      <div class="nx-day">Dia: <strong>${brDate}</strong> • ${attsCount} atendimentos • ${servicosCount} serviços</div>
                     </div>
-                    <div class="lg-meta">Gerado em: ${genStr}</div>
+                    <div class="nx-meta">Gerado em: ${genStr}</div>
                   </div>
 
-                  <div class="lg-hero">
-                    <div class="card calc">
+                  <!-- Primeiro: estado do dinheiro no caixa -->
+                  <div class="nx-hero">
+                    <div class="nx-card hero calc">
                       <div class="t">Dinheiro em Caixa (Calculado)</div>
                       <div class="v">${money(s2.dinheiroCalculado)}</div>
                     </div>
-                    <div class="card info">
+                    <div class="nx-card hero info">
                       <div class="t">Dinheiro em Caixa (Informado)</div>
                       <div class="v">${money(s2.dinheiroInformado)}</div>
                     </div>
-                    <div class="card diff ${diffVal === 0 ? "ok" : (diffVal > 0 ? "pos" : "neg")}">
+                    <div class="nx-card hero diff ${diffVal === 0 ? "ok" : (diffVal > 0 ? "pos" : "neg")}">
                       <div class="t">Diferença</div>
                       <div class="v">${money(diffVal)}</div>
                     </div>
                   </div>
 
-                  ${pay}
+                  <!-- Segundo: resumo financeiro do dia -->
+                  <div class="nx-summary">
+                    <div class="nx-card sum in">
+                      <div class="t">Entradas do Dia (Pix+Cartão+Dinheiro)</div>
+                      <div class="v">${money(receitaDia)}</div>
+                    </div>
+                    <div class="nx-card sum out">
+                      <div class="t">Despesas</div>
+                      <div class="v">${money(despesas)}</div>
+                    </div>
+                    <div class="nx-card sum balance">
+                      <div class="t">Saldo do Dia (Entradas − Despesas)</div>
+                      <div class="v">${money(saldoDia)}</div>
+                    </div>
+                  </div>
 
-                  <div class="lg-section">
+                  <!-- Entradas por forma de pagamento -->
+                  ${payCards}
+
+                  <!-- Clientes e atendimentos -->
+                  <div class="nx-section">
                     <h3>Atendimentos por Cliente</h3>
-                    <div class="${gridClass}">
+                    <div class="nx-grid ${useCompact ? "two" : ""}">
                       ${clientCards || `<div class="muted">Sem atendimentos para esta data</div>`}
                     </div>
                   </div>
 
-                  ${mensalCards ? `<div class="lg-section"><h3>Débito Mensal (Não Pago)</h3><div class="${gridClass}">${mensalCards}</div></div>` : ""}
-
-                  <div class="lg-section">
+                  <!-- Despesas -->
+                  <div class="nx-section">
                     <h3>Despesas</h3>
                     ${(s2.deps || []).length
                       ? `<table>
@@ -4521,7 +4548,7 @@
                       : `<div class="muted">Sem despesas para esta data</div>`}
                   </div>
 
-                  <div class="foot">
+                  <div class="nx-foot">
                     <div style="margin-bottom:4px;">CNPJ: 30.504.701/0001-29 • Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 • Tel: (81) 98628-8749</div>
                     <div>Gerado em ${genStr}</div>
                   </div>
