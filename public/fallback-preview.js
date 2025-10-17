@@ -4163,7 +4163,8 @@
             container.style.position = "fixed";
             container.style.left = "-10000px";
             container.style.top = "0";
-            container.style.width = "980px";
+            // Ajuste para exportar em Full HD (largura 1920px com scale 2 sobre 960px)
+            container.style.width = "960px";
             container.style.background = "#fff";
             container.style.color = "#0f172a";
             container.style.padding = "20px";
@@ -4253,7 +4254,15 @@
             `;
 
             document.body.appendChild(container);
-            const canvas = await html2canvas(container, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
+            const targetWidth = 960; // px in DOM
+            const targetScale = 2;   // 960 * 2 = 1920 (Full HD width)
+            const canvas = await html2canvas(container, {
+              backgroundColor: "#ffffff",
+              scale: targetScale,
+              useCORS: true,
+              windowWidth: targetWidth,
+              windowHeight: container.scrollHeight
+            });
             const dataUrl = canvas.toDataURL("image/png");
             const a = document.createElement("a");
             a.href = dataUrl;
