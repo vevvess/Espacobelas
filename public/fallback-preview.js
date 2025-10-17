@@ -3558,6 +3558,284 @@
             });
           }
 
+          // ======== Atendimento Manual V2 (cliente real + serviços do catálogo + mensal) ========
+          function showAtendimentoModalV2(existing) {
+            ensureSvcDefaults();
+            ensureUsersDefaults();
+            const modals = document.getElementById("modals");
+            const modal = modals.querySelector(".modal");
+
+            const svcStore = getSvcStore();
+            const services = (svcStore.items || []).slice().sort((a,b)=> (a.nome||"").localeCompare(b.nome||""));
+            const users = (getUsersStore().users || []).slice().sort((a,b)=> (a.nome||"").localeCompare(b.nome||""));
+            const clStore = getClientsStore();
+            const clients = (clStore.clients || []).slice().sort((a,b)=> (a.name||"").localeCompare(b.name||""));
+
+            const isEditing = !!existing;
+            const attId = existing?.id || ("att-" + Date.now());
+
+            function svcOptions(selectedId) {
+              return services.map(s => `<option value="${s.id}" ${String(selectedId||"")===String(s.id)?"selected":""}>${s.nome}</option>`).join("");
+            }
+            function userOptions(selName) {
+              const nm = (selName || "").toLowerCase();
+              return ['<option value="">Profissional</option>'].concat(users.map(u => {
+                const sel = String(u.nome||"").toLowerCase() === nm ? "selected" : "";
+                return `<option value="${(u.nome||"").replace(/"/g,"&quot;")}" ${sel}>${u.nome||""}</option>`;
+              })).join("");
+            }
+            function clientOptions(selId) {
+              return ['<option value="">Selecionar</option>'].concat(
+                clients.map(c => `<option value="${c.id}" ${String(selId||"")===String(c.id)?"selected":""}>${(c.name||"")}${c.isMonthly?" • Mensal":""}</option>`)
+              ).join("");
+            }
+
+            modal.innerHTML = `
+              <style>
+                .cx h3 { margin:0 0 12px; font-weight:900; color:var(--bella-800); }
+                .cx .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+                .cx .field { display:grid; gap:6px; }
+                .cx label { color:#a1125b; font-weight:900; font-size:13px; }
+                .cx input, .cx select { border:2px solid #f3c6d9; border-radius:14px; padding:10px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0; }
+                .cx .rows { display:grid; gap:8px; margin-top:6px; }
+                .cx .row { display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; gap:8px; align-items:center; border:1.5px solid #f3c6d9; border-radius:12px; padding:8px; background:#fff; }
+                .cx .del { justify-self:end; border:1px solid #f3c6d9; border-radius:10px; background:#fff; padding:8px; color:#a1125b; }
+                .cx .sum { display:flex; align-items:center; justify-content:space-between; background:#fff7fb; border:1px solid #f3c6d9; padding:10px; border-radius:12px; font-weight:900; color:#a1125b; margin-top:8px; }
+                .cx .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 12px; font-weight:900; color:#a1125b; background:#fff; }
+                .cx .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+                @media(max-width:640px){
+                  .cx .grid2 { grid-template-columns: 1fr; }
+                  .cx .row { grid-template-columns: 1fr 110px 140px 42px; }
+                }
+              </style>
+
+              <div class="cx">
+                <h3>${isEditing ? "Editar Atendimento" : "Novo Atendimento Manual"}</h3>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label>Cliente (existente)</label>
+                    <select id="cxCliSel">${clientOptions(existing?.cliente_id)}</select>
+                  </div>
+                  <div class="field">
+                    <label>Nome do Cliente *</label>
+                    <input id="cxCliNome" placeholder="Nome" value="${(existing?.cliente || "").replace(/"/g,"&quot;")}">
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label>Observação</label>
+                  <input id="cxObs" placeholder="Opcional" value="${(existing?.obs || "").replace(/"/g,"&quot;")}">
+                </div>
+
+                <div class="field">
+                  <label>Serviços *</label>
+                  <div class="rows" id="cxRows"></div>
+                  <button class="btn" id="cxAdd" type="button">+ Adicionar serviço</button>
+                </div>
+
+                <div class="sum" id="cxSum">
+                  <div>Total: R$ 0,00</div>
+                  <div>Serviços: 0</div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; gap:8px; margin-top:10px;">
+                  <button class="btn" data-close>Cancelar</button>
+                  <button class="btn primary" id="cxSalvar">${isEditing ? "Salvar alterações" : "Salvar atendimento"}</button>
+                </div>
+              </div>
+            `;
+            modals.style.display = "flex";
+            const $m = (sel)=>modal.querySelector(sel);
+
+            // Sync client select -> name
+            const cliSel = $m("#cxCliSel");
+            cliSel?.addEventListener("change", () => {
+              const id = cliSel.value || "";
+              const c = clients.find(x => String(x.id)===String(id));
+              if (c) $m("#cxCliNome").value = c.name || "";
+            });
+
+            function addRow(preset = null) {
+              const row = document.createElement("div");
+              row.className = "row";
+              const svcSelId = preset?.servico_id || services[0]?.id || "";
+              row.innerHTML = `
+                <select class="svc">${svcOptions(svcSelId)}</select>
+                <input class="preco" type="number" step="0.01" min="0" placeholder="Preço">
+                <select class="prof">${userOptions(preset?.profissional || "")}</select>
+                <select class="pay">
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="pix">PIX</option>
+                  <option value="cartao">Cartão</option>
+                  <option value="mensal">Mensal</option>
+                </select>
+                <button class="del" type="button" title="Remover">✕</button>
+              `;
+              const sel = row.querySelector(".svc");
+              const ipP = row.querySelector(".preco");
+              const ipPro = row.querySelector(".prof");
+              const ipPay = row.querySelector(".pay");
+              function fillBySvc() {
+                const svc = services.find(s=>s.id===sel.value);
+                ipP.value = String(svc?.preco ?? 0);
+                recalc();
+              }
+              sel.addEventListener("change", fillBySvc);
+              row.querySelector(".del").addEventListener("click", ()=>{ row.remove(); recalc(); });
+              [ipP, ipPro, ipPay].forEach(inp => inp.addEventListener("input", recalc));
+              $m("#cxRows").appendChild(row);
+
+              if (preset) {
+                if (preset.servico_id) sel.value = preset.servico_id;
+                ipP.value = String(preset.preco ?? preset.valor ?? 0);
+                if (preset.profissional) ipPro.value = preset.profissional;
+                if (preset.pagamento) ipPay.value = preset.pagamento;
+                recalc();
+              } else {
+                fillBySvc();
+              }
+            }
+
+            function recalc() {
+              const rows = Array.from($m("#cxRows").children);
+              const total = rows.reduce((acc,r)=> acc + (parseFloat(r.querySelector(".preco").value||"0")||0),0);
+              $m("#cxSum").children[0].textContent = "Total: " + (Number(total)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+              $m("#cxSum").children[1].textContent = "Serviços: " + rows.length;
+            }
+
+            // Init rows
+            if (isEditing && Array.isArray(existing.servicos) && existing.servicos.length) {
+              existing.servicos.forEach(sv => {
+                // try match by name -> id
+                const match = services.find(s => (s.nome||"").toLowerCase() === String(sv.nome||"").toLowerCase());
+                addRow({ servico_id: match?.id || services[0]?.id || "", preco: sv.preco ?? sv.valor ?? 0, profissional: sv.profissional || "", pagamento: sv.pagamento || "" });
+              });
+            } else {
+              addRow();
+            }
+            recalc();
+
+            // wire + add
+            modal.addEventListener("click", (ev) => {
+              const trg = ev.target.closest("#cxAdd");
+              if (trg) { ev.preventDefault(); ev.stopPropagation(); addRow(); }
+            });
+
+            function ymFromYmd(ymd) { try { const [y,m] = ymd.split("-"); return `${y}-${m}`; } catch { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; } }
+
+            function getMonthlyStore() {
+              try { return JSON.parse(localStorage.getItem("bella_monthly_v1") || '{"clients":{}}'); } catch { return { clients: {} }; }
+            }
+            function setMonthlyStore(s) { localStorage.setItem("bella_monthly_v1", JSON.stringify(s)); }
+            function getLedger(clientId, ym) {
+              const st = getMonthlyStore();
+              return (st.clients?.[clientId]?.[ym]) || { items: [], payments: [], closed: false };
+            }
+            function setLedger(clientId, ym, ledger) {
+              const st = getMonthlyStore();
+              if (!st.clients[clientId]) st.clients[clientId] = {};
+              st.clients[clientId][ym] = ledger;
+              setMonthlyStore(st);
+            }
+
+            $m("#cxSalvar").addEventListener("click", () => {
+              const nome = ($m("#cxCliNome").value || "").trim();
+              if (!nome) { alert("Informe o nome do cliente."); return; }
+              const cliId = ($m("#cxCliSel").value || "").trim();
+
+              const rows = Array.from($m("#cxRows").children).map(r => {
+                const svcId = r.querySelector(".svc").value;
+                const svc = services.find(s => s.id === svcId) || {};
+                const preco = parseFloat(r.querySelector(".preco").value || "0") || 0;
+                const profissional = (r.querySelector(".prof").value || "").trim();
+                const pagamento = (r.querySelector(".pay").value || "dinheiro");
+                return {
+                  servico_id: svcId,
+                  nome: svc.nome || "",
+                  valor: preco,
+                  profissional,
+                  pagamento
+                };
+              });
+              if (!rows.length) { alert("Adicione pelo menos um serviço."); return; }
+
+              // Se existe alguma linha mensal, força cliente existente selecionado
+              const hasMensal = rows.some(r => r.pagamento === "mensal");
+              if (hasMensal && !cliId) {
+                alert("Para lançar em Clientes Mensais selecione um cliente existente.");
+                return;
+              }
+
+              const total = rows.reduce((a,b)=>a + (Number(b.valor)||0), 0);
+              const uniquePays = Array.from(new Set(rows.map(r => r.pagamento)));
+              const pagamentoTop = uniquePays.length === 1 ? uniquePays[0] : "misto";
+              const obs = ($m("#cxObs").value || "").trim();
+
+              const store = getStore();
+              const day = getDay(store, selectedDate);
+
+              // Persist in Caixa
+              if (isEditing) {
+                const idx = (day.atendimentos || []).findIndex(a => String(a.id) === String(existing.id));
+                if (idx >= 0) {
+                  day.atendimentos[idx] = {
+                    ...day.atendimentos[idx],
+                    id: attId,
+                    data: selectedDate,
+                    cliente: nome,
+                    cliente_id: cliId || undefined,
+                    pagamento: pagamentoTop,
+                    valor: total,
+                    servicos: rows,
+                    obs
+                  };
+                }
+              } else {
+                day.atendimentos = (day.atendimentos || []).concat({
+                  id: attId,
+                  data: selectedDate,
+                  cliente: nome,
+                  cliente_id: cliId || undefined,
+                  pagamento: pagamentoTop,
+                  valor: total,
+                  servicos: rows,
+                  obs
+                });
+              }
+              setStore(store);
+
+              // Sync Mensal ledger (for lines with pagamento === 'mensal')
+              if (hasMensal && cliId) {
+                const ym = ymFromYmd(selectedDate);
+                const led = getLedger(cliId, ym);
+                // remove previous items of this attendance if editing
+                led.items = (led.items || []).filter(it => String(it.att_id || "") !== String(attId));
+                // add new items for mensal rows
+                rows.forEach((r, idx) => {
+                  if (r.pagamento !== "mensal") return;
+                  const svc = services.find(s => s.id === r.servico_id) || {};
+                  led.items.push({
+                    id: "mi-" + Date.now() + "-" + idx,
+                    att_id: attId,
+                    date: selectedDate,
+                    serviceId: r.servico_id,
+                    serviceName: r.nome || svc.nome || "",
+                    professional: r.profissional || "",
+                    value: Number(r.valor) || 0,
+                    image: svc.foto || ""
+                  });
+                });
+                setLedger(cliId, ym, led);
+              }
+
+              modals.style.display = "none";
+              renderCaixa();
+            });
+
+            modal.addEventListener("click", (e)=>{ if (e.target.hasAttribute("data-close")) modals.style.display = "none"; });
+          }
+
           // ======== Recibo Semanal (assinatura eletrônica simples, sem custo) ========
           function showReciboModal() {
             const modals = document.getElementById("modals");
