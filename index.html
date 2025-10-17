@@ -36,8 +36,19 @@
       const root = document.getElementById("root");
       const isCosine = location.hostname.endsWith(".cosine.page");
       const params = new URLSearchParams(location.search);
-      const wantsVercel = params.get("vercel") === "1";
+      const wantsFallback = params.get("fallback") === "1";
       const VERCEL_URL = "https://espaco-five.vercel.app";
+
+      function embedVercel(url) {
+        const container = document.createElement("div");
+        container.className = "embed-container";
+        const iframe = document.createElement("iframe");
+        iframe.className = "embed-iframe";
+        iframe.src = url;
+        iframe.allow = "clipboard-write; clipboard-read; fullscreen";
+        container.appendChild(iframe);
+        root.replaceWith(container);
+      }
 
       async function loadFallback() {
         const loadScript = (src) =>
@@ -50,7 +61,18 @@
           });
 
         try {
-          await loadScript("/public/fallback-preview.js");
+          // Tenta carregar uma versão segura e mínima primeiro
+          try {
+            await loadScript("/public/fallback-preview-safe.js");
+          } catch (e) {
+            // ignora; pode não existir ainda
+          }
+
+          // Se a função não foi definida, cai para o fallback tradicional
+          if (!window.__runFallbackPreview) {
+            await loadScript("/public/fallback-preview.js");
+          }
+
           if (window.__runFallbackPreview) {
             const target = document.getElementById("root") || document.body;
             window.__runFallbackPreview(target);
@@ -64,16 +86,10 @@
       }
 
       if (isCosine) {
-        // Em cosine.page: por padrão carregar o preview estático; use ?vercel=1 para embutir Vercel
-        if (wantsVercel) {
-          const container = document.createElement("div");
-          container.className = "embed-container";
-          const iframe = document.createElement("iframe");
-          iframe.className = "embed-iframe";
-          iframe.src = VERCEL_URL;
-          iframe.allow = "clipboard-write; clipboard-read; fullscreen";
-          container.appendChild(iframe);
-          root.replaceWith(container);
+        // Em cosine.page: agora incorporamos SEMPRE o app Vercel por padrão.
+        // Quer forçar o preview estático? Use ?fallback=1
+        if (!wantsFallback) {
+          embedVercel(VERCEL_URL);
         } else {
           await loadFallback();
         }
