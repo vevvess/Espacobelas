@@ -2859,7 +2859,9 @@
           }
           const expL = byId("cxExportLegible");
           if (expL) {
-            expL.checked = localStorage.getItem("bella_export_legible") === "1";
+            const v = localStorage.getItem("bella_export_legible");
+            if (v === null) localStorage.setItem("bella_export_legible", "1"); // padrão: LIGADO
+            expL.checked = (localStorage.getItem("bella_export_legible") || "1") === "1";
             expL.addEventListener("change", (e) => {
               localStorage.setItem("bella_export_legible", e.target.checked ? "1" : "0");
             });
@@ -4556,9 +4558,296 @@
               `;
             }
 
-            // If legible mode is active, override with the new design
+            // Build brand-new V2 layout (completely different visual identity)
+            function buildUltraLegibleHTML() {
+              // Compact?
+              let useCompact = false;
+              try {
+                const a = localStorage.getItem("bella_export_legible_compact");
+                if (a === "1" || a === "true") useCompact = true;
+              } catch {}
+              // Aggregates from snapshot
+              const pix = Number(s2.totalPix || 0);
+              const cartao = Number(s2.totalCartao || 0);
+              const dinheiro = Number(s2.totalDinheiro || 0);
+              const mensal = Number(s2.totalDebitos || 0);
+              const entradas = Number(s2.entradas || (pix + cartao + dinheiro));
+              const despesas = Number(s2.totalDespesas || 0);
+              const calc = Number(s2.dinheiroCalculado || 0);
+              const informado = Number(s2.dinheiroInformado || 0);
+              const diffVal = calc - informado;
+              const atts = Array.isArray(s2.atts) ? s2.atts : [];
+              const attsCount = atts.length;
+
+              // Derivatives
+              let servicosCount = 0;
+              const sumsPro = {};
+              const sumsSvc = {};
+              atts.forEach(a => {
+                const lines = (Array.isArray(a.servicos) && a.servicos.length)
+                  ? a.servicos
+                  : [{ nome: a.servico, valor: a.valor, profissional: a.profissional, pagamento: a.pagamento }];
+                lines.forEach(sv => {
+                  const v = Number(sv.valor) || 0;
+                  servicosCount++;
+                  const pro = (sv.profissional || a.profissional || "-").trim() || "-";
+                  const sn = (sv.nome || a.servico || "-").trim() || "-";
+                  sumsPro[pro] = (sumsPro[pro] || 0) + v;
+                  sumsSvc[sn] = (sumsSvc[sn] || 0) + v;
+                });
+              });
+              const topPro = Object.entries(sumsPro).sort((a,b)=>b[1]-a[1]).slice(0,3);
+              const topSvc = Object.entries(sumsSvc).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+              const ticketAtt = attsCount ? entradas / attsCount : 0;
+              const ticketSvc = servicosCount ? entradas / servicosCount : 0;
+              const pct = (v, base) => base > 0 ? Math.round((v / base) * 100) : 0;
+              const pixPct = pct(pix, entradas);
+              const cartaoPct = pct(cartao, entradas);
+              const dinheiroPct = pct(dinheiro, entradas);
+
+              // Group by client for cards
+              const grouped = groupAttsByClient(atts);
+              const entries = Object.entries(grouped);
+
+              const renderClients = () => {
+                const rows = entries.map(([cliente, data]) => {
+                  const items = (data?.items) || [];
+                  if (!items.length) return "";
+                  const total = items.reduce((s,it)=>s + (Number(it.valor)||0), 0);
+                  const obs = (data?.obs?.length) ? `<div class="lx-note">🧾 ${data.obs.map(String).join(" • ")}</div>` : "";
+                  return `
+                    <article class="lx-client">
+                      <header class="lx-chead">
+                        <div class="lx-cbar"></div>
+                        <div class="lx-ctitle">${cliente}</div>
+                        <div class="lx-cbadges">
+                          <span class="lx-badge">Total ${money(total)}</span>
+                          <span class="lx-badge">${items.length} serviços</span>
+                        </div>
+                      </header>
+                      ${obs}
+                      <section class="lx-cbody">
+                        ${items.map(it => `
+                          <div class="lx-row">
+                            <div class="lx-left">
+                              <div class="lx-svc">${it.servico || "-"}</div>
+                              <div class="lx-meta">
+                                ${it.profissional ? `<span class="lx-pill">${it.profissional}</span>` : ``}
+                                ${it.pagamento ? `<span class="lx-chip ${(it.pagamento||"").toLowerCase()}">${(it.pagamento||"").toUpperCase()}</span>` : ``}
+                              </div>
+                            </div>
+                            <div class="lx-val">${money(it.valor)}</div>
+                          </div>
+                        `).join("")}
+                      </section>
+                    </article>
+                  `;
+                }).join("");
+                return rows || `<div class="lx-muted">Sem atendimentos para esta data</div>`;
+              };
+
+              // Expenses table
+              const depTable = (s2.deps || []).length ? `
+                <table class="lx-table">
+                  <thead><tr><th>Descrição</th><th>Origem</th><th>Comprovante</th><th class="num">Valor</th></tr></thead>
+                  <tbody>
+                    ${(s2.deps || []).map(d => {
+                      const proof = d.qr_text ? `<img class="lx-qr" src="${qrImgFor(d.qr_text)}" alt="QR da nota">` : `<span class="lx-muted">—</span>`;
+                      return `<tr>
+                        <td>${d.descricao}</td>
+                        <td>${d.origem === "caixa" ? "Retirada do Caixa" : "Outro"}</td>
+                        <td class="lx-qrc">${proof}</td>
+                        <td class="num">${money(d.valor)}</td>
+                      </tr>`;
+                    }).join("")}
+                  </tbody>
+                </table>
+              ` : `<div class="lx-muted">Sem despesas para esta data</div>`;
+
+              // Bars for payment distribution (only over Entradas)
+              const bar = (pct, cls, label, val) => `
+                <div class="lx-bar">
+                  <div class="lx-barlabel ${cls}">${label} • ${money(val)} (${pct}%)</div>
+                  <div class="lx-track"><div class="lx-fill ${cls}" style="width:${Math.max(4, pct)}%;"></div></div>
+                </div>
+              `;
+
+              // Top lists
+              const topList = (rows) => rows.length
+                ? rows.map(([k,v]) => `<div class="lx-toprow"><span>${k}</span><span class="num">${money(v)}</span></div>`).join("")
+                : `<div class="lx-muted">—</div>`;
+
+              // New identity + layout (no pink)
+              return `
+                <style>
+                  .lx-wrap { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#0f172a; }
+                  .lx-header { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; padding-bottom:10px; border-bottom:2px solid #e5e7eb; }
+                  .lx-brand { height:6px; background:linear-gradient(90deg,#0ea5a1,#4f46e5); border-radius:999px; margin-bottom:10px; }
+                  .lx-title { font-size:28px; font-weight:900; letter-spacing:.25px; color:#0f172a; text-transform:uppercase; }
+                  .lx-sub { color:#475569; font-weight:800; }
+                  .lx-meta { text-align:right; color:#475569; font-weight:800; }
+                  
+                  .lx-hero { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:12px; margin:12px 0; }
+                  .lx-panel { border:2px solid #e5e7eb; border-radius:14px; padding:12px; background:#fff; }
+                  .lx-panel .t { color:#334155; font-weight:900; font-size:13px; }
+                  .lx-panel .v { color:#0f172a; font-weight:900; font-size:36px; margin-top:6px; }
+                  .lx-panel.calc { border-color:#0ea5a1; }
+                  .lx-panel.info { border-color:#475569; }
+                  .lx-panel.pos { border-color:#16a34a; }
+                  .lx-panel.neg { border-color:#dc2626; }
+
+                  .lx-kpi { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap:10px; margin:10px 0 14px; }
+                  .lx-kcard { border:2px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; }
+                  .lx-kcard .t { color:#334155; font-weight:900; font-size:12px; }
+                  .lx-kcard .v { color:#0f172a; font-weight:900; font-size:24px; margin-top:4px; }
+                  .lx-kcard.em { border-color:#0ea5a1; }
+                  .lx-kcard.dp { border-color:#ef4444; }
+                  .lx-kcard.tk { border-color:#4f46e5; }
+
+                  .lx-bars { display:grid; grid-template-columns: 2fr 1fr; gap:12px; margin:6px 0 12px; }
+                  .lx-bar { margin-bottom:8px; }
+                  .lx-barlabel { font-weight:900; font-size:12px; margin-bottom:4px; }
+                  .lx-barlabel.pix { color:#0369a1; }
+                  .lx-barlabel.cartao { color:#4338ca; }
+                  .lx-barlabel.dinheiro { color:#065f46; }
+                  .lx-track { height:10px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:999px; overflow:hidden; }
+                  .lx-fill { height:100%; border-radius:999px; }
+                  .lx-fill.pix { background:#93c5fd; }
+                  .lx-fill.cartao { background:#c7d2fe; }
+                  .lx-fill.dinheiro { background:#a7f3d0; }
+
+                  .lx-side { border:2px solid #e5e7eb; border-radius:12px; padding:10px; background:#fff; }
+                  .lx-side h4 { margin:0 0 8px; font-size:14px; color:#334155; font-weight:900; }
+                  .lx-toprow { display:flex; align-items:center; justify-content:space-between; border-bottom:1px dashed #e5e7eb; padding:6px 0; }
+                  .lx-toprow:last-child { border-bottom:0; }
+                  .num { text-align:right; font-weight:900; }
+
+                  .lx-section { margin-top:14px; }
+                  .lx-section h3 { margin:0 0 8px; color:#0f172a; font-weight:900; font-size:18px; }
+
+                  .lx-grid { display:block; }
+                  .lx-grid.two { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
+
+                  .lx-client { border:2px solid #e5e7eb; border-radius:16px; overflow:hidden; background:#fff; }
+                  .lx-chead { display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid #e5e7eb; background:#f8fafc; }
+                  .lx-cbar { width:6px; height:26px; background:#0ea5a1; border-radius:999px; }
+                  .lx-ctitle { font-weight:900; font-size:20px; color:#0f172a; flex:1; }
+                  .lx-cbadges { display:flex; gap:8px; flex-wrap:wrap; }
+                  .lx-badge { display:inline-flex; align-items:center; gap:8px; background:#f1f5f9; border:1px solid #e2e8f0; color:#0f172a; padding:6px 10px; border-radius:999px; font-weight:900; }
+
+                  .lx-note { padding:10px 14px; background:#fffbea; border-bottom:1px solid #fde68a; color:#0f172a; font-weight:900; }
+
+                  .lx-cbody { padding:12px; display:grid; gap:10px; }
+                  .lx-row { display:grid; grid-template-columns: 1fr 200px; gap:12px; align-items:center; }
+                  .lx-svc { font-weight:900; font-size:16px; color:#0f172a; }
+                  .lx-meta { margin-top:6px; display:flex; gap:8px; flex-wrap:wrap; }
+                  .lx-pill { display:inline-flex; align-items:center; gap:6px; background:#e5e7eb; border:1px solid #cbd5e1; color:#0f172a; padding:5px 10px; border-radius:999px; font-weight:800; font-size:12px; }
+                  .lx-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-weight:900; font-size:12px; border:1px solid transparent; }
+                  .lx-chip.pix { background:#ecfeff; border-color:#a5f3fc; color:#155e75; }
+                  .lx-chip.cartao { background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+                  .lx-chip.dinheiro { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+                  .lx-chip.mensal { background:#fffbeb; border-color:#fde68a; color:#92400e; }
+                  .lx-val { text-align:right; font-weight:900; font-size:18px; color:#0f172a; }
+
+                  .lx-table { width:100%; border-collapse:separate; border-spacing:0 8px; font-size:15px; }
+                  .lx-table th { text-align:left; color:#0f172a; font-weight:900; }
+                  .lx-table td, .lx-table th { padding:10px 12px; border:1px solid #e5e7eb; background:#fff; }
+                  .lx-qr { width:${useCompact ? 100 : 120}px; height:${useCompact ? 100 : 120}px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+                  .lx-qrc { text-align:center; }
+
+                  .lx-muted { color:#64748b; }
+
+                  .lx-foot { margin-top:10px; color:#64748b; font-size:12px; }
+                </style>
+
+                <div class="lx-wrap">
+                  <div class="lx-brand"></div>
+                  <div class="lx-header">
+                    <div>
+                      <div class="lx-title">Relatório Diário do Caixa</div>
+                      <div class="lx-sub">Dia: <strong>${brDate}</strong> • ${attsCount} atendimentos • ${servicosCount} serviços</div>
+                    </div>
+                    <div class="lx-meta">Gerado em: ${genStr}</div>
+                  </div>
+
+                  <!-- Status do Caixa -->
+                  <div class="lx-hero">
+                    <div class="lx-panel calc">
+                      <div class="t">Dinheiro em Caixa (Calculado)</div>
+                      <div class="v">${money(calc)}</div>
+                    </div>
+                    <div class="lx-panel info">
+                      <div class="t">Dinheiro em Caixa (Informado)</div>
+                      <div class="v">${money(informado)}</div>
+                    </div>
+                    <div class="lx-panel ${diffVal >= 0 ? "pos" : "neg"}">
+                      <div class="t">Diferença</div>
+                      <div class="v">${money(diffVal)}</div>
+                    </div>
+                  </div>
+
+                  <!-- Indicadores -->
+                  <div class="lx-kpi">
+                    <div class="lx-kcard em">
+                      <div class="t">Entradas (Pix+Cartão+Dinheiro)</div>
+                      <div class="v">${money(entradas)}</div>
+                    </div>
+                    <div class="lx-kcard">
+                      <div class="t">Atendimentos</div>
+                      <div class="v">${attsCount}</div>
+                    </div>
+                    <div class="lx-kcard tk">
+                      <div class="t">Ticket médio por atendimento</div>
+                      <div class="v">${money(ticketAtt)}</div>
+                    </div>
+                    <div class="lx-kcard tk">
+                      <div class="t">Ticket médio por serviço</div>
+                      <div class="v">${money(ticketSvc)}</div>
+                    </div>
+                  </div>
+
+                  <!-- Distribuição das Entradas + Destaques -->
+                  <div class="lx-bars">
+                    <div>
+                      ${bar(pixPct, "pix", "PIX", pix)}
+                      ${bar(cartaoPct, "cartao", "Cartão", cartao)}
+                      ${bar(dinheiroPct, "dinheiro", "Dinheiro", dinheiro)}
+                      <div class="lx-muted" style="margin-top:6px;">Mensal (débito não pago): ${money(mensal)}</div>
+                    </div>
+                    <div class="lx-side">
+                      <h4>Top profissionais</h4>
+                      ${topList(topPro)}
+                      <h4 style="margin-top:10px;">Top serviços</h4>
+                      ${topList(topSvc)}
+                    </div>
+                  </div>
+
+                  <!-- Clientes -->
+                  <div class="lx-section">
+                    <h3>Atendimentos por Cliente</h3>
+                    <div class="lx-grid ${useCompact ? "two" : ""}">
+                      ${renderClients()}
+                    </div>
+                  </div>
+
+                  <!-- Despesas -->
+                  <div class="lx-section">
+                    <h3>Despesas</h3>
+                    ${depTable}
+                  </div>
+
+                  <div class="lx-foot">
+                    <div style="margin-bottom:4px;">CNPJ: 30.504.701/0001-29 • Endereço: R. Rezende, 229 - Iputinga, Recife - PE, 50680-200 • Tel: (81) 98628-8749</div>
+                    <div>Gerado em ${genStr}</div>
+                  </div>
+                </div>
+              `;
+            }
+
+            // Build brand-new layout when legible is enabled
             if (legible) {
-              container.innerHTML = buildLegibleHTML();
+              container.innerHTML = buildUltraLegibleHTML();
             }
 
             document.body.appendChild(container);
