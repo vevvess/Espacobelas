@@ -2149,10 +2149,33 @@
               </div>
               <div class="field">
                 <label>Imagem</label>
-                <div class="row">
+                <div class="row" style="align-items:flex-start;">
                   <div class="photo" id="sThumb">${it.foto ? `<img src="${it.foto}" style="width:100%;height:100%;object-fit:cover;">` : "📷"}</div>
                   <input type="file" id="sFoto" accept="image/*;capture=camera" style="display:none;">
-                  <button class="btn" id="btnFoto">Tirar/Escolher foto</button>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn" id="btnFoto">Tirar/Escolher foto</button>
+                    <button class="btn" id="btnAI">Gerar com IA</button>
+                  </div>
+                </div>
+                <div id="aiPanel" style="display:none; margin-top:8px; border:1px dashed #f3c6d9; border-radius:12px; padding:10px; background:#fff7fb;">
+                  <div class="field">
+                    <label>Prompt sugerido</label>
+                    <textarea id="aiPrompt" placeholder="Prompt para gerar a imagem do serviço" style="border:1px solid #f3c6d9; border-radius:12px; padding:10px; min-height:70px;"></textarea>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                      <button class="btn" id="copyPrompt" type="button">Copiar prompt</button>
+                      <button class="btn" id="openGen" type="button">Abrir gerador (Clipdrop)</button>
+                    </div>
+                  </div>
+                  <div class="field" style="margin-top:6px;">
+                    <label>URL da imagem gerada</label>
+                    <input id="aiUrl" placeholder="Cole aqui a URL final da imagem gerada">
+                    <div style="display:flex; gap:8px; margin-top:6px;">
+                      <button class="btn primary" id="aiFetch" type="button">Buscar e aplicar</button>
+                    </div>
+                    <div class="muted" style="margin-top:6px; font-size:12px;">
+                      Dica: gere no Clipdrop Stable Diffusion, copie a URL da imagem final e cole acima. Se houver bloqueio CORS, aplicamos a URL diretamente.
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="footer">
