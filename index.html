@@ -50,7 +50,18 @@
           });
 
         try {
-          await loadScript("/public/fallback-preview.js");
+          // Tenta carregar uma versão segura e mínima primeiro
+          try {
+            await loadScript("/public/fallback-preview-safe.js");
+          } catch (e) {
+            // ignora; pode não existir ainda
+          }
+
+          // Se a função não foi definida, cai para o fallback tradicional
+          if (!window.__runFallbackPreview) {
+            await loadScript("/public/fallback-preview.js");
+          }
+
           if (window.__runFallbackPreview) {
             const target = document.getElementById("root") || document.body;
             window.__runFallbackPreview(target);
