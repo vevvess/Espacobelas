@@ -64,9 +64,17 @@
         }
       }
 
-      // Tenta incorporar a versão fixa via iframe; se falhar, cai no preview estático local
+      // Tenta incorporar a versão fixa via iframe; se falhar, ou se ?local=1 for usado, cai no preview estático local
       (async function boot() {
         try {
+          const params = new URLSearchParams(location.search);
+          const forceLocal = params.get("local") === "1";
+
+          if (forceLocal) {
+            await loadFallbackPreview();
+            return;
+          }
+
           const container = document.createElement("div");
           container.className = "embed-container";
           const iframe = document.createElement("iframe");
