@@ -2,6 +2,27 @@
   "id": "bella-app-v1",
   "name": "Bella App",
   "branch": "main",
+  "date": "2025-10-18",
+  "initial_route": "/dashboard",
+  "preview_url": "https://mdnlniq3dq1y.cosine.page",
+  "vercel_preview_url": "https://espaco-five.vercel.app",
+  "manifest_url": "/cosine-manifest.json",
+  "meta_flag": {
+    "name": "cosine-app-id",
+    "content": "bella-app-v1"
+  },
+  "sentinel_comment": "// BELLA_SALON_APP_SENTINEL::REACT_MAIN::2025-10-18::V1",
+  "implemented": [
+    "Relatórios reativado no menu (React).",
+    "Caixa: atendimento manual com criação inline de cliente e serviço; sugestões de cliente por digitação; soma automática do total; seleção de profissional por serviço.",
+    "Exportações do Caixa (PDF/Imagem) preservadas.",
+    "UI mobile-friendly."
+  ],
+  "planned": [
+    "Caixa: edição de movimentos no React (atual: add/remover), export completo com anexos (QR nas imagens/PDF sempre).",
+    "Estoque: rótulos QR e"id": "bella-app-v1",
+  "name": "Bella App",
+  "branch": "main",
   "date": "2025-10-04",
   "initial_route": "/dashboard",
   "preview_url": "https://3jva0vrhapov.cosine.page",
