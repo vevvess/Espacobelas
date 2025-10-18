@@ -32,6 +32,7 @@
       - Ignora Vercel e React/Vite/TSX por enquanto
     -->
     <script type="module">
+      // BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1
       const root = document.getElementById("root");
 
       async function loadFallback() {
@@ -58,6 +59,7 @@
         }
       }
 
+      // Sempre carregar o preview estático, ignorando Vercel e React/Vite
       await loadFallback();
     </script>
   </body>
