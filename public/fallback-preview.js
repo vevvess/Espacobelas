@@ -638,6 +638,62 @@
       <div id="estoque-root"></div>
     `;
 
+    // Relatórios (gerado do AGENDA local) — versão estática
+    const Relatorios = () => `
+      <style>
+        .report-card { background:#fff; border:1px solid #f1e6ee; border-radius:16px; padding:14px; box-shadow: var(--shadow); }
+        .report-grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
+        .r-title { color:#9d174d; font-weight:900; font-size:18px; margin:0 0 8px; }
+        .muted { color:#64748b; }
+        .kpi { background:#fff; border:1px solid #f1e6ee; border-radius:14px; padding:12px; display:flex; align-items:center; justify-content:space-between; }
+        .kpi .t { color:#9d174d; font-weight:800; }
+        .kpi .v { color:#0f172a; font-weight:900; font-size:22px; }
+        table { width:100%; border-collapse:separate; border-spacing:0 6px; }
+        th { text-align:left; color:#9d174d; font-weight:800; }
+        td, th { padding:8px 10px; border:1px solid #f1e6ee; background:#fff; }
+        td.num { text-align:right; font-weight:900; }
+        .controls { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin:10px 0; }
+        .controls input { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; }
+        @media(max-width:720px){ .report-grid{ grid-template-columns: 1fr; } .controls{ grid-template-columns: 1fr; } }
+      </style>
+      <div class="hero"><h1>Relatórios</h1><p>Resumo de agendamentos e receita por período</p></div>
+      <section class="section">
+        <div class="report-card">
+          <div class="r-title">Período</div>
+          <div class="controls">
+            <div><label class="muted">Início</label><input type="date" id="repIni"></div>
+            <div><label class="muted">Fim</label><input type="date" id="repFim"></div>
+          </div>
+          <div class="report-grid" style="margin-top:8px;">
+            <div class="kpi"><div class="t">Total Agendamentos</div><div class="v" id="kTotal">0</div></div>
+            <div class="kpi"><div class="t">Concluídos</div><div class="v" id="kDone">0</div></div>
+            <div class="kpi"><div class="t">Receita Total</div><div class="v" id="kReceita">R$ 0,00</div></div>
+            <div class="kpi"><div class="t">Ticket Médio</div><div class="v" id="kTicket">R$ 0,00</div></div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="report-card">
+          <div class="r-title">Agendamentos do Período</div>
+          <div class="muted" id="repCount">—</div>
+          <div class="table-wrap" style="margin-top:8px; overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data/Hora</th>
+                  <th>Cliente</th>
+                  <th>Serviços</th>
+                  <th>Status</th>
+                  <th class="num">Valor</th>
+                </tr>
+              </thead>
+              <tbody id="repRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    `;
+
     const Usuarios = () => `
       <style>
         .u-actions{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
@@ -686,6 +742,7 @@
       "/servicos": { title: "Serviços", view: Servicos },
       "/caixa": { title: "Caixa", view: Caixa },
       "/estoque": { title: "Estoque", view: Estoque },
+      "/relatorios": { title: "Relatórios", view: Relatorios },
       "/usuarios": { title: "Usuários", view: Usuarios },
       "/configuracoes": { title: "Configurações", view: Configuracoes },
     };
@@ -725,14 +782,14 @@
           </div>
 
           <nav class="navlist">
-            <a class="item" href="#/dashboard" data-link="/dashboard"><span class="icon">🏠</span><span class="label">Dashboard</span></a>
-            <a class="item" href="#/agenda" data-link="/agenda"><span class="icon">📅</span><span class="label">Agenda</span></a>
-            <a class="item" href="#/clientes" data-link="/clientes"><span class="icon">👥</span><span class="label">Clientes</span></a>
-            <a class="item" href="#/ficha-cliente" data-link="/ficha-cliente"><span class="icon">📄</span><span class="label">Ficha Cliente</span></a>
-            <a class="item" href="#/clientes-mensais" data-link="/clientes-mensais"><span class="icon">🗓️</span><span class="label">Clientes Mensais</span></a>
-            <a class="item" href="#/servicos" data-link="/servicos"><span class="icon">⚙️</span><span class="label">Serviços</span></a>
-            <a class="item" href="#/caixa" data-link="/caixa"><span class="icon">💵</span><span class="label">Caixa</span></a>
-            <a class="item" href="#/estoque" data-link="/estoque"><span class="icon">📦</span><span class="label">Estoque</span></a>
+           <<a class="item" href="#/dashboard" data-link="/dashboar"><<span class="icon"></</spa><<span class="label">Dashboa</</sp></</a>
+           <<a class="item" href="#/agenda" data-link="/agend"><<span class="icon"></</spa><<span class="label">Agen</</sp></</a>
+           <<a class="item" href="#/clientes" data-link="/cliente"><<span class="icon"></</spa><<span class="label">Client</</sp></</a>
+           <<a class="item" href="#/ficha-cliente" data-link="/ficha-client"><<span class="icon"></</spa><<span class="label">Ficha Clien</</sp></</a>
+           <<a class="item" href="#/clientes-mensais" data-link="/clientes-mensai"><<span class="icon"></</sspa><sspan class="label">Clientes Mensa<//ssp><//aa>
+           <aa class="item" href="#/servicos" data-link="/servico"><sspan class="icon"><//sspa><sspan class="label">Serviç<//ssp><//aa>
+           <aa class="item" href="#/caixa" data-link="/caix"><sspan class="icon"></spspa><pspan class="label">Cai</spsp></a>a>
+           < a class="item" href="#/estoque" data-link="/estoque<span class="icon">📦</span><span class="label">Estoque</span></a>
           </nav>
 
           <div class="section-divider"><span>ADMINISTRAÇÃO</span></div>
@@ -2187,7 +2244,24 @@
         } catch {}
       }
 
-      // Interações específicas do Caixa (persistência local e cálculos)
+      // Interações específicas de Relatórios (dados da Agenda local)
+      if (hash === "/relatorios") {
+        const AGENDA_KEY = "bella_agenda_v1";
+        const getAgenda = () => {
+          try { return JSON.parse(localStorage.getItem(AGENDA_KEY) || '{"items":[]}'); }
+          catch { return { items: [] }; }
+        };
+        const money = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const fmtDateTimeBR = (iso) => {
+          try {
+            const d = new Date(iso);
+            const ds = d.toLocaleDateString("pt-BR");
+            const hs = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+            return `${ds} ${hs}`;
+          } catch { return iso || ""; }
+        };
+        const repIni = page.querySelector("#repIni");
+        const repFim = page.querySelector("#repFims)
       if (hash === "/caixa") {
         const storageKey = "bella_caixa_v1";
         const todayYMD = (() => {
