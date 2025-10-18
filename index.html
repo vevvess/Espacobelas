@@ -64,19 +64,14 @@
         }
       }
 
-      // Boot: por padrão carrega preview estático; use ?react=1 para carregar a app React (Vite/TSX)
+      // Boot: carregar sempre a app React (Vite/TSX) e cair para preview estático apenas se falhar
       (async function boot() {
-        const params = new URLSearchParams(location.search);
-        const wantReact = params.get("react") === "1";
-        if (wantReact) {
-          try {
-            await import("/src/main.tsx");
-            return;
-          } catch (err) {
-            console.warn("Falha ao carregar React/Vite. Carregando preview estático...", err);
-          }
+        try {
+          await import("/src/main.tsx");
+        } catch (err) {
+          console.warn("Falha ao carregar React/Vite. Carregando preview estático...", err);
+          await loadFallbackPreview();
         }
-        await loadFallbackPreview();
       })();
     </script>
   </body>
