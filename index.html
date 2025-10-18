@@ -37,15 +37,8 @@
       // Preferência do usuário: usar SEMPRE a versão específica com Relatórios
       const COSINE_PREVIEW_URL = "https://qenkkmhlphdk.cosine.page/";
 
-      const root = document.getElementById("root");
-      const container = document.createElement("div");
-      container.className = "embed-container";
-      const iframe = document.createElement("iframe");
-      iframe.className = "embed-iframe";
-      iframe.src = COSINE_PREVIEW_URL;
-      iframe.allow = "clipboard-write; clipboard-read; fullscreen";
-      container.appendChild(iframe);
-      root.replaceWith(container);
+      // Sempre carregar o preview estático, ignorando Vercel e React/Vite
+      await loadFallback();
     </script>
   </body>
 </html>
