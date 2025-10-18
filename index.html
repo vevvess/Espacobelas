@@ -64,55 +64,9 @@
         }
       }
 
-      // Tenta incorporar a versão fixa via iframe; se falhar, ou se ?local=1 for usado, cai no preview estático local
+      // Forçar SEMPRE o preview estático local com as mudanças
       (async function boot() {
-        try {
-          const params = new URLSearchParams(location.search);
-          const forceLocal = params.get("local") === "1";
-
-          if (forceLocal) {
-            await loadFallbackPreview();
-            return;
-          }
-
-          const container = document.createElement("div");
-          container.className = "embed-container";
-          const iframe = document.createElement("iframe");
-          iframe.className = "embed-iframe";
-          iframe.src = COSINE_PREVIEW_URL;
-          iframe.allow = "clipboard-write; clipboard-read; fullscreen";
-          container.appendChild(iframe);
-          root.replaceWith(container);
-
-          let loaded = false;
-          iframe.addEventListener("load", () => { loaded = true; });
-
-          // Fallback por timeout ou erro de carregamento
-          const timeoutMs = 8000;
-          const timer = setTimeout(() => {
-            if (!loaded) {
-              console.warn("Iframe não carregou dentro do tempo. Usando preview estático local.");
-              container.remove();
-              const r = document.createElement("div");
-              r.id = "root";
-              document.body.appendChild(r);
-              loadFallbackPreview();
-            }
-          }, timeoutMs);
-
-          iframe.addEventListener("error", () => {
-            clearTimeout(timer);
-            console.warn("Erro ao carregar iframe. Usando preview estático local.");
-            container.remove();
-            const r = document.createElement("div");
-            r.id = "root";
-            document.body.appendChild(r);
-            loadFallbackPreview();
-          });
-        } catch (err) {
-          console.warn("Falha no boot por iframe. Usando preview estático local.", err);
-          await loadFallbackPreview();
-        }
+        await loadFallbackPreview();
       })();
     </script>
   </body>
