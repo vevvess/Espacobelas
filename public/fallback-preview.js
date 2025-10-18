@@ -676,6 +676,42 @@
       </section>
     `;
 
+    // Relatórios — preview estático (Fechamento de Caixa por data)
+    const Relatorios = () => `
+      <style>
+        .r-hero h1 { margin:0 0 6px; font-size:28px; color:var(--bella-800); font-weight:900; letter-spacing:.2px; }
+        .r-hero p { margin:0; color:#9d3a69; font-weight:600; }
+        .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+        .field { display:grid; gap:6px; }
+        .field input, .field select { border:1px solid #f3c6d9; border-radius:12px; padding:10px; font-weight:700; color:#a1125b; background:#fff; }
+        .btn { border:1px solid #f1e6ee; border-radius:12px; padding:10px 14px; font-weight:900; color:#a1125b; background:#fff; box-shadow: var(--shadow); }
+        .btn.primary { background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); color:#fff; border:0; }
+        .muted { color:#64748b; }
+      </style>
+      <div class="r-hero">
+        <h1>Relatórios</h1>
+        <p>Fechamento de Caixa e Exportações</p>
+      </div>
+      <section class="section">
+        <div class="grid2">
+          <div class="field">
+            <label class="muted">Data</label>
+            <input type="date" id="relData" value="${(() => { const t=new Date(); const y=t.getFullYear(); const m=String(t.getMonth()+1).padStart(2,'0'); const d=String(t.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; })()}">
+          </div>
+          <div class="field">
+            <label class="muted">Ações</label>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn primary" id="relPdf">Fechamento PDF</button>
+              <button class="btn" id="relImg">Fechamento Imagem</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="muted">Use os botões para gerar o fechamento do Caixa na data selecionada. O conteúdo é calculado a partir dos atendimentos e das despesas salvos neste navegador.</div>
+      </section>
+    `;
+
     // Rotas (sem Relatórios, conforme pedido)
     const routes = {
       "/dashboard": { title: "Dashboard", view: Dashboard },
@@ -686,6 +722,7 @@
       "/servicos": { title: "Serviços", view: Servicos },
       "/caixa": { title: "Caixa", view: Caixa },
       "/estoque": { title: "Estoque", view: Estoque },
+      "/relatorios": { title: "Relatórios", view: Relatorios },
       "/usuarios": { title: "Usuários", view: Usuarios },
       "/configuracoes": { title: "Configurações", view: Configuracoes },
     };
@@ -733,6 +770,7 @@
             <a class="item" href="#/servicos" data-link="/servicos"><span class="icon">⚙️</span><span class="label">Serviços</span></a>
             <a class="item" href="#/caixa" data-link="/caixa"><span class="icon">💵</span><span class="label">Caixa</span></a>
             <a class="item" href="#/estoque" data-link="/estoque"><span class="icon">📦</span><span class="label">Estoque</span></a>
+            <a class="item" href="#/relatorios" data-link="/relatorios"><span class="icon">📊</span><span class="label">Relatórios</span></a>
           </nav>
 
           <div class="section-divider"><span>ADMINISTRAÇÃO</span></div>
@@ -2185,6 +2223,164 @@
           const id = p.get("addservice");
           if (id) showAgendamentoModal([id]);
         } catch {}
+      }
+
+      // Interações específicas da página Relatórios (preview estático)
+      if (hash === "/relatorios") {
+        const $ = (sel) => main.querySelector(sel);
+        const getYMD = () => {
+          const v = $("#relData")?.value || "";
+          return v;
+        };
+        const loadScriptOnce = (src) =>
+          new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${src}"]`)) return resolve(true);
+            const s = document.createElement("script");
+            s.src = src;
+            s.onload = () => resolve(true);
+            s.onerror = reject;
+            document.head.appendChild(s);
+          });
+        async function ensureJsPDF() {
+          if (!window.jspdf) {
+            await loadScriptOnce("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js");
+          }
+          return window.jspdf.jsPDF;
+        }
+        async function ensureHtml2Canvas() {
+          if (!window.html2canvas) {
+            await loadScriptOnce("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
+          }
+          return window.html2canvas;
+        }
+        function moeda(v) {
+          const n = Number(v) || 0;
+          return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        }
+        function getDayData(ymd) {
+          const store = getStore();
+          const day = (store.days || {})[ymd] || { atendimentos: [], despesas: [] };
+          return day;
+        }
+        function buildResumo(ymd) {
+          const day = getDayData(ymd);
+          const atts = Array.isArray(day.atendimentos) ? day.atendimentos : [];
+          const despesasArr = Array.isArray(day.despesas) ? day.despesas : [];
+          const sumBy = (arr, predicate) => arr.reduce((sum, x) => sum + (predicate(x) || 0), 0);
+
+          // Somar por forma de pagamento a partir dos serviços de cada atendimento
+          let entradasPix = 0, entradasCartao = 0, entradasDinheiro = 0;
+          atts.forEach(a => {
+            const svs = Array.isArray(a.servicos) ? a.servicos : [];
+            if (!svs.length) {
+              const pay = a.pagamento || "dinheiro";
+              const val = Number(a.valor) || 0;
+              if (pay === "pix") entradasPix += val;
+              else if (pay === "cartao" || pay === "cartao_debito" || pay === "cartao_credito") entradasCartao += val;
+              else entradasDinheiro += val;
+              return;
+            }
+            svs.forEach(s => {
+              const pay = s.pagamento || a.pagamento || "dinheiro";
+              const val = Number(s.valor) || 0;
+              if (pay === "pix") entradasPix += val;
+              else if (pay === "cartao" || pay === "cartao_debito" || pay === "cartao_credito") entradasCartao += val;
+              else entradasDinheiro += val;
+            });
+          });
+          const despesas = sumBy(despesasArr, (d) => Number(d.valor) || 0);
+          const totalEntradas = entradasPix + entradasCartao + entradasDinheiro;
+          const dinheiroCalculado = entradasDinheiro - despesas;
+
+          return { totalEntradas, entradasPix, entradasCartao, entradasDinheiro, despesas, dinheiroCalculado, atts, despesasArr };
+        }
+
+        async function exportPdfForDay(ymd) {
+          const jsPDF = await ensureJsPDF();
+          const doc = new jsPDF({ unit: "pt", format: "a4" });
+          const dt = ymd.split("-").reverse().join("/");
+          const r = buildResumo(ymd);
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(16);
+          doc.text(`Fechamento de Caixa - ${dt}`, 40, 40);
+          doc.setFontSize(11);
+          doc.setFont("helvetica", "normal");
+
+          const lines = [
+            `Total Entradas: ${moeda(r.totalEntradas)}`,
+            `Total PIX: ${moeda(r.entradasPix)}`,
+            `Total Cartão: ${moeda(r.entradasCartao)}`,
+            `Total Dinheiro: ${moeda(r.entradasDinheiro)}`,
+            `Total Despesas: ${moeda(r.despesas)}`,
+            `Dinheiro em Caixa (Calculado): ${moeda(r.dinheiroCalculado)}`,
+          ];
+          let y = 70;
+          lines.forEach((ln) => { doc.text(ln, 40, y); y += 16; });
+
+          y += 12;
+          doc.setFont("helvetica", "bold"); doc.text("Atendimentos", 40, y); doc.setFont("helvetica", "normal");
+          y += 16;
+          r.atts.slice(0, 20).forEach((a) => {
+            const svs = (a.servicos || []).map(s=>s.nome).filter(Boolean).join(" + ");
+            doc.text(`${a.cliente || "-"} — ${svs || (a.obs || "")} — ${moeda(a.valor || 0)}`, 40, y);
+            y += 14;
+          });
+
+          y += 12;
+          doc.setFont("helvetica", "bold"); doc.text("Despesas", 40, y); doc.setFont("helvetica", "normal");
+          y += 16;
+          r.despesasArr.slice(0, 20).forEach((d) => {
+            doc.text(`${d.descricao || "Despesa"} — ${moeda(d.valor || 0)}`, 40, y);
+            y += 14;
+          });
+
+          doc.save(`Fechamento_${ymd}.pdf`);
+        }
+
+        async function exportImageForDay(ymd) {
+          const html2canvas = await ensureHtml2Canvas();
+          const tmp = document.createElement("div");
+          tmp.style.padding = "20px";
+          tmp.style.background = "#fff";
+          tmp.style.color = "#111827";
+          tmp.style.fontFamily = "Inter, Arial, sans-serif";
+          const dt = ymd.split("-").reverse().join("/");
+          const r = buildResumo(ymd);
+          tmp.innerHTML = `
+            <div style="font-weight:900;font-size:18px;margin-bottom:8px">Fechamento de Caixa — ${dt}</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+              <div style="border:1px solid #e5e7eb;padding:8px;border-radius:8px">Entradas: <strong>${moeda(r.totalEntradas)}</strong></div>
+              <div style="border:1px solid #e5e7eb;padding:8px;border-radius:8px">PIX: <strong>${moeda(r.entradasPix)}</strong></div>
+              <div style="border:1px solid #e5e7eb;padding:8px;border-radius:8px">Cartão: <strong>${moeda(r.entradasCartao)}</strong></div>
+              <div style="border:1px solid #e5e7eb;padding:8px;border-radius:8px">Dinheiro: <strong>${moeda(r.entradasDinheiro)}</strong></div>
+              <div style="border:1px solid #e5e7eb;padding:8px;border-radius:8px">Despesas: <strong>${moeda(r.despesas)}</strong></div>
+              <div style="border:1px solid #e5e7eb;padding:8px;border-radius:8px">Dinheiro em Caixa: <strong>${moeda(r.dinheiroCalculado)}</strong></div>
+            </div>
+            <div style="font-weight:900;margin:10px 0 6px">Atendimentos</div>
+            <div>${r.atts.slice(0,20).map(a=>`<div style="border:1px solid #e5e7eb;padding:6px;border-radius:8px;margin-bottom:6px">${a.cliente || "-"} — ${(a.servicos||[]).map(s=>s.nome).join(" + ") || (a.obs||"")} — <strong>${moeda(a.valor || 0)}</strong></div>`).join("") || "<div>Nenhum</div>"}</div>
+            <div style="font-weight:900;margin:10px 0 6px">Despesas</div>
+            <div>${(Array.isArray(r.despesasArr)?r.despesasArr:[]).slice(0,20).map(d=>`<div style="border:1px solid #e5e7eb;padding:6px;border-radius:8px;margin-bottom:6px">${d.descricao || "Despesa"} — <strong>${moeda(d.valor || 0)}</strong></div>`).join("") || "<div>Nenhuma</div>"}</div>
+          `;
+          document.body.appendChild(tmp);
+          const canvas = await html2canvas(tmp, {scale: 2});
+          document.body.removeChild(tmp);
+          const a = document.createElement("a");
+          a.href = canvas.toDataURL("image/png");
+          a.download = `Fechamento_${ymd}.png`;
+          a.click();
+        }
+
+        $("#relPdf")?.addEventListener("click", () => {
+          const ymd = getYMD();
+          if (!ymd) return;
+          exportPdfForDay(ymd);
+        });
+        $("#relImg")?.addEventListener("click", () => {
+          const ymd = getYMD();
+          if (!ymd) return;
+          exportImageForDay(ymd);
+        });
       }
 
       // Interações específicas do Caixa (persistência local e cálculos)
