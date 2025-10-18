@@ -2,15 +2,17 @@
   "id": "bella-app-v1",
   "name": "Bella App",
   "branch": "main",
-  "date": "2025-10-04",
+  "date": "2025-10-18",
   "initial_route": "/dashboard",
-  "preview_url": "https://espaco-five.vercel.app",
+  "preview_url": "/index.html",
   "manifest_url": "/cosine-manifest.json",
   "meta_flag": {
     "name": "cosine-app-id",
-    "content": "bella-app-v1"
+    "content": "BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1"
   },
-  "sentinel_comment": "// COSINE_APP_SENTINEL: BELLA-APP-V1 (Estoque + Caixa + UI nova)",
+  "sentinel_comment": "// COSINE_APP_SENTINEL: BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1",
+  "static_preview": true,
+  "ignore_vercel": true,
   "implemented": [
     "Caixa: atendimentos manuais multi-serviço, despesas (origens), totais, data selecionável, exportar PDF/Imagem, leitura/armazenamento de QR, e persistência Neon/Postgres na versão React (preview local usa localStorage).",
     "Estoque: cadastro completo de produtos, categorias, locais, balanço por movimentações, filtros, scanner de código de barras (foto e vídeo), exportações CSV/XLSX, CRUD de movimentações.",
@@ -21,5 +23,5 @@
     "Estoque: rótulos QR e consumo automático por serviço.",
     "Agenda/Permissões: “profissional preferido”, visibilidade por papéis, busca com typeahead."
   ],
-  "notes": "Este manifesto ajuda a localizar e reabrir o app. O preview local usa fallback estático quando necessário, e a versão de produção referencia o Vercel."
+  "notes": "Versão estática de preview. Vercel ignorado (embed desativado). Use /index.html para abrir o app e /public/fallback-preview.js para a UI estática."
 }
