@@ -37,8 +37,75 @@
       // Preferência do usuário: usar SEMPRE a versão específica com Relatórios
       const COSINE_PREVIEW_URL = "https://qenkkmhlphdk.cosine.page/";
 
-      // Sempre carregar o preview estático, ignorando Vercel e React/Vite
-      await loadFallback();
+      const root = document.getElementById("root");
+
+      async function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = src;
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+
+      async function loadFallbackPreview() {
+        try {
+          await loadScript("/public/fallback-preview.js");
+          if (window.__runFallbackPreview) {
+            const target = document.getElementById("root") || document.body;
+            window.__runFallbackPreview(target);
+          } else {
+            document.body.textContent = "Falha ao inicializar o preview estático.";
+          }
+        } catch (e) {
+          console.error("Erro ao carregar o preview estático:", e);
+          document.body.textContent = "Não foi possível carregar o app ou o preview estático.";
+        }
+      }
+
+      // Tenta incorporar a versão fixa via iframe; se falhar, cai no preview estático local
+      (async function boot() {
+        try {
+          const container = document.createElement("div");
+          container.className = "embed-container";
+          const iframe = document.createElement("iframe");
+          iframe.className = "embed-iframe";
+          iframe.src = COSINE_PREVIEW_URL;
+          iframe.allow = "clipboard-write; clipboard-read; fullscreen";
+          container.appendChild(iframe);
+          root.replaceWith(container);
+
+          let loaded = false;
+          iframe.addEventListener("load", () => { loaded = true; });
+
+          // Fallback por timeout ou erro de carregamento
+          const timeoutMs = 8000;
+          const timer = setTimeout(() => {
+            if (!loaded) {
+              console.warn("Iframe não carregou dentro do tempo. Usando preview estático local.");
+              container.remove();
+              const r = document.createElement("div");
+              r.id = "root";
+              document.body.appendChild(r);
+              loadFallbackPreview();
+            }
+          }, timeoutMs);
+
+          iframe.addEventListener("error", () => {
+            clearTimeout(timer);
+            console.warn("Erro ao carregar iframe. Usando preview estático local.");
+            container.remove();
+            const r = document.createElement("div");
+            r.id = "root";
+            document.body.appendChild(r);
+            loadFallbackPreview();
+          });
+        } catch (err) {
+          console.warn("Falha no boot por iframe. Usando preview estático local.", err);
+          await loadFallbackPreview();
+        }
+      })();
     </script>
   </body>
 </html>
