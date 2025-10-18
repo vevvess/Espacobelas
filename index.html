@@ -33,22 +33,23 @@
       - Se Vite falhar (ex.: só arquivos estáticos), carrega preview estático.
     -->
     <script type="module">
+      // BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1
+      // Preferência do usuário: usar SEMPRE a versão específica com Relatórios
+      const COSINE_PREVIEW_URL = "https://qenkkmhlphdk.cosine.page/";
+
       const root = document.getElementById("root");
-      const isCosine = location.hostname.endsWith(".cosine.page");
-      const params = new URLSearchParams(location.search);
-      const wantsVercel = params.get("vercel") === "1";
-      const VERCEL_URL = "https://espaco-five.vercel.app";
 
-      async function loadFallback() {
-        const loadScript = (src) =>
-          new Promise((resolve, reject) => {
-            const s = document.createElement("script");
-            s.src = src;
-            s.onload = resolve;
-            s.onerror = reject;
-            document.head.appendChild(s);
-          });
+      async function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = src;
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
 
+      async function loadFallbackPreview() {
         try {
           await loadScript("/public/fallback-preview.js");
           if (window.__runFallbackPreview) {
@@ -63,29 +64,38 @@
         }
       }
 
-      if (isCosine) {
-        // Em cosine.page: por padrão carregar o preview estático; use ?vercel=1 para embutir Vercel
-        if (wantsVercel) {
-          const container = document.createElement("div");
-          container.className = "embed-container";
-          const iframe = document.createElement("iframe");
-          iframe.className = "embed-iframe";
-          iframe.src = VERCEL_URL;
-          iframe.allow = "clipboard-write; clipboard-read; fullscreen";
-          container.appendChild(iframe);
-          root.replaceWith(container);
-        } else {
-          await loadFallback();
+      // Boot: carregar a versão React deste repositório por padrão.
+      // Use ?fixed=1 para abrir a versão fixa solicitada (k22f3xsepaxf.cosine.page).
+      (async function boot() {
+        const params = new URLSearchParams(location.search);
+        const wantFixed = params.get("fixed") === "1";
+        if (!wantFixed) {
+          try {
+            await import("/src/main.tsx");
+            return;
+          } catch (err) {
+            console.warn("Falha ao carregar React/Vite. Carregando preview estático...", err);
+            try {
+              await loadFallbackPreview();
+              return;
+            } catch (e2) {
+              console.warn("Falha ao carregar preview estático, caindo para versão fixa.", e2);
+            }
+          }
         }
-      } else {
-        // Dev/local: tenta carregar a app real via Vite. Se falhar, cai no fallback.
-        try {
-          await import("/src/main.tsx");
-        } catch (err) {
-          console.warn("Vite/TSX indisponível. Carregando preview estático...", err);
-          await loadFallback();
-        }
-      }
+
+        // Fixo: incorpora a URL exata que você indicou, se ?fixed=1
+        const FIXED_URL = "https://k22f3xsepaxf.cosine.page/";
+        const rootEl = document.getElementById("root");
+        const container = document.createElement("div");
+        container.className = "embed-container";
+        const iframe = document.createElement("iframe");
+        iframe.className = "embed-iframe";
+        iframe.src = FIXED_URL;
+        iframe.allow = "clipboard-write; clipboard-read; fullscreen";
+        container.appendChild(iframe);
+        rootEl.replaceWith(container);
+      })();
     </script>
   </body>
 </html>

@@ -16,6 +16,9 @@ import {
 } from "react-icons/fi";
 import { useAuth } from "../contexts/SimpleAuthContext";
 import { useCaixa } from "../hooks/useCaixa";
+import { useClientes } from "../hooks/useClientes";
+import { useServicos } from "../hooks/useServicos";
+import { useFuncionarios } from "../hooks/useFuncionarios";
 import { ModalEditarMovimentacao } from "../components/ModalEditarMovimentacao";
 import { toast } from "../hooks/use-toast";
 import { getDinheiroInformado, setDinheiroInformado as setDinheiroInformadoDB } from "@/services/caixaDbService";
@@ -193,6 +196,29 @@ export default function Caixa() {
     valor: 0,
     formaPagamento: "dinheiro",
   });
+
+  // Inline criação/sugestões
+  const { clientes, addCliente, searchClientes } = useClientes();
+  const { servicos: servicosCatalogo, addServico } = useServicos();
+  const { funcionarios } = useFuncionarios();
+
+  const [clienteQuery, setClienteQuery] = useState("");
+  const [mostrarNovoCliente, setMostrarNovoCliente] = useState(false);
+  const [novoClienteInline, setNovoClienteInline] = useState({
+    nome: "",
+    telefone: "",
+    data_nascimento: "" as string | undefined,
+  });
+
+  type LinhaServico = { servicoId?: string; nome?: string; valor: number; profissional?: string };
+  const [linhasServicos, setLinhasServicos] = useState<LinhaServico[]>([
+    { servicoId: undefined, nome: "", valor: 0, profissional: "" },
+  ]);
+
+  const recalcTotalAtendimento = () => {
+    const total = linhasServicos.reduce((sum, l) => sum + (Number(l.valor) || 0), 0);
+    setNovoAtendimento((prev) => ({ ...prev, valor: total }));
+  };
 
   const resumo = useMemo(
     () => getResumoDiario(selectedDate),
@@ -963,9 +989,7 @@ export default function Caixa() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-bella-800">
-                Novo Atendimento Manual
-              </h2>
+              <h2 className="text-xl font-bold text-bella-800">Novo Atendimento Manual</h2>
               <button
                 onClick={() => setShowNovoAtendimento(false)}
                 className="p-2 text-bella-600 hover:bg-bella-100 rounded-lg"
@@ -975,68 +999,253 @@ export default function Caixa() {
             </div>
 
             <div className="space-y-4">
+              {/* Cliente com sugestões e criação inline */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-bella-700 mb-2">
-                    Cliente *
-                  </label>
-                  <input
-                    type="text"
-                    value={novoAtendimento.cliente}
-                    onChange={(e) =>
-                      setNovoAtendimento((p) => ({
-                        ...p,
-                        cliente: e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
-                    placeholder="Nome do cliente"
-                  />
+                  <label className="block text-sm font-medium text-bella-700 mb-2">Cliente *</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={novoAtendimento.cliente}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNovoAtendimento((p) => ({ ...p, cliente: val }));
+                        setClienteQuery(val);
+                      }}
+                      className="flex-1 px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
+                      placeholder="Nome do cliente"
+                      autoComplete="off"
+                    />
+                    <button
+                      onClick={() => {
+                        setMostrarNovoCliente(true);
+                        setNovoClienteInline((prev) => ({ ...prev, nome: novoAtendimento.cliente || "" }));
+                      }}
+                      className="px-3 py-2 border border-bella-300 text-bella-700 rounded-lg hover:bg-bella-50"
+                      title="Criar novo cliente"
+                    >
+                      <FiPlus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {/* Sugestões */}
+                  {!!clienteQuery?.trim() && (
+                    <div className="mt-2 space-y-2">
+                      {searchClientes(clienteQuery).slice(0, 6).map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setNovoAtendimento((p) => ({ ...p, cliente: c.nome }));
+                            setClienteQuery("");
+                          }}
+                          className="w-full text-left px-3 py-2 border border-bella-200 rounded-lg hover:bg-bella-50"
+                        >
+                          <div className="font-semibold text-bella-800">{c.nome}</div>
+                          <div className="text-xs text-bella-600">{[c.telefone, c.email].filter(Boolean).join(" • ")}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* Novo cliente inline */}
+                  {mostrarNovoCliente && (
+                    <div className="mt-3 p-3 border border-bella-200 rounded-lg bg-bella-50 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-bella-700">Nome *</label>
+                          <input
+                            type="text"
+                            value={novoClienteInline.nome}
+                            onChange={(e) => setNovoClienteInline((p) => ({ ...p, nome: e.target.value }))}
+                            className="w-full px-3 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-bella-700">Telefone</label>
+                          <input
+                            type="text"
+                            value={novoClienteInline.telefone}
+                            onChange={(e) => setNovoClienteInline((p) => ({ ...p, telefone: e.target.value }))}
+                            className="w-full px-3 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-bella-700">Aniversário</label>
+                          <input
+                            type="date"
+                            value={novoClienteInline.data_nascimento || ""}
+                            onChange={(e) => setNovoClienteInline((p) => ({ ...p, data_nascimento: e.target.value }))}
+                            className="w-full px-3 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => setMostrarNovoCliente(false)}
+                          className="px-3 py-2 border border-bella-300 text-bella-700 rounded-lg hover:bg-bella-100"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const nome = (novoClienteInline.nome || "").trim();
+                            if (!nome) return;
+                            try {
+                              const created = await addCliente({
+                                nome,
+                                telefone: novoClienteInline.telefone,
+                                data_nascimento: novoClienteInline.data_nascimento ? new Date(novoClienteInline.data_nascimento) : undefined,
+                                observacoes: "",
+                                endereco: "",
+                                email: "",
+                                tipo_cliente: "normal",
+                              } as any);
+                              setNovoAtendimento((p) => ({ ...p, cliente: created?.nome || nome }));
+                              setMostrarNovoCliente(false);
+                              setClienteQuery("");
+                            } catch {}
+                          }}
+                          className="px-3 py-2 bella-button"
+                        >
+                          Criar Cliente
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-bella-700 mb-2">
-                    Valor (R$) *
-                  </label>
+                  <label className="block text-sm font-medium text-bella-700 mb-2">Valor (R$) *</label>
                   <input
                     type="number"
                     step="0.01"
                     value={novoAtendimento.valor}
-                    onChange={(e) =>
-                      setNovoAtendimento((prev) => ({
-                        ...prev,
-                        valor: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                    className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
+                    readOnly
+                    className="w-full px-4 py-2 border border-bella-200 rounded-lg bg-bella-50 text-bella-700"
                     placeholder="0,00"
                   />
                 </div>
               </div>
 
+              {/* Serviços com catálogo + criação inline */}
               <div>
-                <label className="block text-sm font-medium text-bella-700 mb-2">
-                  Serviço(s) *
-                </label>
-                <input
-                  type="text"
-                  value={novoAtendimento.servicos}
-                  onChange={(e) =>
-                    setNovoAtendimento((prev) => ({
-                      ...prev,
-                      servicos: e.target.value,
-                    }))
-                  }
-                  className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
-                  placeholder="Ex: Corte + Escova"
-                />
+                <label className="block text-sm font-medium text-bella-700 mb-2">Serviço(s) *</label>
+                <div className="space-y-3">
+                  {linhasServicos.map((linha, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-5">
+                        <select
+                          value={linha.servicoId || ""}
+                          onChange={(e) => {
+                            const id = e.target.value || undefined;
+                            const svc = servicosCatalogo.find((s: any) => String(s.id) === String(id));
+                            setLinhasServicos((rows) => {
+                              const next = [...rows];
+                              next[idx] = {
+                                ...next[idx],
+                                servicoId: id,
+                                nome: svc?.nome || next[idx].nome,
+                                valor: typeof svc?.preco === "number" ? svc.preco : next[idx].valor,
+                              };
+                              return next;
+                            });
+                            setTimeout(recalcTotalAtendimento, 0);
+                          }}
+                          className="w-full px-3 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500"
+                        >
+                          <option value="">Selecionar serviço</option>
+                          {servicosCatalogo.map((s: any) => (
+                            <option key={s.id} value={s.id}>{s.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={linha.valor}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value || "0") || 0;
+                            setLinhasServicos((rows) => {
+                              const next = [...rows];
+                              next[idx] = { ...next[idx], valor: v };
+                              return next;
+                            });
+                            setTimeout(recalcTotalAtendimento, 0);
+                          }}
+                          className="w-full px-3 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500"
+                          placeholder="Valor"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <select
+                          value={linha.profissional || ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setLinhasServicos((rows) => {
+                              const next = [...rows];
+                              next[idx] = { ...next[idx], profissional: v };
+                              return next;
+                            });
+                          }}
+                          className="w-full px-3 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500"
+                        >
+                          <option value="">Profissional</option>
+                          {funcionarios.map((f: any) => (
+                            <option key={f.id} value={f.nome}>{f.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-1 flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            // Mini criação de serviço inline (rápida)
+                            const nome = window.prompt("Nome do serviço:");
+                            if (!nome) return;
+                            const precoStr = window.prompt("Preço (R$):", "0");
+                            const preco = parseFloat(precoStr || "0") || 0;
+                            addServico({ nome, descricao: "", preco, duracao_minutos: 60, ativo: true } as any)
+                              .then((novo) => {
+                                setLinhasServicos((rows) => {
+                                  const next = [...rows];
+                                  next[idx] = { ...next[idx], servicoId: novo?.id, nome: novo?.nome || nome, valor: preco };
+                                  return next;
+                                });
+                                setTimeout(recalcTotalAtendimento, 0);
+                              })
+                              .catch(() => {});
+                          }}
+                          className="p-2 border border-bella-300 text-bella-700 rounded-lg hover:bg-bella-50"
+                          title="Criar novo serviço"
+                        >
+                          <FiPlus className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setLinhasServicos((rows) => rows.filter((_, i) => i !== idx));
+                            setTimeout(recalcTotalAtendimento, 0);
+                          }}
+                          className="p-2 text-red-600 hover:bg-red-100 rounded-lg"
+                          title="Remover"
+                        >
+                          <FiX className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2">
+                  <button
+                    onClick={() => setLinhasServicos((rows) => [...rows, { servicoId: undefined, nome: "", valor: 0, profissional: "" }])}
+                    className="px-3 py-2 border border-bella-300 text-bella-700 rounded-lg hover:bg-bella-50"
+                  >
+                    + Adicionar serviço
+                  </button>
+                </div>
               </div>
 
+              {/* Categoria e pagamento */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-bella-700 mb-2">
-                    Categoria
-                  </label>
+                  <label className="block text-sm font-medium text-bella-700 mb-2">Categoria</label>
                   <input
                     value="Atendimento"
                     disabled
@@ -1045,17 +1254,10 @@ export default function Caixa() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-bella-700 mb-2">
-                    Forma de Pagamento
-                  </label>
+                  <label className="block text-sm font-medium text-bella-700 mb-2">Forma de Pagamento</label>
                   <select
                     value={novoAtendimento.formaPagamento}
-                    onChange={(e) =>
-                      setNovoAtendimento((prev) => ({
-                        ...prev,
-                        formaPagamento: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setNovoAtendimento((prev) => ({ ...prev, formaPagamento: e.target.value }))}
                     className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
                   >
                     {formasPagamento.map((forma) => (
@@ -1065,24 +1267,6 @@ export default function Caixa() {
                     ))}
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-bella-700 mb-2">
-                  Funcionário *
-                </label>
-                <input
-                  type="text"
-                  value={novoAtendimento.profissional}
-                  onChange={(e) =>
-                    setNovoAtendimento((prev) => ({
-                      ...prev,
-                      profissional: e.target.value,
-                    }))
-                  }
-                  className="w-full px-4 py-2 border border-bella-200 rounded-lg focus:ring-2 focus:ring-bella-500 focus:border-transparent"
-                  placeholder="Nome do funcionário"
-                />
               </div>
 
               <div className="flex space-x-3">
@@ -1096,6 +1280,9 @@ export default function Caixa() {
                       valor: 0,
                       formaPagamento: "dinheiro",
                     });
+                    setLinhasServicos([{ servicoId: undefined, nome: "", valor: 0, profissional: "" }]);
+                    setMostrarNovoCliente(false);
+                    setClienteQuery("");
                   }}
                   className="flex-1 px-4 py-3 border border-bella-300 text-bella-700 rounded-lg hover:bg-bella-50"
                 >
@@ -1103,24 +1290,32 @@ export default function Caixa() {
                 </button>
                 <button
                   onClick={() => {
-                    if (
-                      !novoAtendimento.cliente ||
-                      !novoAtendimento.servicos ||
-                      !novoAtendimento.profissional ||
-                      novoAtendimento.valor <= 0
-                    )
-                      return;
+                    const clienteNome = (novoAtendimento.cliente || "").trim();
+                    const validRows = linhasServicos.filter((l) => (l.nome || l.servicoId) && (Number(l.valor) || 0) > 0);
+                    if (!clienteNome || validRows.length === 0) return;
+
+                    const payloadServicos = validRows.map((l) => {
+                      const nome = l.nome || servicosCatalogo.find((s: any) => String(s.id) === String(l.servicoId))?.nome || "";
+                      return {
+                        nome,
+                        valor: Number(l.valor) || 0,
+                        profissional: l.profissional || novoAtendimento.profissional || "",
+                      };
+                    });
+
+                    const total = payloadServicos.reduce((sum, s) => sum + (Number(s.valor) || 0), 0);
                     adicionarMovimentoManual({
                       tipo: "entrada",
                       descricao: `Atendimento manual`,
-                      valor: novoAtendimento.valor,
+                      valor: total,
                       categoria: "Atendimento",
                       formaPagamento: novoAtendimento.formaPagamento,
                       data: new Date(selectedDate.getTime()),
-                      observacoes: novoAtendimento.servicos,
-                      clienteNome: novoAtendimento.cliente,
-                      profissional: novoAtendimento.profissional,
+                      observacoes: payloadServicos.map((s) => s.nome).filter(Boolean).join(" + "),
+                      clienteNome,
+                      profissional: payloadServicos[0]?.profissional || "",
                     });
+
                     setShowNovoAtendimento(false);
                     setNovoAtendimento({
                       cliente: "",
@@ -1129,13 +1324,14 @@ export default function Caixa() {
                       valor: 0,
                       formaPagamento: "dinheiro",
                     });
+                    setLinhasServicos([{ servicoId: undefined, nome: "", valor: 0, profissional: "" }]);
+                    setMostrarNovoCliente(false);
+                    setClienteQuery("");
                   }}
                   className="flex-1 bella-button"
                   disabled={
-                    !novoAtendimento.cliente ||
-                    !novoAtendimento.servicos ||
-                    !novoAtendimento.profissional ||
-                    novoAtendimento.valor <= 0
+                    !(novoAtendimento.cliente || "").trim() ||
+                    linhasServicos.filter((l) => (l.nome || l.servicoId) && (Number(l.valor) || 0) > 0).length === 0
                   }
                 >
                   Salvar Atendimento
