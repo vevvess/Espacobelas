@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bella App</title>
+    <meta name="cosine-app-id" content="bella-app-v1" />
+    <meta name="cosine-sentinel" content="BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1" />
+    <meta name="cosine-preview-url" content="/" />
+    <!-- Os campos abaixo serão preenchidos quando o repositório for informado -->
+    <meta name="cosine-repo-url" content="" />
+    <meta name="cosine-repo-branch" content="" />
+    <meta name="cosine-repo-subpath" content="" />
     <style>
       .embed-container {
         position: fixed;
@@ -27,15 +34,13 @@
 
     <!--
       Regra simples:
-      - Em cosine.page: incorpora o app real hospedado no Vercel via iframe (visual e funcional 100% iguais).
-      - Fora de cosine.page (dev/local ou build): carrega o app normalmente via Vite/TSX.
-      - Se Vite falhar (ex.: só arquivos estáticos), carrega preview estático.
+      - Static-only: ignorar Vercel e usar sempre o preview estático.
+      - Fora de cosine.page (dev/local ou build): tenta carregar via Vite/TSX; se falhar, usa preview estático.
     -->
     <script type="module">
       const root = document.getElementById("root");
       const isCosine = location.hostname.endsWith(".cosine.page");
       const params = new URLSearchParams(location.search);
-      const wantsVercel = params.get("vercel") === "1";
       const VERCEL_URL = "https://espaco-five.vercel.app";
 
       async function loadFallback() {
@@ -63,20 +68,8 @@
       }
 
       if (isCosine) {
-        if (wantsVercel) {
-          // Modo: embutir Vercel explicitamente (?vercel=1)
-          const container = document.createElement("div");
-          container.className = "embed-container";
-          const iframe = document.createElement("iframe");
-          iframe.className = "embed-iframe";
-          iframe.src = VERCEL_URL;
-          iframe.allow = "clipboard-write; clipboard-read; fullscreen";
-          container.appendChild(iframe);
-          root.replaceWith(container);
-        } else {
-          // Padrão em cosine.page: mostrar o preview estático (WIP)
-          await loadFallback();
-        }
+        // Static-only: sempre usar o preview estático, ignorando Vercel
+        await loadFallback();
       } else {
         // Dev/local: tenta carregar a app real via Vite. Se falhar, cai no fallback.
         try {
