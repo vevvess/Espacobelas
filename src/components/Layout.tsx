@@ -53,7 +53,7 @@ const adminNavigation = [
   { name: "Caixa", href: "/caixa", icon: FiDollarSign },
   { name: "Estoque", href: "/estoque", icon: FiPackage },
   // Relatórios mantido visível porém desativado temporariamente
-  { name: "Relatórios", href: "/relatorios", icon: FiBarChart, disabled: true },
+  { name: "Relatórios", href: "/relatorios", icon: FiBarChart },
 ];
 
 // Navegação para funcionários (agenda, chat e ficha cliente)
