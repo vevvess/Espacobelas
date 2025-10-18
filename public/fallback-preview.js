@@ -2604,59 +2604,43 @@
             const modals = document.getElementById("modals");
             const modal = modals.querySelector(".modal");
 
+            const clientsStore = getClientsStore();
+            const clients = (clientsStore.clients || []);
+            const svcStore = getSvcStore();
+            const services = (svcStore.items || []);
+            const users = (getUsersStore().users || []);
+
             modal.innerHTML = `
               <style>
-                .amodal h3 {
-                  margin: 0 0 14px;
-                  font-weight: 900;
-                  color: var(--bella-800);
-                  font-size: 22px;
-                }
-                .amodal .header {
-                  display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;
-                }
-                .amodal .closex {
-                  width:38px; height:38px; border-radius:12px; display:grid; place-items:center;
-                  background:#fff; border:1px solid #f3c6d9; color:#a1125b;
-                }
+                .amodal h3 { margin: 0 0 14px; font-weight: 900; color: var(--bella-800); font-size: 22px; }
+                .amodal .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+                .amodal .closex { width:38px; height:38px; border-radius:12px; display:grid; place-items:center; background:#fff; border:1px solid #f3c6d9; color:#a1125b; }
                 .amodal .grid2 { display:grid; grid-template-columns: 1fr 180px; gap:10px; }
                 .amodal .field { display:grid; gap:8px; }
                 .amodal label { color:#a1125b; font-weight:900; }
-                .amodal input, .amodal select {
-                  border:2px solid #f3c6d9; border-radius:14px; padding:12px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0;
-                }
+                .amodal input, .amodal select { border:2px solid #f3c6d9; border-radius:14px; padding:12px; font-weight:700; color:#a1125b; background:#fff; width:100%; min-width:0; }
                 .amodal input[readonly] { background:#fff7fb; }
                 .amodal .hint { color:#9ca3af; font-weight:700; }
-                .amodal .svc-head { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+                .amodal #cSuggest { display:grid; gap:6px; margin-top:6px; }
+                .amodal .cs-item { display:flex; align-items:center; justify-content:space-between; gap:10px; background:#fff; border:1px solid #f1e6ee; border-radius:10px; padding:8px; }
+                .amodal .cs-item .nm { font-weight:900; color:#7a0f3f; }
+                .amodal .mini-box { border:1px solid #f1e6ee; border-radius:12px; padding:10px; background:#fff; display:none; }
+                .amodal .mini-box.visible { display:block; }
                 .amodal #svcList { display:grid; gap:10px; }
-                .amodal .svc-row {
-                  display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; grid-template-areas: "nome valor prof pay del"; gap:10px; align-items:center;
-                  background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:10px;
-                }
-                .amodal .svc-row .svc-nome { grid-area: nome; }
-                .amodal .svc-row .svc-valor { grid-area: valor; }
-                .amodal .svc-row .svc-prof { grid-area: prof; }
-                .amodal .svc-row .svc-pay { grid-area: pay; }
-                .amodal .svc-row .svc-del { grid-area: del; justify-self:end; }
+                .amodal .svc-row { display:grid; grid-template-columns: 1fr 110px 160px 140px 42px; gap:10px; align-items:center; background:#fff; border:1.5px solid #f3c6d9; border-radius:12px; padding:10px; }
+                .amodal .svc-row .svc-sel { width:100%; }
+                .amodal .svc-row .svc-valor { }
+                .amodal .svc-row .svc-prof { }
+                .amodal .svc-row .svc-pay { }
+                .amodal .svc-row .svc-del { justify-self:end; }
                 .amodal .svc-add { border:1px solid #f3c6d9; background:#fff; color:#a1125b; border-radius:12px; padding:10px 12px; font-weight:900; display:inline-flex; align-items:center; gap:8px; max-width:100%; }
                 .amodal .footer { display:flex; justify-content:space-between; gap:8px; margin-top:8px; }
-                .amodal .btn-cancel {
-                  border:2px solid #f3c6d9; border-radius:16px; padding:12px 16px; background:#fff; color:#a1125b; font-weight:900;
-                }
-                .amodal .btn-save {
-                  border:0; border-radius:16px; padding:12px 16px; font-weight:900; color:#fff;
-                  background:linear-gradient(90deg,var(--bella-500),var(--bella-400));
-                }
+                .amodal .btn-cancel { border:2px solid #f3c6d9; border-radius:16px; padding:12px 16px; background:#fff; color:#a1125b; font-weight:900; }
+                .amodal .btn-save { border:0; border-radius:16px; padding:12px 16px; font-weight:900; color:#fff; background:linear-gradient(90deg,var(--bella-500),var(--bella-400)); }
+                .amodal .inline-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
                 @media(max-width: 640px){
                   .amodal .grid2 { grid-template-columns: 1fr; }
-                  .amodal .svc-row { grid-template-columns: 1fr 110px 42px; grid-template-areas:
-                    "nome valor del"
-                    "prof pay del";
-                  }
-                  .amodal .svc-row .svc-nome,
-                  .amodal .svc-row .svc-valor,
-                  .amodal .svc-row .svc-prof,
-                  .amodal .svc-row .svc-pay { min-width: 0; }
+                  .amodal .svc-row { grid-template-columns: 1fr 110px 42px; }
                 }
               </style>
 
@@ -2668,30 +2652,40 @@
                   </button>
                 </div>
 
+                <div class="field">
+                  <label>Cliente *</label>
+                  <div class="inline-actions">
+                    <input id="fCliente" placeholder="Nome do cliente" value="${existing?.cliente || ""}" autocomplete="off">
+                    <button class="closex" id="btnNewClient" title="Novo cliente" style="padding:10px;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    </button>
+                  </div>
+                  <div id="cSuggest"></div>
+                  <div id="newClientBox" class="mini-box">
+                    <div class="field"><label>Nome *</label><input id="ncNome" placeholder="Nome completo"></div>
+                    <div class="field"><label>Telefone</label><input id="ncTel" placeholder="(DDD) 9xxxx-xxxx"></div>
+                    <div class="field"><label>Aniversário</label><input id="ncBirth" type="date"></div>
+                    <div class="field"><label>Profissional preferido</label>
+                      <select id="ncPref"><option value="">Selecionar</option>${users.map(u=>`<option value="${u.id}">${u.nome||""}</option>`).join("")}</select>
+                    </div>
+                    <div class="inline-actions" style="justify-content:flex-end;">
+                      <button class="btn-cancel" id="ncCancel">Cancelar</button>
+                      <button class="btn-save" id="ncSave">Criar Cliente</button>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="grid2">
                   <div class="field">
-                    <label>Cliente *</label>
-                    <input id="fCliente" placeholder="Nome do cliente" value="${existing?.cliente || ""}">
+                    <label>Serviço(s) *</label>
+                    <div id="svcList"></div>
+                    <button class="svc-add" id="addSvc" type="button">+ Adicionar serviço</button>
                   </div>
                   <div class="field">
                     <label>Valor (R$) *</label>
                     <input id="fTotal" type="number" step="0.01" min="0" value="${existing ? existing.valor : 0}" readonly>
                   </div>
                 </div>
-
-                <div class="field">
-                  <label>Serviço(s) *</label>
-                  <div class="hint">Ex: Corte + Escova</div>
-                  <div id="svcList" style="margin-top:6px;"></div>
-                  <button class="svc-add" id="addSvc" type="button">+ Adicionar serviço</button>
-                </div>
-
-                <div class="field">
-                  <label>Categoria</label>
-                  <input value="Atendimento" readonly>
-                </div>
-
-                
 
                 <div class="field">
                   <label>Observação</label>
@@ -2707,63 +2701,190 @@
 
             modals.style.display = "flex";
 
-            const svcList = modal.querySelector("#svcList");
-
+            const $m = (sel) => modal.querySelector(sel);
             const defaultPay = existing?.pagamento || "dinheiro";
+            let selectedClientPhone = "";
 
-            function addRow(svc = { nome: "", valor: "", profissional: "", pagamento: "" }) {
+            function renderClientSuggestions(q) {
+              const box = $m("#cSuggest");
+              const val = String(q || "").trim().toLowerCase();
+              if (!val) { box.innerHTML = ""; return; }
+              const items = clients
+                .filter(c => String(c.name || "").toLowerCase().includes(val))
+                .slice(0, 8);
+              if (!items.length) { box.innerHTML = ""; return; }
+              box.innerHTML = items.map(c => `
+                <div class="cs-item" data-id="${c.id}">
+                  <div>
+                    <div class="nm">${c.name || "-"}</div>
+                    <div class="muted">${[c.phone || "", c.prefUserName ? ("Prefere: " + c.prefUserName) : ""].filter(Boolean).join(" • ")}</div>
+                  </div>
+                  <button class="closex" data-pick>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                </div>
+              `).join("");
+              box.querySelectorAll("[data-pick]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                  const row = btn.closest(".cs-item");
+                  const id = row.getAttribute("data-id");
+                  const c = clients.find(x => String(x.id) === String(id));
+                  if (c) {
+                    $m("#fCliente").value = c.name || "";
+                    selectedClientPhone = c.phone || "";
+                    box.innerHTML = "";
+                  }
+                });
+              });
+            }
+
+            $m("#fCliente").addEventListener("input", (e) => renderClientSuggestions(e.target.value));
+
+            // Novo cliente inline
+            $m("#btnNewClient").addEventListener("click", () => {
+              $m("#newClientBox").classList.add("visible");
+              $m("#ncNome").value = ($m("#fCliente").value || "").trim();
+              $m("#ncNome").focus();
+            });
+            $m("#ncCancel").addEventListener("click", () => $m("#newClientBox").classList.remove("visible"));
+            $m("#ncSave").addEventListener("click", () => {
+              const nome = ($m("#ncNome").value || "").trim();
+              if (!nome) { alert("Informe o nome"); return; }
+              const tel = ($m("#ncTel").value || "").trim();
+              const birth = $m("#ncBirth").value || "";
+              const prefUserId = $m("#ncPref").value || "";
+              const prefUserName = prefUserId ? (users.find(u=>String(u.id)===String(prefUserId))?.nome || "") : "";
+              const store = getClientsStore();
+              const payload = { id: "cl-" + Date.now(), name: nome, phone: tel, birthdate: birth, prefUserId, prefUserName };
+              store.clients = (store.clients || []).concat(payload);
+              setClientsStore(store);
+              clients.push(payload);
+              $m("#fCliente").value = nome;
+              selectedClientPhone = tel;
+              $m("#newClientBox").classList.remove("visible");
+              renderClientSuggestions(""); // clear
+            });
+
+            // Serviços: linha com select + criar novo serviço
+            const svcList = $m("#svcList");
+            function svcOptionsHTML() {
+              const items = (getSvcStore().items || []).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+              return items.map(s => `<option value="${s.id}" data-preco="${s.preco}" data-nome="${(s.nome||"").replace(/"/g,"&quot;")}">${s.nome}</option>`).join("");
+            }
+            function addSvcRow(preset = null) {
               const row = document.createElement("div");
               row.className = "svc-row";
-              const payVal = svc.pagamento || defaultPay || "dinheiro";
-              const sel = (val) => (payVal === val ? "selected" : "");
+              const paySel = (val) => (val === (preset?.pagamento || defaultPay || "dinheiro")) ? "selected" : "";
               row.innerHTML = `
-                <input placeholder="Serviço" class="svc-nome" value="${svc.nome || ""}">
-                <input type="number" step="0.01" min="0" placeholder="Valor" class="svc-valor" value="${svc.valor || ""}">
-                <input placeholder="Profissional" class="svc-prof" value="${svc.profissional || ""}">
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <select class="svc-sel">${svcOptionsHTML()}</select>
+                  <button class="closex svc-new" type="button" title="Novo serviço">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                  </button>
+                </div>
+                <input type="number" step="0.01" min="0" placeholder="Valor" class="svc-valor">
+                <select class="svc-prof"><option value="">Profissional</option>${users.map(u=>`<option value="${(u.nome||"").replace(/"/g,"&quot;")}">${u.nome||""}</option>`).join("")}</select>
                 <select class="svc-pay">
-                  <option value="dinheiro" ${sel("dinheiro")}>Dinheiro</option>
-                  <option value="pix" ${sel("pix")}>PIX</option>
-                  <option value="cartao" ${sel("cartao")}>Cartão</option>
-                  <option value="mensal" ${sel("mensal")}>Mensal</option>
+                  <option value="dinheiro" ${paySel("dinheiro")}>Dinheiro</option>
+                  <option value="pix" ${paySel("pix")}>PIX</option>
+                  <option value="cartao" ${paySel("cartao")}>Cartão</option>
+                  <option value="mensal" ${paySel("mensal")}>Mensal</option>
                 </select>
                 <button class="closex svc-del" type="button" title="Remover">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 </button>
               `;
-              row.querySelector(".svc-del").addEventListener("click", () => {
-                row.remove();
+              const sel = row.querySelector(".svc-sel");
+              const ipV = row.querySelector(".svc-valor");
+              function fillBySel() {
+                const id = sel.value;
+                const svc = (getSvcStore().items || []).find(s=>s.id===id) || null;
+                ipV.value = svc ? String(svc.preco ?? 0) : "";
                 recalcTotal();
-              });
-              row.querySelectorAll("input").forEach((inp) =>
-                inp.addEventListener("input", recalcTotal)
-              );
+              }
+              sel.addEventListener("change", fillBySel);
+              row.querySelector(".svc-del").addEventListener("click", () => { row.remove(); recalcTotal(); });
+              row.querySelectorAll("input,select").forEach(inp => inp.addEventListener("input", recalcTotal));
+              row.querySelector(".svc-new").addEventListener("click", () => openNewServiceInline(sel, ipV));
               svcList.appendChild(row);
+
+              if (preset && preset.servico_id) sel.value = preset.servico_id;
+              if (preset && typeof preset.valor !== "undefined") ipV.value = String(preset.valor || 0);
+              fillBySel();
+              if (preset && preset.profissional) row.querySelector(".svc-prof").value = preset.profissional;
+              if (preset && preset.pagamento) row.querySelector(".svc-pay").value = preset.pagamento;
+            }
+
+            function openNewServiceInline(selectEl, priceEl) {
+              // mini inline form
+              const box = document.createElement("div");
+              box.className = "mini-box visible";
+              const cats = (getSvcStore().cats || []);
+              box.innerHTML = `
+                <div class="field"><label>Nome *</label><input id="nsNome" placeholder="Ex.: Corte Feminino"></div>
+                <div class="field"><label>Categoria</label><select id="nsCat">${cats.map(c=>`<option value="${c.id}">${c.nome}</option>`).join("")}</select></div>
+                <div class="field"><label>Preço (R$) *</label><input id="nsPreco" type="number" step="0.01" min="0" value="0"></div>
+                <div class="inline-actions" style="justify-content:flex-end;">
+                  <button class="btn-cancel" id="nsCancel">Cancelar</button>
+                  <button class="btn-save" id="nsSave">Criar Serviço</button>
+                </div>
+              `;
+              modal.querySelector(".amodal").appendChild(box);
+              box.querySelector("#nsCancel").addEventListener("click", () => box.remove());
+              box.querySelector("#nsSave").addEventListener("click", () => {
+                const nome = (box.querySelector("#nsNome").value || "").trim();
+                const cat = box.querySelector("#nsCat").value || (cats[0]?.id || "");
+                const preco = parseFloat(box.querySelector("#nsPreco").value || "0") || 0;
+                if (!nome) { alert("Informe o nome do serviço"); return; }
+                const s2 = getSvcStore();
+                const id = "svc-" + Date.now();
+                s2.items = (s2.items || []).concat({ id, nome, cat_id: cat, preco, duracao_min: 60, desc:"", foto:"/public/placeholder.svg" });
+                setSvcStore(s2);
+                // refresh options and select
+                selectEl.innerHTML = svcOptionsHTML();
+                selectEl.value = id;
+                if (priceEl) priceEl.value = String(preco);
+                recalcTotal();
+                box.remove();
+              });
             }
 
             function recalcTotal() {
               const values = Array.from(modal.querySelectorAll(".svc-valor"))
                 .map((i) => parseFloat(i.value || "0") || 0);
               const total = values.reduce((a, b) => a + b, 0);
-              modal.querySelector("#fTotal").value = String(total.toFixed(2));
+              $m("#fTotal").value = String(total.toFixed(2));
             }
 
-            modal.querySelector("#addSvc").addEventListener("click", () => addRow());
-            if (existing?.servicos?.length) existing.servicos.forEach(addRow);
-            else addRow();
+            // Inicializar linhas de serviços
+            if (existing?.servicos?.length) existing.servicos.forEach(sv => addSvcRow({
+              servico_id: (services.find(s=>s.nome===sv.nome)?.id || services[0]?.id || ""),
+              valor: sv.valor,
+              profissional: sv.profissional,
+              pagamento: sv.pagamento
+            }));
+            else addSvcRow();
 
-            modal.querySelector("#saveAtt").addEventListener("click", () => {
-              const cliente = modal.querySelector("#fCliente").value.trim();
-              const obs = (modal.querySelector("#fObs")?.value || "").trim();
-              const total = parseFloat(modal.querySelector("#fTotal").value || "0") || 0;
-              const servicos = Array.from(modal.querySelectorAll("#svcList .svc-row")).map((r) => ({
-                nome: r.querySelector(".svc-nome").value.trim(),
-                valor: parseFloat(r.querySelector(".svc-valor").value || "0") || 0,
-                profissional: r.querySelector(".svc-prof").value.trim(),
-                pagamento: (r.querySelector(".svc-pay")?.value) || defaultPay || "dinheiro",
-              }));
+            $m("#addSvc").addEventListener("click", () => addSvcRow());
 
-              // pagamento do atendimento: se todos iguais, usa o único; senão, "misto"
-              const uniquePays = Array.from(new Set(servicos.map((s) => s.pagamento).filter(Boolean)));
+            // Salvar
+            $m("#saveAtt").addEventListener("click", () => {
+              const cliente = ($m("#fCliente").value || "").trim();
+              if (!cliente) { alert("Informe o cliente"); return; }
+              const obs = ($m("#fObs")?.value || "").trim();
+              const total = parseFloat($m("#fTotal").value || "0") || 0;
+              const rows = Array.from($m("#svcList").children).map(r => {
+                const selId = r.querySelector(".svc-sel").value;
+                const svc = (getSvcStore().items || []).find(s=>s.id===selId) || {};
+                return {
+                  nome: svc.nome || r.querySelector(".svc-sel").selectedOptions[0]?.textContent || "",
+                  valor: parseFloat(r.querySelector(".svc-valor").value || "0") || 0,
+                  profissional: (r.querySelector(".svc-prof")?.value || "").trim(),
+                  pagamento: (r.querySelector(".svc-pay")?.value) || defaultPay || "dinheiro",
+                };
+              });
+
+              const uniquePays = Array.from(new Set(rows.map((s) => s.pagamento).filter(Boolean)));
               const pagamentoTop = uniquePays.length === 1 ? uniquePays[0] : "misto";
 
               const store = getStore();
@@ -2772,7 +2893,7 @@
               if (existing) {
                 const idx = day.atendimentos.findIndex((a) => String(a.id) === String(existing.id));
                 if (idx >= 0)
-                  day.atendimentos[idx] = { ...existing, cliente, pagamento: pagamentoTop, valor: total, servicos, obs };
+                  day.atendimentos[idx] = { ...existing, cliente, pagamento: pagamentoTop, valor: total, servicos: rows, obs };
               } else {
                 day.atendimentos.push({
                   id: "att-" + Date.now(),
@@ -2780,7 +2901,7 @@
                   cliente,
                   pagamento: pagamentoTop,
                   valor: total,
-                  servicos,
+                  servicos: rows,
                   obs,
                 });
               }
