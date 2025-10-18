@@ -1,4 +1,6 @@
 (function () {
+  // COSINE SENTINEL: BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1
+  window.__COSINE_SENTINEL = "BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1";
   window.__runFallbackPreview = function (root) {
     const formatDateLong = () =>
       new Date().toLocaleDateString("pt-BR", {

@@ -1,0 +1,11 @@
+{
+  "ai_sentinel": "BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1",
+  "app_id": "bella-app-v1",
+  "preview_url": "/",
+  "repo": {
+    "provider": "",
+    "url": "",
+    "branch": "",
+    "subpath": ""
+  }
+}
