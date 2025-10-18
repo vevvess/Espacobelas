@@ -64,13 +64,28 @@
         }
       }
 
-      // Boot: carregar sempre a app React (Vite/TSX) e cair para preview estático apenas se falhar
+      // Boot: carregar SEMPRE a versão fixa solicitada por você
       (async function boot() {
-        try {
-          await import("/src/main.tsx");
-        } catch (err) {
-          console.warn("Falha ao carregar React/Vite. Carregando preview estático...", err);
-          await loadFallbackPreview();
+        const FIXED_URL = "https://k22f3xsepaxf.cosine.page/"; // versão exata com Relatórios/Histórico
+        const rootEl = document.getElementById("root");
+        const container = document.createElement("div");
+        container.className = "embed-container";
+        const iframe = document.createElement("iframe");
+        iframe.className = "embed-iframe";
+        iframe.src = FIXED_URL;
+        iframe.allow = "clipboard-write; clipboard-read; fullscreen";
+        container.appendChild(iframe);
+        rootEl.replaceWith(container);
+
+        // Opcional: se quiser ver a versão React deste repo para testar mudanças, abra com ?react=1
+        const params = new URLSearchParams(location.search);
+        if (params.get("react") === "1") {
+          try {
+            await import("/src/main.tsx");
+            container.remove();
+          } catch (err) {
+            console.warn("Falha ao carregar React/Vite. Mantendo versão fixa incorporada.", err);
+          }
         }
       })();
     </script>
