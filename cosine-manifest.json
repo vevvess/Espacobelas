@@ -2,6 +2,32 @@
   "id": "bella-app-v1",
   "name": "Bella App",
   "branch": "main",
+  "date": "2025-10-18",
+  "initial_route": "/dashboard",
+  "preview_url": "/index.html",
+  "vercel_preview_url": "",
+  "manifest_url": "/cosine-manifest.json",
+  "meta_flag": {
+    "name": "cosine-app-id",
+    "content": "BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1"
+  },
+  "sentinel_comment": "// COSINE_APP_SENTINEL: BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1",
+  "static_preview": true,
+  "ignore_vercel": true,
+  "implemented": [
+    "Caixa: atendimentos manuais multi-serviço, despesas (origens), totais, data selecionável, exportar PDF/Imagem, leitura/armazenamento de QR, e persistência Neon/Postgres na versão React (preview local usa localStorage).",
+    "Estoque: cadastro completo de produtos, categorias, locais, balanço por movimentações, filtros, scanner de código de barras (foto e vídeo), exportações CSV/XLSX, CRUD de movimentações.",
+    "UI mobile-friendly (ajustes responsivos em áreas críticas)."
+  ],
+  "planned": [
+    "Caixa: edição de movimentos no React (atual: add/remover), export completo com anexos (QR nas imagens/PDF sempre).",
+    "Estoque: rótulos QR e consumo automático por serviço.",
+    "Agenda/Permissões: “profissional preferido”, visibilidade por papéis, busca com typeahead."
+  ],
+  "notes": "Manifesto para a variante estática. Vercel desativado nesta versão. Abra /index.html ou use Vite preview para servir a pasta dist."
+}id": "bella-app-v1",
+  "name": "Bella App",
+  "branch": "main",
   "date": "2025-10-04",
   "initial_route": "/dashboard",
   "preview_url": "https://3jva0vrhapov.cosine.page",
