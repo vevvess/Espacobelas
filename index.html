@@ -34,34 +34,18 @@
     -->
     <script type="module">
       // BELLA_SALON_APP_SENTINEL::STATIC_ONLY::2025-10-18::V1
+      // Preferência do usuário: usar SEMPRE a versão específica com Relatórios
+      const COSINE_PREVIEW_URL = "https://qenkkmhlphdk.cosine.page/";
+
       const root = document.getElementById("root");
-
-      async function loadFallback() {
-        const loadScript = (src) =>
-          new Promise((resolve, reject) => {
-            const s = document.createElement("script");
-            s.src = src;
-            s.onload = resolve;
-            s.onerror = reject;
-            document.head.appendChild(s);
-          });
-
-        try {
-          await loadScript("/public/fallback-preview.js");
-          if (window.__runFallbackPreview) {
-            const target = document.getElementById("root") || document.body;
-            window.__runFallbackPreview(target);
-          } else {
-            document.body.textContent = "Falha ao inicializar o preview estático.";
-          }
-        } catch (e) {
-          console.error("Erro ao carregar o preview estático:", e);
-          document.body.textContent = "Não foi possível carregar o app ou o preview estático.";
-        }
-      }
-
-      // Sempre carregar o preview estático, ignorando Vercel e Vite/React
-      await loadFallback();
+      const container = document.createElement("div");
+      container.className = "embed-container";
+      const iframe = document.createElement("iframe");
+      iframe.className = "embed-iframe";
+      iframe.src = COSINE_PREVIEW_URL;
+      iframe.allow = "clipboard-write; clipboard-read; fullscreen";
+      container.appendChild(iframe);
+      root.replaceWith(container);
     </script>
   </body>
 </html>
